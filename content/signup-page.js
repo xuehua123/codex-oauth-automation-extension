@@ -1624,8 +1624,13 @@ function createStep6RecoverableResult(reason, snapshot, options = {}) {
   };
 }
 
-async function createStep6LoginTimeoutRecoverableResult(reason, snapshot, message) {
-  const resolvedSnapshot = normalizeStep6Snapshot(snapshot || inspectLoginAuthState());
+async function createStep6LoginTimeoutRecoveryTransition(reason, snapshot, message, options = {}) {
+  const {
+    loginVerificationRequestedAt = null,
+    via = 'login_timeout_recovered',
+  } = options;
+  let resolvedSnapshot = normalizeStep6Snapshot(snapshot || inspectLoginAuthState());
+  let recovered = false;
   if (resolvedSnapshot?.state === 'login_timeout_error_page') {
     try {
       const recoveryResult = await recoverCurrentAuthRetryPage({
@@ -1634,8 +1639,9 @@ async function createStep6LoginTimeoutRecoverableResult(reason, snapshot, messag
         step: 7,
         timeoutMs: 12000,
       });
-      if (recoveryResult?.recovered) {
-        log('步骤 7：登录超时报错页已点击“重试”，准备重新执行当前步骤。', 'warn');
+      recovered = Boolean(recoveryResult?.recovered);
+      if (recovered) {
+        log('步骤 7：登录超时报错页已点击“重试”，正在按恢复后的页面状态继续当前流程。', 'warn');
       }
     } catch (error) {
       if (/CF_SECURITY_BLOCKED::/i.test(String(error?.message || error || ''))) {
@@ -1645,7 +1651,46 @@ async function createStep6LoginTimeoutRecoverableResult(reason, snapshot, messag
     }
   }
 
-  return createStep6RecoverableResult(reason, resolvedSnapshot, {
+  resolvedSnapshot = recovered
+    ? normalizeStep6Snapshot(await waitForKnownLoginAuthState(4000))
+    : normalizeStep6Snapshot(inspectLoginAuthState());
+
+  if (resolvedSnapshot.state === 'verification_page') {
+    return {
+      action: 'done',
+      result: createStep6SuccessResult(resolvedSnapshot, {
+        via,
+        loginVerificationRequestedAt,
+      }),
+    };
+  }
+
+  if (resolvedSnapshot.state === 'password_page') {
+    log('步骤 7：登录超时报错页恢复后已进入密码页，继续当前登录流程。', 'warn');
+    return { action: 'password', snapshot: resolvedSnapshot };
+  }
+
+  if (resolvedSnapshot.state === 'email_page') {
+    log('步骤 7：登录超时报错页恢复后已回到邮箱输入页，继续当前登录流程。', 'warn');
+    return { action: 'email', snapshot: resolvedSnapshot };
+  }
+
+  return {
+    action: 'recoverable',
+    result: createStep6RecoverableResult(reason, resolvedSnapshot, {
+      message,
+      loginVerificationRequestedAt,
+    }),
+  };
+}
+
+async function createStep6LoginTimeoutRecoverableResult(reason, snapshot, message) {
+  const transition = await createStep6LoginTimeoutRecoveryTransition(reason, snapshot, message);
+  if (transition?.action === 'done' || transition?.action === 'recoverable') {
+    return transition.result;
+  }
+
+  return createStep6RecoverableResult(reason, transition?.snapshot || normalizeStep6Snapshot(inspectLoginAuthState()), {
     message,
   });
 }
@@ -2321,13 +2366,30 @@ async function waitForStep6EmailSubmitTransition(emailSubmittedAt, timeout = 120
     }
 
     if (snapshot.state === 'login_timeout_error_page') {
+      const transition = await createStep6LoginTimeoutRecoveryTransition(
+        'login_timeout_error_page',
+        snapshot,
+        '提交邮箱后进入登录超时报错页。',
+        {
+          loginVerificationRequestedAt: emailSubmittedAt,
+          via: 'email_submit_timeout_recovered',
+        }
+      );
+      if (transition.action === 'done') {
+        return {
+          action: 'done',
+          result: transition.result,
+        };
+      }
+      if (transition.action === 'password') {
+        return { action: 'password', snapshot: transition.snapshot };
+      }
+      if (transition.action === 'email') {
+        return { action: 'email', snapshot: transition.snapshot };
+      }
       return {
         action: 'recoverable',
-        result: await createStep6LoginTimeoutRecoverableResult(
-          'login_timeout_error_page',
-          snapshot,
-          '提交邮箱后进入登录超时报错页。'
-        ),
+        result: transition.result,
       };
     }
 
@@ -2356,13 +2418,30 @@ async function waitForStep6EmailSubmitTransition(emailSubmittedAt, timeout = 120
     return { action: 'password', snapshot };
   }
   if (snapshot.state === 'login_timeout_error_page') {
+    const transition = await createStep6LoginTimeoutRecoveryTransition(
+      'login_timeout_error_page',
+      snapshot,
+      '提交邮箱后进入登录超时报错页。',
+      {
+        loginVerificationRequestedAt: emailSubmittedAt,
+        via: 'email_submit_timeout_recovered',
+      }
+    );
+    if (transition.action === 'done') {
+      return {
+        action: 'done',
+        result: transition.result,
+      };
+    }
+    if (transition.action === 'password') {
+      return { action: 'password', snapshot: transition.snapshot };
+    }
+    if (transition.action === 'email') {
+      return { action: 'email', snapshot: transition.snapshot };
+    }
     return {
       action: 'recoverable',
-      result: await createStep6LoginTimeoutRecoverableResult(
-        'login_timeout_error_page',
-        snapshot,
-        '提交邮箱后进入登录超时报错页。'
-      ),
+      result: transition.result,
     };
   }
   if (snapshot.state === 'oauth_consent_page') {
@@ -2399,13 +2478,30 @@ async function waitForStep6PasswordSubmitTransition(passwordSubmittedAt, timeout
     }
 
     if (snapshot.state === 'login_timeout_error_page') {
+      const transition = await createStep6LoginTimeoutRecoveryTransition(
+        'login_timeout_error_page',
+        snapshot,
+        '提交密码后进入登录超时报错页。',
+        {
+          loginVerificationRequestedAt: passwordSubmittedAt,
+          via: 'password_submit_timeout_recovered',
+        }
+      );
+      if (transition.action === 'done') {
+        return {
+          action: 'done',
+          result: transition.result,
+        };
+      }
+      if (transition.action === 'password') {
+        return { action: 'password', snapshot: transition.snapshot };
+      }
+      if (transition.action === 'email') {
+        return { action: 'email', snapshot: transition.snapshot };
+      }
       return {
         action: 'recoverable',
-        result: await createStep6LoginTimeoutRecoverableResult(
-          'login_timeout_error_page',
-          snapshot,
-          '提交密码后进入登录超时报错页。'
-        ),
+        result: transition.result,
       };
     }
 
@@ -2431,13 +2527,30 @@ async function waitForStep6PasswordSubmitTransition(passwordSubmittedAt, timeout
     };
   }
   if (snapshot.state === 'login_timeout_error_page') {
+    const transition = await createStep6LoginTimeoutRecoveryTransition(
+      'login_timeout_error_page',
+      snapshot,
+      '提交密码后进入登录超时报错页。',
+      {
+        loginVerificationRequestedAt: passwordSubmittedAt,
+        via: 'password_submit_timeout_recovered',
+      }
+    );
+    if (transition.action === 'done') {
+      return {
+        action: 'done',
+        result: transition.result,
+      };
+    }
+    if (transition.action === 'password') {
+      return { action: 'password', snapshot: transition.snapshot };
+    }
+    if (transition.action === 'email') {
+      return { action: 'email', snapshot: transition.snapshot };
+    }
     return {
       action: 'recoverable',
-      result: await createStep6LoginTimeoutRecoverableResult(
-        'login_timeout_error_page',
-        snapshot,
-        '提交密码后进入登录超时报错页。'
-      ),
+      result: transition.result,
     };
   }
   if (snapshot.state === 'oauth_consent_page') {
@@ -2474,11 +2587,22 @@ async function waitForStep6SwitchTransition(loginVerificationRequestedAt, timeou
     }
 
     if (snapshot.state === 'login_timeout_error_page') {
-      return await createStep6LoginTimeoutRecoverableResult(
+      const transition = await createStep6LoginTimeoutRecoveryTransition(
         'login_timeout_error_page',
         snapshot,
-        '切换到一次性验证码登录后进入登录超时报错页。'
+        '切换到一次性验证码登录后进入登录超时报错页。',
+        {
+          loginVerificationRequestedAt,
+          via: 'switch_to_one_time_code_timeout_recovered',
+        }
       );
+      if (transition.action === 'done') {
+        return transition.result;
+      }
+      if (transition.action === 'password' || transition.action === 'email') {
+        return transition;
+      }
+      return transition.result;
     }
 
     if (snapshot.state === 'oauth_consent_page') {
@@ -2500,11 +2624,22 @@ async function waitForStep6SwitchTransition(loginVerificationRequestedAt, timeou
     });
   }
   if (snapshot.state === 'login_timeout_error_page') {
-    return await createStep6LoginTimeoutRecoverableResult(
+    const transition = await createStep6LoginTimeoutRecoveryTransition(
       'login_timeout_error_page',
       snapshot,
-      '切换到一次性验证码登录后进入登录超时报错页。'
+      '切换到一次性验证码登录后进入登录超时报错页。',
+      {
+        loginVerificationRequestedAt,
+        via: 'switch_to_one_time_code_timeout_recovered',
+      }
     );
+    if (transition.action === 'done') {
+      return transition.result;
+    }
+    if (transition.action === 'password' || transition.action === 'email') {
+      return transition;
+    }
+    return transition.result;
   }
   if (snapshot.state === 'oauth_consent_page') {
     throw new Error(`切换到一次性验证码登录后页面直接进入 OAuth 授权页，未经过登录验证码页。URL: ${snapshot.url}`);
@@ -2518,7 +2653,7 @@ async function waitForStep6SwitchTransition(loginVerificationRequestedAt, timeou
   });
 }
 
-async function step6SwitchToOneTimeCodeLogin(snapshot) {
+async function step6SwitchToOneTimeCodeLogin(payload, snapshot) {
   const switchTrigger = snapshot?.switchTrigger || findOneTimeCodeLoginTrigger();
   if (!switchTrigger || !isActionEnabled(switchTrigger)) {
     return createStep6RecoverableResult('missing_one_time_code_trigger', normalizeStep6Snapshot(inspectLoginAuthState()), {
@@ -2540,6 +2675,12 @@ async function step6SwitchToOneTimeCodeLogin(snapshot) {
       via: result.via || 'switch_to_one_time_code_login',
     });
   }
+  if (result?.action === 'password') {
+    return step6LoginFromPasswordPage(payload, result.snapshot);
+  }
+  if (result?.action === 'email') {
+    return step6LoginFromEmailPage(payload, result.snapshot);
+  }
   return result;
 }
 
@@ -2551,7 +2692,7 @@ async function step6LoginFromPasswordPage(payload, snapshot) {
     if (!hasPassword) {
       if (currentSnapshot.switchTrigger) {
         log('步骤 7：当前未提供密码，改走一次性验证码登录。', 'warn');
-        return step6SwitchToOneTimeCodeLogin(currentSnapshot);
+        return step6SwitchToOneTimeCodeLogin(payload, currentSnapshot);
       }
 
       return createStep6RecoverableResult('missing_password_and_one_time_code_trigger', currentSnapshot, {
@@ -2581,8 +2722,14 @@ async function step6LoginFromPasswordPage(payload, snapshot) {
       log(`步骤 7：${transition.result.message || '提交密码后仍未进入登录验证码页面，准备重新执行步骤 7。'}`, 'warn');
       return transition.result;
     }
+    if (transition.action === 'password') {
+      return step6LoginFromPasswordPage(payload, transition.snapshot);
+    }
+    if (transition.action === 'email') {
+      return step6LoginFromEmailPage(payload, transition.snapshot);
+    }
     if (transition.action === 'switch') {
-      return step6SwitchToOneTimeCodeLogin(transition.snapshot);
+      return step6SwitchToOneTimeCodeLogin(payload, transition.snapshot);
     }
 
     return createStep6RecoverableResult('password_submit_unknown', normalizeStep6Snapshot(inspectLoginAuthState()), {
@@ -2591,7 +2738,7 @@ async function step6LoginFromPasswordPage(payload, snapshot) {
   }
 
   if (currentSnapshot.switchTrigger) {
-    return step6SwitchToOneTimeCodeLogin(currentSnapshot);
+    return step6SwitchToOneTimeCodeLogin(payload, currentSnapshot);
   }
 
   return createStep6RecoverableResult('password_page_unactionable', currentSnapshot, {
@@ -2631,6 +2778,9 @@ async function step6LoginFromEmailPage(payload, snapshot) {
     log(`步骤 7：${transition.result.message || '提交邮箱后仍未进入目标页面，准备重新执行步骤 7。'}`, 'warn');
     return transition.result;
   }
+  if (transition.action === 'email') {
+    return step6LoginFromEmailPage(payload, transition.snapshot);
+  }
   if (transition.action === 'password') {
     return step6LoginFromPasswordPage(payload, transition.snapshot);
   }
@@ -2644,11 +2794,10 @@ async function step6_login(payload) {
   const { email } = payload;
   if (!email) throw new Error('登录时缺少邮箱地址。');
 
-  log(`步骤 7：正在使用 ${email} 登录...`);
-
   const snapshot = normalizeStep6Snapshot(await waitForKnownLoginAuthState(15000));
 
   if (snapshot.state === 'verification_page') {
+    log('步骤 7：认证页已在登录验证码页，开始确认页面是否稳定。');
     return finalizeStep6VerificationReady({
       logLabel: '步骤 7 收尾',
       loginVerificationRequestedAt: null,
@@ -2657,19 +2806,39 @@ async function step6_login(payload) {
   }
 
   if (snapshot.state === 'login_timeout_error_page') {
-    log('步骤 7：检测到登录超时报错，准备重新执行步骤 7。', 'warn');
-    return await createStep6LoginTimeoutRecoverableResult(
+    log('步骤 7：检测到登录超时报错页，先尝试恢复当前页面。', 'warn');
+    const transition = await createStep6LoginTimeoutRecoveryTransition(
       'login_timeout_error_page',
       snapshot,
-      '当前页面处于登录超时报错页。'
+      '当前页面处于登录超时报错页。',
+      {
+        loginVerificationRequestedAt: null,
+        via: 'login_timeout_initial_recovered',
+      }
     );
+    if (transition.action === 'done') {
+      return finalizeStep6VerificationReady({
+        logLabel: '步骤 7 收尾',
+        loginVerificationRequestedAt: transition.result.loginVerificationRequestedAt || null,
+        via: transition.result.via || 'login_timeout_initial_recovered',
+      });
+    }
+    if (transition.action === 'email') {
+      return step6LoginFromEmailPage(payload, transition.snapshot);
+    }
+    if (transition.action === 'password') {
+      return step6LoginFromPasswordPage(payload, transition.snapshot);
+    }
+    return transition.result;
   }
 
   if (snapshot.state === 'email_page') {
+    log(`步骤 7：正在使用 ${email} 登录...`);
     return step6LoginFromEmailPage(payload, snapshot);
   }
 
   if (snapshot.state === 'password_page') {
+    log('步骤 7：认证页已在密码页，继续当前登录流程。');
     return step6LoginFromPasswordPage(payload, snapshot);
   }
 

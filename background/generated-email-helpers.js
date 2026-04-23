@@ -147,6 +147,7 @@
       const requestedName = String(options.localPart || options.name || '').trim().toLowerCase() || generateCloudflareAliasLocalPart();
       const payload = {
         enablePrefix: true,
+        enableRandomSubdomain: Boolean(config.useRandomSubdomain),
         name: requestedName,
         domain: config.domain,
       };
