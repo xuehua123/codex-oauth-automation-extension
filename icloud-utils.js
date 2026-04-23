@@ -156,6 +156,72 @@
       });
   }
 
+  function normalizeAppleAccountAliasRecord(raw, options = {}) {
+    const usedEmails = toNormalizedEmailSet(options.usedEmails);
+    const preservedEmails = toNormalizedEmailSet(options.preservedEmails);
+    const anonymousId = String(raw?.id || raw?.anonymousId || '').trim();
+    const email = String(
+      raw?.emailAddress
+        || raw?.hme
+        || raw?.email
+        || ''
+    ).trim().toLowerCase();
+
+    if (!email || !email.includes('@')) return null;
+
+    const active = raw?.active !== false && raw?.isActive !== false && options.forceInactive !== true;
+    const forwardToEmail = String(
+      raw?.forwardToEmail
+        || raw?.forwardToAddress
+        || raw?.forwardEmail
+        || options.forwardToEmail
+        || ''
+    ).trim().toLowerCase();
+
+    return {
+      anonymousId,
+      email,
+      label: String(raw?.label || raw?.displayName || '').trim(),
+      note: String(raw?.note || '').trim(),
+      state: active ? 'active' : 'inactive',
+      active,
+      used: usedEmails.has(email),
+      preserved: preservedEmails.has(email),
+      createdAt: raw?.createdDate || raw?.createdAt || null,
+      forwardToEmail,
+      source: 'apple-account',
+    };
+  }
+
+  function normalizeAppleAccountAliasList(response, options = {}) {
+    const activeAliases = Array.isArray(response?.privateEmailList) ? response.privateEmailList : [];
+    const inactiveAliases = Array.isArray(response?.inactivePrivateEmailList) ? response.inactivePrivateEmailList : [];
+    const forwardToEmail = String(
+      response?.forwardToEmailAddress
+        || response?.forwardToOptions?.forwardToEmail?.address
+        || options.forwardToEmail
+        || ''
+    ).trim().toLowerCase();
+
+    return [
+      ...activeAliases.map((alias) => normalizeAppleAccountAliasRecord(alias, {
+        ...options,
+        forwardToEmail,
+      })),
+      ...inactiveAliases.map((alias) => normalizeAppleAccountAliasRecord(alias, {
+        ...options,
+        forwardToEmail,
+        forceInactive: true,
+      })),
+    ]
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (left.active !== right.active) return left.active ? -1 : 1;
+        if (left.used !== right.used) return left.used ? 1 : -1;
+        return String(left.email).localeCompare(String(right.email));
+      });
+  }
+
   function pickReusableIcloudAlias(aliases = []) {
     return (Array.isArray(aliases) ? aliases : []).find((alias) => alias?.active && !alias?.used) || null;
   }
@@ -175,6 +241,8 @@
     getIcloudLoginUrlForHost,
     getIcloudMailUrlForHost,
     getIcloudSetupUrlForHost,
+    normalizeAppleAccountAliasList,
+    normalizeAppleAccountAliasRecord,
     normalizeBooleanMap,
     normalizeIcloudAliasList,
     normalizeIcloudAliasRecord,

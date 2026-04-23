@@ -13,7 +13,7 @@
         {
           "header": "Referer",
           "operation": "set",
-          "value": "https://www.icloud.com/"
+          "value": "https://www.icloud.com/icloudplus/"
         }
       ]
     },
@@ -37,7 +37,7 @@
         {
           "header": "Referer",
           "operation": "set",
-          "value": "https://www.icloud.com.cn/"
+          "value": "https://www.icloud.com.cn/icloudplus/"
         }
       ]
     },

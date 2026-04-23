@@ -17,6 +17,7 @@ if (document.documentElement.getAttribute(SIGNUP_PAGE_LISTENER_SENTINEL) !== '1'
       || message.type === 'STEP8_FIND_AND_CLICK'
       || message.type === 'STEP8_GET_STATE'
       || message.type === 'STEP8_TRIGGER_CONTINUE'
+      || message.type === 'GET_VERIFICATION_SUBMIT_STATE'
       || message.type === 'GET_LOGIN_AUTH_STATE'
       || message.type === 'PREPARE_SIGNUP_VERIFICATION'
       || message.type === 'RECOVER_AUTH_RETRY_PAGE'
@@ -86,6 +87,8 @@ async function handleCommand(message) {
       return getStep8State();
     case 'STEP8_TRIGGER_CONTINUE':
       return await step8_triggerContinue(message.payload);
+    case 'GET_VERIFICATION_SUBMIT_STATE':
+      return getVerificationSubmitState(message.step);
   }
 }
 
@@ -1820,6 +1823,27 @@ function inspectSignupVerificationState() {
   return { state: 'unknown' };
 }
 
+function serializeSignupVerificationState(snapshot) {
+  return {
+    state: snapshot?.state || 'unknown',
+    url: location.href,
+    errorText: getVerificationErrorText() || '',
+    userAlreadyExistsBlocked: Boolean(snapshot?.userAlreadyExistsBlocked),
+    retryEnabled: Boolean(snapshot?.retryButton && isActionEnabled(snapshot.retryButton)),
+  };
+}
+
+function getVerificationSubmitState(step) {
+  if (step === 4) {
+    return serializeSignupVerificationState(inspectSignupVerificationState());
+  }
+
+  return {
+    ...serializeLoginAuthState(normalizeStep6Snapshot(inspectLoginAuthState())),
+    errorText: getVerificationErrorText() || '',
+  };
+}
+
 async function waitForSignupVerificationTransition(timeout = 5000) {
   const start = Date.now();
 
@@ -1991,25 +2015,90 @@ function getVerificationSubmitButtonForTarget(codeInput, options = {}) {
     return allowDisabled || isActionEnabled(element);
   };
 
+  const scoreSubmitAction = (element, root) => {
+    if (!isUsableAction(element)) {
+      return Number.NEGATIVE_INFINITY;
+    }
+
+    const text = getActionText(element);
+    const type = String(element.getAttribute?.('type') || element?.type || '').trim().toLowerCase();
+    const ddActionName = String(element.getAttribute?.('data-dd-action-name') || '').trim();
+    let score = 0;
+
+    if (form && (element?.form === form || element?.closest?.('form') === form)) {
+      score += 40;
+    } else if (root === form) {
+      score += 20;
+    }
+
+    if (type === 'submit') {
+      score += 8;
+    }
+    if (ddActionName === 'Continue') {
+      score += 120;
+    }
+    if (CONTINUE_ACTION_PATTERN.test(text)) {
+      score += 100;
+    }
+    if (/verify|confirm|验证|确认/i.test(text)) {
+      score += 70;
+    }
+    if (/submit/i.test(text)) {
+      score += 10;
+    }
+    if (/try\s+again|重试/i.test(text)) {
+      score -= 200;
+    }
+    if (!text && type === 'submit') {
+      score += 1;
+    }
+
+    return score;
+  };
+
   const findSubmitInRoot = (root) => {
     if (!root?.querySelectorAll) return null;
 
-    const directCandidates = root.querySelectorAll('button[type="submit"], input[type="submit"]');
-    for (const element of directCandidates) {
-      if (isUsableAction(element)) {
-        return element;
+    const candidates = Array.from(
+      root.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]')
+    );
+    let best = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (const element of candidates) {
+      const score = scoreSubmitAction(element, root);
+      if (score > bestScore) {
+        best = element;
+        bestScore = score;
       }
     }
 
-    const textCandidates = root.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]');
-    return Array.from(textCandidates).find((element) => {
-      if (!isUsableAction(element)) return false;
-      const text = getActionText(element);
-      return /verify|confirm|submit|continue|确认|验证|继续/i.test(text);
-    }) || null;
+    return bestScore > Number.NEGATIVE_INFINITY ? best : null;
   };
 
   return findSubmitInRoot(form) || findSubmitInRoot(document);
+}
+
+async function waitForVerificationAutoAdvanceBeforeClick(step, timeout = 1200) {
+  const start = Date.now();
+  const waitingState = step === 4 ? 'verification' : 'verification_page';
+
+  while (Date.now() - start < timeout) {
+    throwIfStopped();
+    const snapshot = getVerificationSubmitState(step);
+
+    if (snapshot?.errorText) {
+      return snapshot;
+    }
+
+    if (snapshot?.state && snapshot.state !== waitingState) {
+      return snapshot;
+    }
+
+    await sleep(150);
+  }
+
+  return null;
 }
 
 async function waitForVerificationSubmitButton(codeInput, timeout = 5000) {
@@ -2143,14 +2232,19 @@ async function fillVerificationCode(step, payload) {
       log(`步骤 ${step}：分格验证码输入框已稳定显示 ${code}。`, 'info');
     }
 
-    await sleep(800);
-    const splitSubmitBtn = await waitForVerificationSubmitButton(splitInputs[0], 2000).catch(() => null);
-    if (splitSubmitBtn) {
-      await humanPause(450, 1200);
-      simulateClick(splitSubmitBtn);
-      log(`步骤 ${step}：分格验证码已提交`);
+    await sleep(500);
+    const splitAutoAdvanceState = await waitForVerificationAutoAdvanceBeforeClick(step, 1200);
+    if (!splitAutoAdvanceState) {
+      const splitSubmitBtn = await waitForVerificationSubmitButton(splitInputs[0], 2000).catch(() => null);
+      if (splitSubmitBtn) {
+        await humanPause(450, 1200);
+        simulateClick(splitSubmitBtn);
+        log(`步骤 ${step}：分格验证码已提交（按钮="${getActionText(splitSubmitBtn).slice(0, 40)}"，ddAction="${splitSubmitBtn.getAttribute?.('data-dd-action-name') || ''}"）`);
+      } else {
+        log(`步骤 ${step}：分格验证码页面未找到可点击提交按钮，继续等待页面自动推进。`, 'info');
+      }
     } else {
-      log(`步骤 ${step}：分格验证码页面未找到可点击提交按钮，继续等待页面自动推进。`, 'info');
+      log(`步骤 ${step}：验证码填写后页面已自行推进或给出反馈（state=${splitAutoAdvanceState.state || 'unknown'}），跳过手动提交。`, 'info');
     }
 
     const outcome = await waitForVerificationSubmitOutcome(step);
@@ -2172,15 +2266,20 @@ async function fillVerificationCode(step, payload) {
   log(`步骤 ${step}：验证码已填写`);
 
   // Submit
-  await sleep(800);
-  const submitBtn = await waitForVerificationSubmitButton(codeInput, 5000).catch(() => null);
+  await sleep(500);
+  const autoAdvanceState = await waitForVerificationAutoAdvanceBeforeClick(step, 1200);
+  if (!autoAdvanceState) {
+    const submitBtn = await waitForVerificationSubmitButton(codeInput, 5000).catch(() => null);
 
-  if (submitBtn) {
-    await humanPause(450, 1200);
-    simulateClick(submitBtn);
-    log(`步骤 ${step}：验证码已提交`);
+    if (submitBtn) {
+      await humanPause(450, 1200);
+      simulateClick(submitBtn);
+      log(`步骤 ${step}：验证码已提交（按钮="${getActionText(submitBtn).slice(0, 40)}"，ddAction="${submitBtn.getAttribute?.('data-dd-action-name') || ''}"）`);
+    } else {
+      log(`步骤 ${step}：未找到可提交的验证码按钮，先等待页面自动推进或反馈结果。`, 'warn');
+    }
   } else {
-    log(`步骤 ${step}：未找到可提交的验证码按钮，先等待页面自动推进或反馈结果。`, 'warn');
+    log(`步骤 ${step}：验证码填写后页面已自行推进或给出反馈（state=${autoAdvanceState.state || 'unknown'}），跳过手动提交。`, 'info');
   }
 
   const outcome = await waitForVerificationSubmitOutcome(step);

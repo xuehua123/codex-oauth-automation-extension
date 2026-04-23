@@ -135,6 +135,8 @@ const inputSub2ApiEmail = { value: 'user@example.com' };
 const inputSub2ApiPassword = { value: 'sub-secret' };
 const inputSub2ApiGroup = { value: ' codex ' };
 const inputSub2ApiDefaultProxy = { value: ' proxy-a ' };
+const inputBrowserProxyEnabled = { checked: true };
+const inputBrowserProxySpec = { value: ' proxy.example.com:8080:user:pass ' };
 const inputPassword = { value: 'Secret123!' };
 const selectMailProvider = { value: '163' };
 const selectEmailGenerator = { value: 'duck' };
@@ -168,6 +170,7 @@ function getCloudflareTempEmailDomainsFromState() { return { domains: ['mail.exa
 function normalizeCloudflareTempEmailDomainValue(value) { return String(value || '').trim(); }
 function getSelectedLocalCpaStep9Mode() { return 'submit'; }
 function getSelectedMail2925Mode() { return 'provide'; }
+function getSelectedEmailGenerator() { return String(selectEmailGenerator.value || '').trim().toLowerCase(); }
 function normalizeAccountRunHistoryHelperBaseUrlValue(value) { return String(value || '').trim(); }
 function buildManagedAliasBaseEmailPayload() { return { gmailBaseEmail: '', mail2925BaseEmail: '', emailPrefix: '' }; }
 function getSelectedHotmailServiceMode() { return 'local'; }

@@ -21,18 +21,12 @@
   function getActivationStrategy(target = {}) {
     const tagName = normalizeTagName(target.tagName);
     const type = normalizeType(target.type);
-    const pathname = normalizePathname(target.pathname);
     const hasForm = Boolean(target.hasForm);
-    const isEmailVerificationRoute = /\/email-verification(?:[/?#]|$)/i.test(pathname);
     const isSubmitButton = hasForm
       && (
         (tagName === 'button' && (!type || type === 'submit'))
         || (tagName === 'input' && type === 'submit')
       );
-
-    if (isSubmitButton && isEmailVerificationRoute) {
-      return { method: 'requestSubmit' };
-    }
 
     return { method: 'click' };
   }

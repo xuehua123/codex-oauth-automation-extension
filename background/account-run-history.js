@@ -10,6 +10,7 @@
       getErrorMessage,
       getState,
       normalizeAccountRunHistoryHelperBaseUrl,
+      resolveAccountRunRecordContext,
     } = deps;
 
     function normalizeTimestamp(value) {
@@ -20,6 +21,28 @@
     function normalizeRetryCount(value) {
       const count = Math.floor(Number(value) || 0);
       return count > 0 ? count : 0;
+    }
+
+    function normalizeText(value = '') {
+      return String(value || '').trim();
+    }
+
+    function normalizeImportTarget(value = '') {
+      const normalized = normalizeText(value).toLowerCase();
+      if (normalized === 'cpa' || normalized === 'sub2api') {
+        return normalized;
+      }
+      return '';
+    }
+
+    function normalizeRecordContext(context = {}, finalStatus = '') {
+      const verificationCodeUrl = normalizeText(context?.verificationCodeUrl);
+      return {
+        verificationCodeUrl,
+        verificationCodeNote: verificationCodeUrl ? normalizeText(context?.verificationCodeNote) : '',
+        importTarget: normalizeImportTarget(context?.importTarget),
+        importedToPanel: finalStatus === 'success' && Boolean(context?.importedToPanel),
+      };
     }
 
     function normalizeFinalStatus(status = '') {
@@ -165,6 +188,7 @@
       const source = normalizeSource(record.source || (autoRunContext ? 'auto' : 'manual'));
       const computedFailureLabel = buildFailureLabel(finalStatus, failedStep, failureDetail);
       const rawFailureLabel = String(record.failureLabel || '').trim();
+      const recordContext = normalizeRecordContext(record, finalStatus);
 
       return {
         recordId: String(record.recordId || '').trim() || buildRecordId(email),
@@ -180,6 +204,7 @@
         failedStep: Number.isInteger(failedStep) && failedStep > 0 ? failedStep : null,
         source,
         autoRunContext: source === 'auto' ? autoRunContext : null,
+        ...recordContext,
       };
     }
 
@@ -229,6 +254,16 @@
       const autoRunContext = source === 'auto' ? buildAutoRunContextFromState(state) : null;
       const retryCount = source === 'auto' ? getRetryCountFromState(state) : 0;
       const finishedAt = new Date().toISOString();
+      const recordContext = normalizeRecordContext(
+        typeof resolveAccountRunRecordContext === 'function'
+          ? resolveAccountRunRecordContext(state, finalStatus, {
+            rawStatus: status,
+            reason,
+            failedStep,
+          })
+          : null,
+        finalStatus
+      );
 
       return {
         recordId: buildRecordId(email),
@@ -242,6 +277,7 @@
         failedStep: Number.isInteger(failedStep) && failedStep > 0 ? failedStep : null,
         source,
         autoRunContext,
+        ...recordContext,
       };
     }
 

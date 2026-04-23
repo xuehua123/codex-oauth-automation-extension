@@ -56,6 +56,12 @@ test('account run history helper upgrades old records, keeps stopped items and s
       accountRunHistoryTextEnabled: false,
       accountRunHistoryHelperBaseUrl: '',
     }),
+    resolveAccountRunRecordContext: (state, finalStatus) => ({
+      verificationCodeUrl: state.email === ' latest@example.com ' ? 'https://example.com/code/latest' : '',
+      verificationCodeNote: state.email === ' latest@example.com ' ? 'main' : '',
+      importTarget: 'cpa',
+      importedToPanel: finalStatus === 'success',
+    }),
     normalizeAccountRunHistoryHelperBaseUrl: (value) => String(value || '').trim(),
   });
 
@@ -87,6 +93,10 @@ test('account run history helper upgrades old records, keeps stopped items and s
       totalRuns: 10,
       attemptRun: 3,
     },
+    verificationCodeUrl: 'https://example.com/code/latest',
+    verificationCodeNote: 'main',
+    importTarget: 'cpa',
+    importedToPanel: false,
   });
 
   const appended = await helpers.appendAccountRunRecord('step8_failed', null, '步骤 8：认证页进入了手机号页面，当前不是 OAuth 同意页，无法继续自动授权。');
@@ -115,6 +125,10 @@ test('account run history helper upgrades old records, keeps stopped items and s
   assert.equal(stoppedRecord.failedStep, 7);
   assert.equal(stoppedRecord.source, 'manual');
   assert.equal(stoppedRecord.autoRunContext, null);
+  assert.equal(stoppedRecord.verificationCodeUrl, '');
+  assert.equal(stoppedRecord.verificationCodeNote, '');
+  assert.equal(stoppedRecord.importTarget, 'cpa');
+  assert.equal(stoppedRecord.importedToPanel, false);
   assert.ok(stoppedRecord.finishedAt);
 
   const genericStoppedRecord = helpers.buildAccountRunHistoryRecord({ email: 'stop@b.com', password: 'y' }, 'stopped', 'stop');
@@ -133,9 +147,17 @@ test('account run history helper upgrades old records, keeps stopped items and s
     failedStep: 7,
     source: 'manual',
     autoRunContext: null,
+    verificationCodeUrl: 'https://example.com/code/legacy',
+    verificationCodeNote: 'legacy',
+    importTarget: 'sub2api',
+    importedToPanel: true,
   });
   assert.equal(normalizedStoppedRecord.failureLabel, '步骤 7 停止');
   assert.equal(normalizedStoppedRecord.failedStep, 7);
+  assert.equal(normalizedStoppedRecord.verificationCodeUrl, 'https://example.com/code/legacy');
+  assert.equal(normalizedStoppedRecord.verificationCodeNote, 'legacy');
+  assert.equal(normalizedStoppedRecord.importTarget, 'sub2api');
+  assert.equal(normalizedStoppedRecord.importedToPanel, false);
 });
 
 test('account run history helper clears persisted records and syncs full snapshot payload to local helper', async () => {

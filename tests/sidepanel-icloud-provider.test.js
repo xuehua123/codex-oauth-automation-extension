@@ -79,3 +79,54 @@ return { getSelectedIcloudHostPreference, getMailProviderLoginUrl };
   assert.equal(api.getSelectedIcloudHostPreference(), 'icloud.com.cn');
   assert.equal(api.getMailProviderLoginUrl(), 'https://www.icloud.com.cn/');
 });
+
+test('getSelectedEmailGenerator treats icloud-list mail provider as the effective generator', () => {
+  const bundle = [
+    extractFunction('isIcloudListMailProvider'),
+    extractFunction('getSelectedEmailGenerator'),
+  ].join('\n');
+
+  const api = new Function(`
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
+const selectMailProvider = { value: ICLOUD_LIST_PROVIDER };
+const selectEmailGenerator = { value: 'icloud' };
+${bundle}
+return { getSelectedEmailGenerator };
+`)();
+
+  assert.equal(api.getSelectedEmailGenerator(), 'icloud-list');
+});
+
+test('syncEmailGeneratorSelectionForMailProvider aligns the visible generator with icloud-list mode', () => {
+  const bundle = [
+    extractFunction('isIcloudListMailProvider'),
+    extractFunction('syncEmailGeneratorSelectionForMailProvider'),
+  ].join('\n');
+
+  const api = new Function(`
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
+const selectMailProvider = { value: ICLOUD_LIST_PROVIDER };
+const selectEmailGenerator = { value: 'icloud' };
+${bundle}
+return { selectEmailGenerator, syncEmailGeneratorSelectionForMailProvider };
+`)();
+
+  assert.equal(api.syncEmailGeneratorSelectionForMailProvider(), true);
+  assert.equal(api.selectEmailGenerator.value, 'icloud-list');
+});
+
+test('sidepanel saves and fetches the effective generator in icloud-list mode', () => {
+  assert.match(source, /emailGenerator:\s*getSelectedEmailGenerator\(\)/);
+  assert.match(source, /generator:\s*getSelectedEmailGenerator\(\)/);
+  assert.match(
+    source,
+    /selectEmailGenerator\.disabled = useHotmail \|\| useLuckmail \|\| useGeneratedAlias \|\| useCustomEmail \|\| useIcloudListProvider;/
+  );
+});
+
+test('sidepanel restores the current icloud-list email when the regular email field is empty', () => {
+  assert.match(
+    source,
+    /if \(!String\(state\?\.email \|\| ''\)\.trim\(\) && getSelectedEmailGenerator\(\) === ICLOUD_LIST_PROVIDER\) \{\s*inputEmail\.value = state\?\.currentIcloudListEmail \|\| '';/s
+  );
+});

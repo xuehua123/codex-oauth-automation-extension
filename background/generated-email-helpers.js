@@ -10,6 +10,7 @@
       DUCK_AUTOFILL_URL,
       fetch,
       fetchIcloudHideMyEmail,
+      fetchIcloudListEmail,
       getCloudflareTempEmailAddressFromResponse,
       getCloudflareTempEmailConfig,
       getState,
@@ -242,6 +243,9 @@
       }
       if (generator === 'icloud') {
         return fetchIcloudHideMyEmail();
+      }
+      if (generator === 'icloud-list') {
+        return fetchIcloudListEmail(currentState, options);
       }
       if (generator === 'cloudflare') {
         return fetchCloudflareEmail(currentState, options);

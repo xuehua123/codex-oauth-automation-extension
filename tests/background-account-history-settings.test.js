@@ -118,4 +118,12 @@ return {
     api.normalizePersistentSettingValue('sub2apiDefaultProxyName', ' proxy-a '),
     'proxy-a'
   );
+  assert.equal(
+    api.normalizePersistentSettingValue('browserProxyEnabled', 1),
+    true
+  );
+  assert.equal(
+    api.normalizePersistentSettingValue('browserProxySpec', ' proxy.example.com:8080:user:pass '),
+    'proxy.example.com:8080:user:pass'
+  );
 });

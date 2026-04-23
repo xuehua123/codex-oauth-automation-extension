@@ -217,3 +217,53 @@ test('signup flow helper finalizes step 3 submit by reusing signup verification 
     },
   });
 });
+
+test('signup flow helper clears login cookies and reloads the signup entry tab before opening ChatGPT', async () => {
+  const calls = [];
+
+  const helpers = signupFlowApi.createSignupFlowHelpers({
+    buildGeneratedAliasEmail: () => '',
+    chrome: { tabs: { get: async () => ({ id: 41, url: 'https://chatgpt.com/' }) } },
+    ensureContentScriptReadyOnTab: async (...args) => {
+      calls.push({ type: 'ensureReady', args });
+    },
+    ensureHotmailAccountForFlow: async () => ({}),
+    ensureLuckmailPurchaseForFlow: async () => ({}),
+    isGeneratedAliasProvider: () => false,
+    isReusableGeneratedAliasEmail: () => false,
+    isHotmailProvider: () => false,
+    isLuckmailProvider: () => false,
+    isSignupEmailVerificationPageUrl: () => false,
+    isSignupPasswordPageUrl: () => false,
+    prepareSignupEntryForLoggedOutState: async (step) => {
+      calls.push({ type: 'precleanup', step });
+    },
+    reuseOrCreateTab: async (source, url, options) => {
+      calls.push({ type: 'reuse', source, url, options });
+      return 41;
+    },
+    sendToContentScriptResilient: async () => ({}),
+    setEmailState: async () => {},
+    SIGNUP_ENTRY_URL: 'https://chatgpt.com/',
+    SIGNUP_PAGE_INJECT_FILES: ['content/utils.js', 'content/signup-page.js'],
+    waitForTabUrlMatch: async () => null,
+  });
+
+  const tabId = await helpers.openSignupEntryTab(1);
+
+  assert.equal(tabId, 41);
+  assert.deepStrictEqual(calls[0], {
+    type: 'precleanup',
+    step: 1,
+  });
+  assert.deepStrictEqual(calls[1], {
+    type: 'reuse',
+    source: 'signup-page',
+    url: 'https://chatgpt.com/',
+    options: {
+      inject: ['content/utils.js', 'content/signup-page.js'],
+      injectSource: 'signup-page',
+      reloadIfSameUrl: true,
+    },
+  });
+});

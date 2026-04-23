@@ -3,6 +3,7 @@
 importScripts(
   'managed-alias-utils.js',
   'mail2925-utils.js',
+  'background/browser-proxy.js',
   'background/account-run-history.js',
   'background/contribution-oauth.js',
   'background/mail-2925-session.js',
@@ -33,6 +34,7 @@ importScripts(
   'luckmail-utils.js',
   'cloudflare-temp-email-utils.js',
   'icloud-utils.js',
+  'icloud-list-utils.js',
   'content/activation-utils.js'
 );
 
@@ -117,6 +119,7 @@ const {
   getIcloudLoginUrlForHost,
   getIcloudMailUrlForHost,
   getIcloudSetupUrlForHost,
+  normalizeAppleAccountAliasList,
   normalizeBooleanMap,
   normalizeIcloudAliasList,
   normalizeIcloudHost,
@@ -124,20 +127,49 @@ const {
   toNormalizedEmailSet,
 } = self.IcloudUtils;
 const {
+  allocateIcloudListEntry,
+  deleteIcloudListEntry,
+  extractLatestTimestampFromAny,
+  extractVerificationCodeFromAny,
+  findIcloudListEntryByEmail,
+  mergeIcloudListEntries,
+  normalizeIcloudListEmail,
+  normalizeIcloudListEntries,
+  normalizeIcloudListEntry,
+  parseIcloudListText,
+  patchIcloudListEntry,
+  resetIcloudListEntriesUsage,
+  resolveIcloudListCurrentEntry,
+} = self.IcloudListUtils;
+const {
   isRecoverableStep9AuthFailure,
 } = self.MultiPageActivationUtils;
 
 const LOG_PREFIX = '[MultiPage:bg]';
 const DUCK_AUTOFILL_URL = 'https://duckduckgo.com/email/settings/autofill';
 const ICLOUD_SETUP_URLS = [
-  'https://setup.icloud.com.cn/setup/ws/1',
   'https://setup.icloud.com/setup/ws/1',
+  'https://setup.icloud.com.cn/setup/ws/1',
 ];
 const ICLOUD_LOGIN_URLS = [
-  'https://www.icloud.com.cn/',
   'https://www.icloud.com/',
+  'https://www.icloud.com.cn/',
+];
+const APPLE_ACCOUNT_PRIVACY_PAGE_URL = 'https://account.apple.com/account/manage/section/privacy';
+const APPLE_ACCOUNT_PRIVATE_EMAILS_URL = 'https://appleid.apple.com/account/manage/email/private';
+const ICLOUD_AUTH_COOKIE_NAMES = [
+  'X-APPLE-WEBAUTH-USER',
+  'X-APPLE-WEBAUTH-TOKEN',
+  'X-APPLE-WEBAUTH-HSA-TRUST',
+  'X-APPLE-WEBAUTH-LOGIN',
+  'X-APPLE-WEBAUTH-VALIDATE',
+  'X-APPLE-WEBAUTH-PCS-Mail',
+  'X-APPLE-DS-WEB-SESSION-TOKEN',
+  'X-APPLE-WEB-ID',
+  'X-APPLE-UNIQUE-CLIENT-ID',
 ];
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
@@ -251,6 +283,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   sub2apiPassword: '',
   sub2apiGroupName: DEFAULT_SUB2API_GROUP_NAME,
   sub2apiDefaultProxyName: DEFAULT_SUB2API_PROXY_NAME,
+  browserProxyEnabled: false,
+  browserProxySpec: '',
   customPassword: '',
   autoRunSkipFailures: false,
   autoRunFallbackThreadIntervalMinutes: 0,
@@ -264,6 +298,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   emailGenerator: 'duck',
   autoDeleteUsedIcloudAlias: false,
   icloudHostPreference: 'auto',
+  icloudListEntries: [],
+  currentIcloudListEmail: '',
   accountRunHistoryTextEnabled: false,
   accountRunHistoryHelperBaseUrl: DEFAULT_ACCOUNT_RUN_HISTORY_HELPER_BASE_URL,
   gmailBaseEmail: '',
@@ -341,6 +377,7 @@ const DEFAULT_STATE = {
   luckmailPreserveTagName: DEFAULT_LUCKMAIL_PRESERVE_TAG_NAME,
   currentLuckmailPurchase: null,
   currentLuckmailMailCursor: null,
+  currentIcloudListEmail: null,
   autoRunning: false, // 当前是否处于自动运行中。
   autoRunPhase: 'idle', // 当前自动运行阶段。
   autoRunCurrentRun: 0, // 自动运行当前执行到第几轮。
@@ -360,6 +397,7 @@ const DEFAULT_STATE = {
   currentHotmailAccountId: null,
   currentMail2925AccountId: null,
   preferredIcloudHost: '',
+  preferredIcloudAliasSource: '',
 };
 
 function normalizeAutoRunDelayMinutes(value) {
@@ -645,6 +683,9 @@ function normalizeEmailGenerator(value = '') {
   if (normalized === 'icloud') {
     return 'icloud';
   }
+  if (normalized === ICLOUD_LIST_PROVIDER) {
+    return ICLOUD_LIST_PROVIDER;
+  }
   if (normalized === 'cloudflare') return 'cloudflare';
   if (normalized === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return CLOUDFLARE_TEMP_EMAIL_GENERATOR;
   return 'duck';
@@ -659,6 +700,7 @@ function normalizeMailProvider(value = '') {
   switch (normalized) {
     case 'custom':
     case ICLOUD_PROVIDER:
+    case ICLOUD_LIST_PROVIDER:
     case GMAIL_PROVIDER:
     case HOTMAIL_PROVIDER:
     case LUCKMAIL_PROVIDER:
@@ -872,6 +914,10 @@ function normalizePersistentSettingValue(key, value) {
       return String(value || '').trim();
     case 'sub2apiDefaultProxyName':
       return String(value || '').trim();
+    case 'browserProxyEnabled':
+      return Boolean(value);
+    case 'browserProxySpec':
+      return String(value || '').trim();
     case 'customPassword':
       return String(value || '');
     case 'autoRunSkipFailures':
@@ -898,6 +944,10 @@ function normalizePersistentSettingValue(key, value) {
       return Boolean(value);
     case 'icloudHostPreference':
       return normalizeIcloudHost(value) || 'auto';
+    case 'icloudListEntries':
+      return normalizeIcloudListEntries(value);
+    case 'currentIcloudListEmail':
+      return normalizeIcloudListEmail(value);
     case 'accountRunHistoryHelperBaseUrl':
       return normalizeAccountRunHistoryHelperBaseUrl(value);
     case 'gmailBaseEmail':
@@ -1025,7 +1075,11 @@ async function getState() {
     getPersistedAliasState(),
     accountRunHistoryHelpers?.getPersistedAccountRunHistory?.() || [],
   ]);
-  return { ...DEFAULT_STATE, ...persistedSettings, ...persistedAliasState, accountRunHistory, ...state };
+  const sessionState = state && typeof state === 'object'
+    ? { ...state }
+    : {};
+  delete sessionState.accountRunHistory;
+  return { ...DEFAULT_STATE, ...persistedSettings, ...persistedAliasState, accountRunHistory, ...sessionState };
 }
 
 async function initializeSessionStorageAccess() {
@@ -1140,9 +1194,171 @@ function broadcastIcloudAliasesChanged(payload = {}) {
   }).catch(() => { });
 }
 
+function isIcloudListMode(state = {}) {
+  return normalizeMailProvider(state?.mailProvider) === ICLOUD_LIST_PROVIDER
+    || normalizeEmailGenerator(state?.emailGenerator) === ICLOUD_LIST_PROVIDER;
+}
+
+function getIcloudListEntries(state = {}) {
+  return normalizeIcloudListEntries(state?.icloudListEntries);
+}
+
+function getCurrentIcloudListEntry(state = {}) {
+  return resolveIcloudListCurrentEntry(getIcloudListEntries(state), state);
+}
+
+function resolveAccountRunRecordContext(state = {}, finalStatus = '') {
+  const usesIcloudList = normalizeEmailGenerator(state?.emailGenerator) === ICLOUD_LIST_PROVIDER
+    || normalizeMailProvider(state?.mailProvider) === ICLOUD_LIST_PROVIDER;
+  const currentIcloudListEntry = usesIcloudList ? getCurrentIcloudListEntry(state) : null;
+  const panelMode = String(state?.panelMode || '').trim().toLowerCase() === 'sub2api'
+    ? 'sub2api'
+    : 'cpa';
+  const normalizedFinalStatus = String(finalStatus || '').trim().toLowerCase();
+
+  let importedToPanel = false;
+  if (normalizedFinalStatus === 'success') {
+    if (panelMode === 'sub2api' || state?.contributionMode) {
+      importedToPanel = true;
+    } else {
+      importedToPanel = !shouldBypassStep9ForLocalCpa(state);
+    }
+  }
+
+  return {
+    verificationCodeUrl: String(currentIcloudListEntry?.codeUrl || '').trim(),
+    verificationCodeNote: String(currentIcloudListEntry?.note || '').trim(),
+    importTarget: panelMode,
+    importedToPanel,
+  };
+}
+
+async function setIcloudListEntriesState(entries, options = {}) {
+  const latestState = options.state || await getState();
+  const normalizedEntries = normalizeIcloudListEntries(entries);
+  const currentEntry = resolveIcloudListCurrentEntry(normalizedEntries, latestState);
+  const currentEmail = normalizeIcloudListEmail(latestState?.email);
+  const updates = {
+    icloudListEntries: normalizedEntries,
+    currentIcloudListEmail: currentEntry?.email || null,
+  };
+  if (!currentEntry && currentEmail && isIcloudListMode(latestState)) {
+    updates.email = null;
+  }
+
+  await setPersistentSettings({
+    icloudListEntries: normalizedEntries,
+    currentIcloudListEmail: currentEntry?.email || '',
+  });
+  await setState(updates);
+  broadcastDataUpdate(updates);
+  return normalizedEntries;
+}
+
+async function applyIcloudListText(text = '') {
+  const state = await ensureManualInteractionAllowed('应用 iCloud 列表');
+  const parsed = parseIcloudListText(text, {
+    existingEntries: state.icloudListEntries,
+  });
+
+  if (!parsed.entries.length) {
+    if (parsed.errors.length) {
+      throw new Error(`没有可导入的有效 iCloud 列表行。首个错误：第 ${parsed.errors[0].lineNumber} 行：${parsed.errors[0].reason}`);
+    }
+    throw new Error('iCloud 列表内容为空，请先粘贴有效内容。');
+  }
+
+  const normalizedEntries = await setIcloudListEntriesState(parsed.entries, { state });
+  await addLog(`iCloud 列表：已应用 ${normalizedEntries.length} 条邮箱记录。`, 'ok');
+  return {
+    entries: normalizedEntries,
+    errors: parsed.errors,
+  };
+}
+
+async function setIcloudListEntryUsedState(payload = {}) {
+  const state = await ensureManualInteractionAllowed('更新 iCloud 列表邮箱状态');
+  const email = normalizeIcloudListEmail(payload.email);
+  if (!email) {
+    throw new Error('iCloud 列表邮箱不能为空。');
+  }
+
+  const used = Boolean(payload.used);
+  const existingEntry = findIcloudListEntryByEmail(getIcloudListEntries(state), email);
+  if (!existingEntry) {
+    throw new Error(`iCloud 列表中未找到邮箱：${email}`);
+  }
+
+  const nextEntries = patchIcloudListEntry(getIcloudListEntries(state), email, {
+    used,
+    lastUsedAt: used ? Date.now() : 0,
+  });
+  await setIcloudListEntriesState(nextEntries, { state });
+  await addLog(`iCloud 列表：已将 ${email} ${used ? '标记为已用' : '设为未用'}。`, 'ok');
+  return {
+    entry: findIcloudListEntryByEmail(nextEntries, email),
+  };
+}
+
+async function deleteIcloudListEmailEntry(payload = {}) {
+  const state = await ensureManualInteractionAllowed('删除 iCloud 列表邮箱');
+  const email = normalizeIcloudListEmail(payload.email);
+  if (!email) {
+    throw new Error('iCloud 列表邮箱不能为空。');
+  }
+
+  const entries = getIcloudListEntries(state);
+  if (!findIcloudListEntryByEmail(entries, email)) {
+    throw new Error(`iCloud 列表中未找到邮箱：${email}`);
+  }
+
+  const nextEntries = deleteIcloudListEntry(entries, email);
+  await setIcloudListEntriesState(nextEntries, { state });
+  await addLog(`iCloud 列表：已删除 ${email}。`, 'ok');
+  return {
+    deletedEmail: email,
+    entries: nextEntries,
+  };
+}
+
+async function resetIcloudListUsageState() {
+  const state = await ensureManualInteractionAllowed('批量标记 iCloud 列表邮箱为未用');
+  const nextEntries = resetIcloudListEntriesUsage(getIcloudListEntries(state));
+  await setIcloudListEntriesState(nextEntries, { state });
+  await addLog('iCloud 列表：已批量标记全部邮箱为未用。', 'ok');
+  return {
+    entries: nextEntries,
+  };
+}
+
+async function clearIcloudListEntries() {
+  await ensureManualInteractionAllowed('清空 iCloud 列表');
+  await setIcloudListEntriesState([], { state: await getState() });
+  await addLog('iCloud 列表：已清空全部邮箱记录。', 'ok');
+  return {
+    entries: [],
+  };
+}
+
 async function setEmailStateSilently(email) {
-  await setState({ email });
-  broadcastDataUpdate({ email });
+  const latestState = await getState();
+  const normalizedEmail = email ? String(email).trim() : null;
+  const updates = { email: normalizedEmail };
+  let persistedCurrentIcloudListEmail = '';
+
+  if (isIcloudListMode(latestState) && normalizedEmail) {
+    const matchedEntry = findIcloudListEntryByEmail(getIcloudListEntries(latestState), normalizedEmail);
+    updates.currentIcloudListEmail = matchedEntry?.email || null;
+    persistedCurrentIcloudListEmail = matchedEntry?.email || '';
+  } else {
+    updates.currentIcloudListEmail = null;
+  }
+
+  await setPersistentSettings({
+    currentIcloudListEmail: persistedCurrentIcloudListEmail,
+  });
+  await setState(updates);
+  broadcastDataUpdate(updates);
 }
 
 async function setEmailState(email) {
@@ -1369,6 +1585,7 @@ async function resetState() {
       'luckmailPreserveTagId',
       'luckmailPreserveTagName',
       'preferredIcloudHost',
+      'preferredIcloudAliasSource',
       ...CONTRIBUTION_RUNTIME_KEYS,
     ]),
     getPersistedSettings(),
@@ -1399,7 +1616,13 @@ async function resetState() {
     currentLuckmailPurchase: null,
     currentLuckmailMailCursor: null,
     preferredIcloudHost: prev.preferredIcloudHost || '',
+    preferredIcloudAliasSource: String(prev.preferredIcloudAliasSource || '').trim().toLowerCase() === 'apple-account'
+      ? 'apple-account'
+      : '',
   });
+  if (typeof chrome.storage.session.remove === 'function') {
+    await chrome.storage.session.remove('accountRunHistory');
+  }
 }
 
 /**
@@ -3172,6 +3395,169 @@ async function pollCloudflareTempEmailVerificationCode(step, state, pollPayload 
   throw lastError || new Error(`步骤 ${step}：未在 Cloudflare Temp Email 中找到新的匹配验证码。`);
 }
 
+async function requestIcloudListCodeUrlSnapshot(codeUrl, options = {}) {
+  const timeoutMs = Math.max(3000, Number(options.timeoutMs) || 15000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error('timeout')), timeoutMs);
+
+  try {
+    const response = await fetch(codeUrl, {
+      method: 'GET',
+      credentials: 'include',
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    const rawText = await response.text();
+    let parsedBody = rawText;
+
+    if (contentType.includes('application/json')) {
+      try {
+        parsedBody = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        parsedBody = rawText;
+      }
+    } else {
+      try {
+        parsedBody = rawText ? JSON.parse(rawText) : rawText;
+      } catch {
+        parsedBody = rawText;
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(`验证码链接请求失败：HTTP ${response.status}`);
+    }
+
+    return {
+      code: extractVerificationCodeFromAny(parsedBody),
+      emailTimestamp: extractLatestTimestampFromAny(parsedBody),
+      rawText,
+      parsedBody,
+    };
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`验证码链接请求超时（>${Math.round(timeoutMs / 1000)} 秒）`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function isIcloudListVerificationResultFresh(result, pollPayload = {}) {
+  const timestamp = Number(result?.emailTimestamp || 0) || 0;
+  const filterAfterTimestamp = Number(pollPayload.filterAfterTimestamp || 0) || 0;
+  if (!timestamp || !filterAfterTimestamp) {
+    return true;
+  }
+  return timestamp >= filterAfterTimestamp;
+}
+
+async function tryPollIcloudListVerificationFromPage(step, mail, pollPayload = {}, attempt = 1) {
+  await reuseOrCreateTab(mail.source, mail.url, {
+    inject: mail.inject,
+    injectSource: mail.injectSource,
+    reloadIfSameUrl: attempt > 1,
+  });
+
+  const pageResult = await sendToMailContentScriptResilient(
+    mail,
+    {
+      type: 'POLL_EMAIL',
+      step,
+      source: 'background',
+      payload: {
+        ...pollPayload,
+        maxAttempts: 1,
+        intervalMs: 0,
+      },
+    },
+    {
+      timeoutMs: Math.max(12000, Number(pollPayload.intervalMs || 0) + 12000),
+      responseTimeoutMs: Math.max(10000, Number(pollPayload.intervalMs || 0) + 8000),
+      maxRecoveryAttempts: 1,
+    }
+  );
+
+  if (pageResult?.error) {
+    throw new Error(pageResult.error);
+  }
+  return pageResult || null;
+}
+
+async function pollIcloudListVerificationCode(step, state, mail, pollPayload = {}) {
+  const currentEntry = mail?.entry || getCurrentIcloudListEntry(state);
+  if (!currentEntry?.email) {
+    throw new Error('当前 iCloud 列表邮箱不存在，请重新获取邮箱或改回列表内邮箱。');
+  }
+  if (!currentEntry?.codeUrl) {
+    throw new Error(`当前 iCloud 列表邮箱 ${currentEntry.email} 缺少验证码链接。`);
+  }
+
+  const maxAttempts = Math.max(1, Number(pollPayload.maxAttempts) || 5);
+  const intervalMs = Math.max(1000, Number(pollPayload.intervalMs) || 3000);
+  const excludedCodes = new Set((pollPayload.excludeCodes || []).filter(Boolean));
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    throwIfStopped();
+    await addLog(`步骤 ${step}：正在轮询 iCloud 列表验证码链接（${attempt}/${maxAttempts}）...`, 'info');
+
+    try {
+      const fetchResult = await requestIcloudListCodeUrlSnapshot(currentEntry.codeUrl, {
+        timeoutMs: Math.max(10000, intervalMs + 7000),
+      });
+      if (fetchResult?.code) {
+        if (excludedCodes.has(fetchResult.code)) {
+          throw new Error(`步骤 ${step}：验证码链接返回了已排除的旧验证码：${fetchResult.code}`);
+        }
+        if (!isIcloudListVerificationResultFresh(fetchResult, pollPayload)) {
+          throw new Error(`步骤 ${step}：验证码链接返回了旧时间窗口内的验证码。`);
+        }
+        return {
+          ok: true,
+          code: fetchResult.code,
+          emailTimestamp: fetchResult.emailTimestamp || Date.now(),
+          source: 'icloud-list-fetch',
+        };
+      }
+    } catch (err) {
+      lastError = err;
+      await addLog(`步骤 ${step}：iCloud 列表后台请求未拿到验证码：${err.message}`, 'warn');
+    }
+
+    try {
+      const pageResult = await tryPollIcloudListVerificationFromPage(step, mail, pollPayload, attempt);
+      if (pageResult?.code) {
+        if (excludedCodes.has(pageResult.code)) {
+          throw new Error(`步骤 ${step}：页面回退拿到的是旧验证码：${pageResult.code}`);
+        }
+        if (!isIcloudListVerificationResultFresh(pageResult, pollPayload)) {
+          throw new Error(`步骤 ${step}：页面回退拿到的是旧时间窗口内的验证码。`);
+        }
+        return {
+          ok: true,
+          code: pageResult.code,
+          emailTimestamp: Number(pageResult.emailTimestamp || 0) || Date.now(),
+          source: 'icloud-list-page',
+        };
+      }
+      lastError = new Error(`步骤 ${step}：验证码链接页面回退未找到新的验证码。`);
+    } catch (err) {
+      lastError = err;
+      await addLog(`步骤 ${step}：iCloud 列表页面回退未拿到验证码：${err.message}`, 'warn');
+    }
+
+    if (attempt < maxAttempts) {
+      await sleepWithStop(intervalMs);
+    }
+  }
+
+  throw lastError || new Error(`步骤 ${step}：未在 iCloud 列表验证码链接中找到新的验证码。`);
+}
+
 async function getOpenIcloudHostPreference() {
   try {
     const tabs = await chrome.tabs.query({
@@ -3194,6 +3580,104 @@ async function getOpenIcloudHostPreference() {
   return '';
 }
 
+function scoreIcloudPageTab(tab, preferredHost = '') {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(tab?.url || '');
+  } catch {
+    return -1;
+  }
+
+  const host = normalizeIcloudHost(parsedUrl.host);
+  if (!host) {
+    return -1;
+  }
+
+  let score = 0;
+  if ((parsedUrl.pathname || '/').toLowerCase().includes('/icloudplus')) {
+    score += 4;
+  }
+  if (host === normalizeIcloudHost(preferredHost)) {
+    score += 3;
+  }
+  if (tab?.active) {
+    score += 2;
+  }
+  return score;
+}
+
+function getOrderedIcloudPageTabs(openTabs = [], preferredHost = '') {
+  return (Array.isArray(openTabs) ? openTabs : [])
+    .map((tab) => {
+      try {
+        const parsedUrl = new URL(tab.url);
+        const icloudHost = normalizeIcloudHost(parsedUrl.host);
+        if (!icloudHost) {
+          return null;
+        }
+        return {
+          ...tab,
+          icloudHost,
+          icloudPath: parsedUrl.pathname || '/',
+          icloudPageScore: scoreIcloudPageTab(tab, preferredHost),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      const scoreDiff = (right.icloudPageScore || 0) - (left.icloudPageScore || 0);
+      if (scoreDiff) {
+        return scoreDiff;
+      }
+      return (Number(right.id) || 0) - (Number(left.id) || 0);
+    });
+}
+
+function scoreAppleAccountPageTab(tab) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(tab?.url || '');
+  } catch {
+    return -1;
+  }
+
+  if (String(parsedUrl.host || '').toLowerCase() !== 'account.apple.com') {
+    return -1;
+  }
+
+  let score = 0;
+  const path = String(parsedUrl.pathname || '/').toLowerCase();
+  if (path.includes('/account/manage/section/privacy')) {
+    score += 6;
+  } else if (path.includes('/account/manage')) {
+    score += 4;
+  } else if (path.includes('/sign-in')) {
+    score += 2;
+  }
+  if (tab?.active) {
+    score += 3;
+  }
+  return score;
+}
+
+function getOrderedAppleAccountPageTabs(openTabs = []) {
+  return (Array.isArray(openTabs) ? openTabs : [])
+    .map((tab) => ({
+      ...tab,
+      appleAccountPageScore: scoreAppleAccountPageTab(tab),
+    }))
+    .filter((tab) => tab.appleAccountPageScore >= 0)
+    .sort((left, right) => {
+      const scoreDiff = (right.appleAccountPageScore || 0) - (left.appleAccountPageScore || 0);
+      if (scoreDiff) {
+        return scoreDiff;
+      }
+      return (Number(right.id) || 0) - (Number(left.id) || 0);
+    });
+}
+
 async function getPreferredIcloudLoginUrl(error = null, state = null) {
   const currentState = state || await getState();
   const configuredHost = getConfiguredIcloudHostPreference(currentState);
@@ -3201,9 +3685,9 @@ async function getPreferredIcloudLoginUrl(error = null, state = null) {
     return getIcloudLoginUrlForHost(configuredHost);
   }
 
-  const messageHint = getIcloudHostHintFromMessage(getErrorMessage(error));
-  if (messageHint) {
-    return getIcloudLoginUrlForHost(messageHint);
+  const openHost = await getOpenIcloudHostPreference();
+  if (openHost) {
+    return getIcloudLoginUrlForHost(openHost);
   }
 
   const savedHost = normalizeIcloudHost(currentState?.preferredIcloudHost);
@@ -3211,9 +3695,9 @@ async function getPreferredIcloudLoginUrl(error = null, state = null) {
     return getIcloudLoginUrlForHost(savedHost);
   }
 
-  const openHost = await getOpenIcloudHostPreference();
-  if (openHost) {
-    return getIcloudLoginUrlForHost(openHost);
+  const messageHint = getIcloudHostHintFromMessage(getErrorMessage(error));
+  if (messageHint) {
+    return getIcloudLoginUrlForHost(messageHint);
   }
 
   return ICLOUD_LOGIN_URLS[0];
@@ -3236,10 +3720,12 @@ function isIcloudLoginRequiredError(error) {
   const message = getErrorMessage(error).toLowerCase();
   return message.includes('could not validate icloud session')
     || message.includes('hide my email service was unavailable')
-    || /\bstatus (401|403|409|421)\b/.test(message);
+    || (/\bstatus (401|403|421)\b/.test(message)
+      && (/\/validate\b/.test(message) || /\/v2\/hme\/list\b/.test(message)));
 }
 
 let lastIcloudLoginPromptAt = 0;
+let lastAppleAccountLoginPromptAt = 0;
 
 async function openIcloudLoginPage(preferredUrl) {
   const tabs = await chrome.tabs.query({
@@ -3269,16 +3755,54 @@ async function openIcloudLoginPage(preferredUrl) {
   return created.id;
 }
 
+async function openAppleAccountPrivacyPage(preferredUrl) {
+  const targetUrl = preferredUrl || (
+    typeof APPLE_ACCOUNT_PRIVACY_PAGE_URL === 'string' && APPLE_ACCOUNT_PRIVACY_PAGE_URL
+      ? APPLE_ACCOUNT_PRIVACY_PAGE_URL
+      : 'https://account.apple.com/account/manage/section/privacy'
+  );
+  const tabs = await chrome.tabs.query({
+    url: ['https://account.apple.com/*'],
+  });
+  const existing = tabs.find((tab) => {
+    try {
+      return String(new URL(tab.url).host || '').toLowerCase() === 'account.apple.com';
+    } catch {
+      return false;
+    }
+  });
+
+  if (existing?.id) {
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.url !== targetUrl) {
+      await chrome.tabs.update(existing.id, { url: targetUrl });
+    }
+    return existing.id;
+  }
+
+  const created = await chrome.tabs.create({ url: targetUrl, active: true });
+  return created.id;
+}
+
 async function promptIcloudLogin(error, actionLabel = 'iCloud 操作') {
   const now = Date.now();
   const preferredUrl = await getPreferredIcloudLoginUrl(error);
+  let assistUrl = preferredUrl;
+  try {
+    const preferredHost = normalizeIcloudHost(new URL(preferredUrl).host);
+    if (preferredHost === 'icloud.com') {
+      assistUrl = 'https://www.icloud.com/icloudplus/';
+    } else if (preferredHost === 'icloud.com.cn') {
+      assistUrl = 'https://www.icloud.com.cn/icloudplus/';
+    }
+  } catch {}
   const originalError = getErrorMessage(error);
 
   chrome.runtime.sendMessage({
     type: 'ICLOUD_LOGIN_REQUIRED',
     payload: {
       actionLabel,
-      loginUrl: preferredUrl,
+      loginUrl: assistUrl,
       message: '需要先登录 iCloud，我已经为你打开登录页。',
       detail: originalError,
     },
@@ -3289,12 +3813,46 @@ async function promptIcloudLogin(error, actionLabel = 'iCloud 操作') {
   }
   lastIcloudLoginPromptAt = now;
 
-  await addLog(`iCloud：${actionLabel}时需要登录，正在打开 ${new URL(preferredUrl).host} ...`, 'warn');
+  await addLog(`iCloud：${actionLabel}时需要登录，正在打开 ${new URL(assistUrl).host} 的 iCloud+ 页面...`, 'warn');
 
   try {
-    await openIcloudLoginPage(preferredUrl);
+    await openIcloudLoginPage(assistUrl);
   } catch (tabErr) {
     await addLog(`iCloud：自动打开登录页失败：${getErrorMessage(tabErr)}`, 'warn');
+  }
+}
+
+async function promptAppleAccountLogin(error, actionLabel = '加载 Apple Account 隐私邮箱列表') {
+  const now = Date.now();
+  const assistUrl = typeof APPLE_ACCOUNT_PRIVACY_PAGE_URL === 'string' && APPLE_ACCOUNT_PRIVACY_PAGE_URL
+    ? APPLE_ACCOUNT_PRIVACY_PAGE_URL
+    : 'https://account.apple.com/account/manage/section/privacy';
+  const originalError = getErrorMessage(error);
+
+  chrome.runtime.sendMessage({
+    type: 'ICLOUD_LOGIN_REQUIRED',
+    payload: {
+      actionLabel,
+      loginUrl: assistUrl,
+      loginContext: 'apple-account',
+      title: '需要登录 Apple Account',
+      text: '我已经为你打开 account.apple.com。请在那个页面完成登录，然后回到这里点击“我已登录”。',
+      message: '需要先登录 Apple Account，我已经为你打开隐私页。',
+      detail: originalError,
+    },
+  }).catch(() => { });
+
+  if (now - lastAppleAccountLoginPromptAt < 15000) {
+    return;
+  }
+  lastAppleAccountLoginPromptAt = now;
+
+  await addLog(`Apple Account：${actionLabel}时需要登录，正在打开 account.apple.com 隐私页...`, 'warn');
+
+  try {
+    await openAppleAccountPrivacyPage(assistUrl);
+  } catch (tabErr) {
+    await addLog(`Apple Account：自动打开登录页失败：${getErrorMessage(tabErr)}`, 'warn');
   }
 }
 
@@ -3302,6 +3860,10 @@ async function withIcloudLoginHelp(actionLabel, action) {
   try {
     return await action();
   } catch (err) {
+    const errorMessage = getErrorMessage(err);
+    if (/hide my email service was unavailable/i.test(errorMessage)) {
+      throw new Error('已检测到当前 iCloud 会话不一定是未登录，更可能是 Hide My Email 服务当前不可用。请确认当前 Apple ID 已开通 iCloud+、已开启双重认证，并直接打开 iCloud+ / 隐藏邮件地址页面后再试。');
+    }
     if (isIcloudLoginRequiredError(err)) {
       await promptIcloudLogin(err, actionLabel);
       throw new Error('请先在新打开的 iCloud 页面中完成登录，再回来点击“我已登录”。');
@@ -3310,28 +3872,345 @@ async function withIcloudLoginHelp(actionLabel, action) {
   }
 }
 
+function buildAppleAccountHttpErrorMessage(method, url, status, rawText = '') {
+  let detail = '';
+  try {
+    const parsed = rawText ? JSON.parse(rawText) : null;
+    detail = parsed?.error?.message
+      || parsed?.error?.errorMessage
+      || parsed?.errorMessage
+      || parsed?.message
+      || parsed?.reason
+      || '';
+  } catch {}
+  return `Apple Account 请求失败：${method} ${url}，status ${status}${detail ? `，${detail}` : ''}`;
+}
+
+async function appleAccountRequest(method, url, options = {}) {
+  const { data, allowPageFallback = true } = options;
+  const privacyPageUrl = typeof APPLE_ACCOUNT_PRIVACY_PAGE_URL === 'string' && APPLE_ACCOUNT_PRIVACY_PAGE_URL
+    ? APPLE_ACCOUNT_PRIVACY_PAGE_URL
+    : 'https://account.apple.com/account/manage/section/privacy';
+  const requestInit = {
+    method,
+    credentials: 'include',
+    headers: data !== undefined
+      ? {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        }
+      : {
+          Accept: 'application/json',
+        },
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+    referrer: privacyPageUrl,
+    referrerPolicy: 'strict-origin-when-cross-origin',
+  };
+
+  async function parseJsonResponse(response) {
+    const rawText = await response.text().catch(() => '');
+    if (!response.ok) {
+      throw new Error(buildAppleAccountHttpErrorMessage(method, url, response.status, rawText));
+    }
+
+    if (!rawText) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(rawText);
+    } catch (err) {
+      throw new Error(`Apple Account 返回的 JSON 无法解析：${method} ${url}，${err.message}`);
+    }
+  }
+
+  try {
+    const response = await fetch(url, requestInit);
+    return await parseJsonResponse(response);
+  } catch (err) {
+    const normalizedError = err instanceof Error
+      ? err
+      : new Error(`Apple Account 请求失败：${method} ${url}，${getErrorMessage(err)}`);
+    const shouldTryPageFallback = allowPageFallback
+      && /^https:\/\/appleid\.apple\.com\/account\/manage\//.test(url)
+      && chrome.tabs?.query
+      && chrome.scripting?.executeScript;
+
+    if (!shouldTryPageFallback) {
+      if (/^Apple Account 请求失败：/.test(normalizedError.message) || /^Apple Account 返回的 JSON 无法解析：/.test(normalizedError.message)) {
+        throw normalizedError;
+      }
+      throw new Error(`Apple Account 请求失败：${method} ${url}，${normalizedError.message}`);
+    }
+
+    let openTabs = [];
+    try {
+      openTabs = await chrome.tabs.query({
+        url: ['https://account.apple.com/*'],
+      });
+    } catch {}
+
+    const orderedTabs = getOrderedAppleAccountPageTabs(openTabs);
+    const pageErrors = [];
+    for (const tab of orderedTabs) {
+      try {
+        const executionResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: 'MAIN',
+          func: async (requestUrl, init) => {
+            try {
+              const response = await fetch(requestUrl, init);
+              const rawText = await response.text().catch(() => '');
+              if (!response.ok) {
+                return {
+                  ok: false,
+                  status: response.status,
+                  rawText,
+                };
+              }
+              if (!rawText) {
+                return {
+                  ok: true,
+                  data: null,
+                };
+              }
+              return {
+                ok: true,
+                data: JSON.parse(rawText),
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                networkError: true,
+                error: String(error?.message || error || 'unknown error'),
+              };
+            }
+          },
+          args: [url, requestInit],
+        });
+        const pageResult = executionResults?.[0]?.result;
+        if (!pageResult) {
+          throw new Error('页面内请求没有返回结果。');
+        }
+        if (!pageResult.ok) {
+          if (pageResult.networkError) {
+            throw new Error(`页面内请求失败：${pageResult.error || 'unknown error'}`);
+          }
+          throw new Error(buildAppleAccountHttpErrorMessage(method, url, pageResult.status, pageResult.rawText));
+        }
+        await addLog(`Apple Account：后台请求 ${new URL(url).pathname} 失败，已改用打开的 account.apple.com 页面继续请求。`, 'warn');
+        return pageResult.data;
+      } catch (pageError) {
+        pageErrors.push(getErrorMessage(pageError));
+      }
+    }
+
+    if (/^Apple Account 请求失败：/.test(normalizedError.message) || /^Apple Account 返回的 JSON 无法解析：/.test(normalizedError.message)) {
+      if (!pageErrors.length) {
+        throw normalizedError;
+      }
+      throw new Error(`${normalizedError.message} | 页面内请求也失败：${pageErrors.join(' | ')}`);
+    }
+    throw new Error(`Apple Account 请求失败：${method} ${url}，${normalizedError.message}${pageErrors.length ? ` | 页面内请求也失败：${pageErrors.join(' | ')}` : ''}`);
+  }
+}
+
+function shouldFallbackToAppleAccountAliases(error) {
+  const message = getErrorMessage(error).toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  return message.includes('your account does not have permission to access this application')
+    || message.includes('could not validate icloud session')
+    || message.includes('hide my email service was unavailable')
+    || /\/setup\/ws\/1\/validate\b/.test(message)
+    || /\/v[12]\/hme\//.test(message);
+}
+
+function isAppleAccountLoginRequiredError(error) {
+  const message = getErrorMessage(error).toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  if (message.includes('apple account 请求失败')
+    && /\bstatus (401|403)\b/.test(message)) {
+    return true;
+  }
+
+  return message.includes('appleid.apple.com/account/manage/email/private')
+    && /\bstatus (401|403)\b/.test(message);
+}
+
+async function listAppleAccountAliases(state, options = {}) {
+  const privateEmailsUrl = typeof APPLE_ACCOUNT_PRIVATE_EMAILS_URL === 'string' && APPLE_ACCOUNT_PRIVATE_EMAILS_URL
+    ? APPLE_ACCOUNT_PRIVATE_EMAILS_URL
+    : 'https://appleid.apple.com/account/manage/email/private';
+  const response = await appleAccountRequest('GET', privateEmailsUrl);
+  const aliases = normalizeAppleAccountAliasList(response, {
+    usedEmails: options.usedEmails ?? getEffectiveUsedEmails(state),
+    preservedEmails: options.preservedEmails ?? getPreservedAliasMap(state),
+  });
+
+  if (options.logMessage) {
+    await addLog(`${options.logMessage}（共 ${aliases.length} 个）`, 'warn');
+  }
+  return aliases;
+}
+
 async function icloudRequest(method, url, options = {}) {
-  const { data } = options;
-  let response;
+  const { data, allowPageFallback = true } = options;
+  let requestReferrer = '';
   try {
-    response = await fetch(url, {
-      method,
-      credentials: 'include',
-      headers: data !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: data !== undefined ? JSON.stringify(data) : undefined,
-    });
-  } catch (err) {
-    throw new Error(`iCloud 请求失败：${method} ${url}，${err.message}`);
+    const targetUrl = new URL(url);
+    const targetHost = String(targetUrl.hostname || '').toLowerCase();
+    const targetFamily = normalizeIcloudHost(targetHost)
+      || (targetHost.endsWith('.icloud.com.cn') ? 'icloud.com.cn' : '')
+      || (targetHost.endsWith('.icloud.com') ? 'icloud.com' : '');
+    if (targetFamily === 'icloud.com') {
+      requestReferrer = 'https://www.icloud.com/icloudplus/';
+    } else if (targetFamily === 'icloud.com.cn') {
+      requestReferrer = 'https://www.icloud.com.cn/icloudplus/';
+    }
+  } catch {}
+
+  const requestInit = {
+    method,
+    credentials: 'include',
+    headers: data !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  };
+  if (requestReferrer) {
+    requestInit.referrer = requestReferrer;
+    requestInit.referrerPolicy = 'strict-origin-when-cross-origin';
   }
 
-  if (!response.ok) {
-    throw new Error(`iCloud 请求失败：${method} ${url}，status ${response.status}`);
+  async function parseJsonResponse(response) {
+    const rawText = await response.text().catch(() => '');
+    if (!response.ok) {
+      throw new Error(buildIcloudHttpErrorMessage(method, url, response.status, rawText));
+    }
+
+    if (!rawText) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(rawText);
+    } catch (err) {
+      throw new Error(`iCloud 返回的 JSON 无法解析：${method} ${url}，${err.message}`);
+    }
   }
 
+  let syncedCookieCount = 0;
   try {
-    return await response.json();
+    if (/\/v[12]\/hme\//.test(url) || /\/setup\/ws\/1\/validate\b/.test(url)) {
+      syncedCookieCount = await syncIcloudAuthCookiesToServiceHost(url);
+    }
+    const response = await fetch(url, requestInit);
+    return await parseJsonResponse(response);
   } catch (err) {
-    throw new Error(`iCloud 返回的 JSON 无法解析：${method} ${url}，${err.message}`);
+    const normalizedError = err instanceof Error
+      ? err
+      : new Error(`iCloud 请求失败：${method} ${url}，${getErrorMessage(err)}`);
+    if (/\/setup\/ws\/1\/validate\b/.test(url)) {
+      await addLog(
+        `iCloud：后台 validate 失败（${new URL(url).host}），已同步 ${Number.isFinite(syncedCookieCount) ? syncedCookieCount : 0} 个鉴权 cookie，Referrer=${requestReferrer || 'none'}，原因：${getErrorMessage(normalizedError).slice(0, 220)}`,
+        'warn'
+      );
+    }
+    const shouldTryPageFallback = allowPageFallback
+      && /\/v[12]\/hme\//.test(url)
+      && chrome.tabs?.query
+      && chrome.scripting?.executeScript;
+
+    if (!shouldTryPageFallback) {
+      if (/^iCloud 请求失败：/.test(normalizedError.message) || /^iCloud 返回的 JSON 无法解析：/.test(normalizedError.message)) {
+        throw normalizedError;
+      }
+      throw new Error(`iCloud 请求失败：${method} ${url}，${normalizedError.message}`);
+    }
+
+    let state = null;
+    try {
+      state = await getState();
+    } catch {}
+
+    let openTabs = [];
+    try {
+      openTabs = await chrome.tabs.query({
+        url: [
+          'https://www.icloud.com/*',
+          'https://www.icloud.com.cn/*',
+        ],
+      });
+    } catch {}
+
+    const preferredHost = normalizeIcloudHost(state?.preferredIcloudHost);
+    const orderedTabs = getOrderedIcloudPageTabs(openTabs, preferredHost);
+
+    const pageErrors = [];
+    for (const tab of orderedTabs) {
+      try {
+        const executionResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: 'MAIN',
+          func: async (requestUrl, init) => {
+            try {
+              const response = await fetch(requestUrl, init);
+              const rawText = await response.text().catch(() => '');
+              if (!response.ok) {
+                return {
+                  ok: false,
+                  status: response.status,
+                  rawText,
+                };
+              }
+              if (!rawText) {
+                return {
+                  ok: true,
+                  data: null,
+                };
+              }
+              return {
+                ok: true,
+                data: JSON.parse(rawText),
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                networkError: true,
+                error: String(error?.message || error || 'unknown error'),
+              };
+            }
+          },
+          args: [url, requestInit],
+        });
+        const pageResult = executionResults?.[0]?.result;
+        if (!pageResult) {
+          throw new Error('页面内请求没有返回结果。');
+        }
+        if (!pageResult.ok) {
+          if (pageResult.networkError) {
+            throw new Error(`页面内请求失败：${pageResult.error || 'unknown error'}`);
+          }
+          throw new Error(buildIcloudHttpErrorMessage(method, url, pageResult.status, pageResult.rawText));
+        }
+        await addLog(`iCloud：后台请求 ${new URL(url).pathname} 失败，已改用打开的 ${tab.icloudHost || new URL(tab.url).host}${tab.icloudPath || ''} 页面继续请求。`, 'warn');
+        return pageResult.data;
+      } catch (pageError) {
+        pageErrors.push(getErrorMessage(pageError));
+      }
+    }
+
+    if (/^iCloud 请求失败：/.test(normalizedError.message) || /^iCloud 返回的 JSON 无法解析：/.test(normalizedError.message)) {
+      if (!pageErrors.length) {
+        throw normalizedError;
+      }
+      throw new Error(`${normalizedError.message} | 页面内请求也失败：${pageErrors.join(' | ')}`);
+    }
+    throw new Error(`iCloud 请求失败：${method} ${url}，${normalizedError.message}${pageErrors.length ? ` | 页面内请求也失败：${pageErrors.join(' | ')}` : ''}`);
   }
 }
 
@@ -3343,6 +4222,101 @@ async function validateIcloudSession(setupUrl) {
   return data;
 }
 
+async function resolveIcloudPremiumMailServiceForSetupUrl(setupUrl, state = null, options = {}) {
+  const currentState = state || await getState();
+  const { persistPreferredHost = true } = options;
+  let data = null;
+  const preferredHost = normalizeIcloudHost(new URL(setupUrl).host);
+  try {
+    data = await validateIcloudSession(setupUrl);
+  } catch (backgroundError) {
+    const pageErrors = [];
+    let openTabs = [];
+
+    if (chrome.tabs?.query && chrome.scripting?.executeScript) {
+      try {
+        openTabs = await chrome.tabs.query({
+          url: [
+            'https://www.icloud.com/*',
+            'https://www.icloud.com.cn/*',
+          ],
+        });
+      } catch {}
+    }
+
+    const orderedTabs = getOrderedIcloudPageTabs(openTabs, preferredHost);
+
+    for (const tab of orderedTabs) {
+      try {
+        const executionResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          world: 'MAIN',
+          func: async (baseUrl) => {
+            try {
+              const response = await fetch(`${baseUrl}/validate`, {
+                method: 'POST',
+                credentials: 'include',
+              });
+              const text = await response.text();
+              let data = null;
+              try {
+                data = text ? JSON.parse(text) : null;
+              } catch {}
+              return {
+                ok: response.ok,
+                status: response.status,
+                data,
+                text,
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                networkError: true,
+                error: String(error?.message || error || 'unknown error'),
+              };
+            }
+          },
+          args: [setupUrl],
+        });
+        const pageResult = executionResults?.[0]?.result;
+        if (!pageResult) {
+          throw new Error('页面内校验没有返回结果。');
+        }
+        if (!pageResult.ok) {
+          if (pageResult.networkError) {
+            throw new Error(`页面内校验请求失败：${pageResult.error || 'unknown error'}`);
+          }
+          throw new Error(`页面内校验失败：status ${pageResult.status}`);
+        }
+        if (!pageResult.data?.webservices?.premiummailsettings?.url) {
+          throw new Error('Hide My Email service was unavailable.');
+        }
+        data = pageResult.data;
+        await addLog(`iCloud：后台接口校验失败，已改用打开的 ${tab.icloudHost || new URL(tab.url).host}${tab.icloudPath || ''} 页面完成会话校验。`, 'warn');
+        break;
+      } catch (pageError) {
+        pageErrors.push(`${tab.icloudHost || tab.id}: ${getErrorMessage(pageError)}`);
+      }
+    }
+
+    if (!data) {
+      if (pageErrors.length) {
+        throw new Error(`${getErrorMessage(backgroundError)} | ${pageErrors.join(' | ')}`);
+      }
+      throw backgroundError;
+    }
+  }
+
+  const preferredIcloudHost = normalizeIcloudHost(new URL(setupUrl).host);
+  if (persistPreferredHost && preferredIcloudHost && preferredIcloudHost !== normalizeIcloudHost(currentState.preferredIcloudHost)) {
+    await setState({ preferredIcloudHost });
+  }
+  return {
+    setupUrl,
+    serviceUrl: String(data.webservices.premiummailsettings.url || '').replace(/\/$/, ''),
+  };
+}
+
 async function resolveIcloudPremiumMailService() {
   const errors = [];
   const state = await getState();
@@ -3350,15 +4324,7 @@ async function resolveIcloudPremiumMailService() {
 
   for (const setupUrl of setupUrls) {
     try {
-      const data = await validateIcloudSession(setupUrl);
-      const preferredIcloudHost = normalizeIcloudHost(new URL(setupUrl).host);
-      if (preferredIcloudHost && preferredIcloudHost !== normalizeIcloudHost(state.preferredIcloudHost)) {
-        await setState({ preferredIcloudHost });
-      }
-      return {
-        setupUrl,
-        serviceUrl: String(data.webservices.premiummailsettings.url || '').replace(/\/$/, ''),
-      };
+      return await resolveIcloudPremiumMailServiceForSetupUrl(setupUrl, state);
     } catch (err) {
       errors.push(`${new URL(setupUrl).host}: ${getErrorMessage(err)}`);
     }
@@ -3375,6 +4341,404 @@ function getIcloudAliasLabel() {
   return `MultiPage ${dateStr}`;
 }
 
+function buildIcloudHttpErrorMessage(method, url, status, rawBody = '') {
+  const normalizedBody = String(rawBody || '').trim();
+  if (!normalizedBody) {
+    return `iCloud 请求失败：${method} ${url}，status ${status}`;
+  }
+
+  let detail = '';
+  try {
+    const parsed = JSON.parse(normalizedBody);
+    const candidate = parsed?.error?.errorMessage
+      || parsed?.errorMessage
+      || parsed?.reason
+      || parsed?.message
+      || parsed?.error
+      || '';
+    detail = typeof candidate === 'string' ? candidate.trim() : JSON.stringify(candidate);
+  } catch {
+    detail = normalizedBody.replace(/\s+/g, ' ').trim();
+  }
+
+  if (!detail) {
+    return `iCloud 请求失败：${method} ${url}，status ${status}`;
+  }
+  return `iCloud 请求失败：${method} ${url}，status ${status}，${detail.slice(0, 260)}`;
+}
+
+function getIcloudBusinessErrorMessage(response, fallbackMessage = 'iCloud 请求失败。') {
+  return response?.error?.errorMessage
+    || response?.errorMessage
+    || response?.reason
+    || response?.message
+    || fallbackMessage;
+}
+
+function shouldRetryIcloudOnAlternateHost(error) {
+  const message = getErrorMessage(error).toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  if (message.includes('your account does not have permission to access this application')) {
+    return true;
+  }
+  if (message.includes('missing x-apple-webauth-user cookie')) {
+    return true;
+  }
+
+  return /\/v[12]\/hme\//.test(message) && /\bstatus (401|403|421)\b/.test(message);
+}
+
+async function runIcloudActionWithAutoHostFallback(state, primaryService, action, options = {}) {
+  const { actionLabel = '执行 iCloud 操作' } = options;
+  const fallbackFailureMessages = [];
+  const configuredHost = getConfiguredIcloudHostPreference(state);
+
+  try {
+    return await action(primaryService);
+  } catch (primaryError) {
+    if (!shouldRetryIcloudOnAlternateHost(primaryError)) {
+      throw primaryError;
+    }
+
+    const primaryHost = normalizeIcloudHost(new URL(primaryService.setupUrl).host);
+    const setupUrls = await getPreferredIcloudSetupUrls(state);
+    const primaryErrorMessage = getErrorMessage(primaryError).slice(0, 180);
+
+    for (const setupUrl of setupUrls) {
+      const fallbackHost = normalizeIcloudHost(new URL(setupUrl).host);
+      if (!fallbackHost || fallbackHost === primaryHost) {
+        continue;
+      }
+
+      let fallbackService;
+      try {
+        fallbackService = await resolveIcloudPremiumMailServiceForSetupUrl(setupUrl, state, {
+          persistPreferredHost: false,
+        });
+      } catch (resolveError) {
+        const resolveMessage = getErrorMessage(resolveError).slice(0, 180);
+        fallbackFailureMessages.push(`备用 ${fallbackHost} 会话校验失败：${resolveMessage}`);
+        await addLog(`iCloud：备用 ${fallbackHost} 会话校验失败：${resolveMessage}`, 'warn');
+        continue;
+      }
+
+      await addLog(`iCloud：${actionLabel}在 ${primaryHost || '当前'} 失败（${primaryErrorMessage}），改用 ${fallbackHost} 重试。`, 'warn');
+
+      try {
+        const result = await action(fallbackService);
+        if (!configuredHost && fallbackHost !== normalizeIcloudHost(state?.preferredIcloudHost)) {
+          await setState({ preferredIcloudHost: fallbackHost });
+        }
+        if (configuredHost) {
+          await addLog(`iCloud：当前手动指定 ${configuredHost}，本次已临时改用 ${fallbackHost} 完成请求。`, 'warn');
+        }
+        await addLog(`iCloud：${actionLabel}已切换到 ${fallbackHost}。`, 'warn');
+        return result;
+      } catch (fallbackError) {
+        const fallbackMessage = getErrorMessage(fallbackError).slice(0, 180);
+        fallbackFailureMessages.push(`备用 ${fallbackHost} 也失败：${fallbackMessage}`);
+        await addLog(`iCloud：备用 ${fallbackHost} 也失败：${fallbackMessage}`, 'warn');
+      }
+    }
+
+    if (fallbackFailureMessages.length) {
+      throw new Error(`${getErrorMessage(primaryError)} | ${fallbackFailureMessages.join(' | ')}`);
+    }
+    throw primaryError;
+  }
+}
+
+async function syncIcloudAuthCookiesToServiceHost(requestUrl) {
+  if (!chrome.cookies?.getAll || !chrome.cookies?.set) {
+    return 0;
+  }
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(requestUrl);
+  } catch {
+    return 0;
+  }
+
+  function resolveIcloudFamily(rawHost = '') {
+    const host = String(rawHost || '').trim().toLowerCase().replace(/^\./, '').replace(/:\d+$/, '');
+    const normalized = normalizeIcloudHost(host);
+    if (normalized) return normalized;
+    if (host === 'icloud.com' || host.endsWith('.icloud.com')) return 'icloud.com';
+    if (host === 'icloud.com.cn' || host.endsWith('.icloud.com.cn')) return 'icloud.com.cn';
+    return '';
+  }
+
+  const targetFamily = resolveIcloudFamily(targetUrl.hostname);
+  const supportsCookieSyncTarget = /maildomainws\./.test(targetUrl.hostname)
+    || /^setup\.icloud\.com(\.cn)?$/i.test(targetUrl.hostname);
+  if (!targetFamily || !supportsCookieSyncTarget) {
+    return 0;
+  }
+
+  const targetCookieUrl = `${targetUrl.protocol}//${targetUrl.hostname}/`;
+  let syncedCount = 0;
+  const partitionLookupContexts = [];
+  let orderedTabs = [];
+  let debuggerCookiesCache = null;
+
+  function getIcloudCookieSourceUrls(family, preferredUrl = '') {
+    const urls = [];
+    function addUrl(candidate) {
+      if (!candidate) {
+        return;
+      }
+      try {
+        urls.push(String(new URL(candidate)));
+      } catch {}
+    }
+
+    addUrl(preferredUrl);
+
+    if (family === 'icloud.com') {
+      addUrl('https://www.icloud.com/');
+      addUrl('https://www.icloud.com/icloudplus/');
+      addUrl('https://setup.icloud.com/');
+      addUrl('https://setup.icloud.com/setup/ws/1/');
+      addUrl('https://setup.icloud.com/setup/ws/1/validate');
+    } else if (family === 'icloud.com.cn') {
+      addUrl('https://www.icloud.com.cn/');
+      addUrl('https://www.icloud.com.cn/icloudplus/');
+      addUrl('https://setup.icloud.com.cn/');
+      addUrl('https://setup.icloud.com.cn/setup/ws/1/');
+      addUrl('https://setup.icloud.com.cn/setup/ws/1/validate');
+    }
+
+    addUrl(requestUrl);
+    return Array.from(new Set(urls.filter(Boolean)));
+  }
+
+  if (chrome.tabs?.query) {
+    let openTabs = [];
+    try {
+      openTabs = await chrome.tabs.query({
+        url: [
+          'https://www.icloud.com/*',
+          'https://www.icloud.com.cn/*',
+        ],
+      });
+    } catch {}
+
+    orderedTabs = getOrderedIcloudPageTabs(openTabs, targetFamily);
+    const seenPartitionContexts = new Set();
+    for (const tab of orderedTabs) {
+      let parsedTabUrl;
+      try {
+        parsedTabUrl = new URL(tab.url);
+      } catch {
+        continue;
+      }
+
+      const tabFamily = resolveIcloudFamily(parsedTabUrl.hostname);
+      if (!tabFamily) {
+        continue;
+      }
+
+      let partitionKey = null;
+      if (chrome.cookies?.getPartitionKey) {
+        try {
+          partitionKey = await chrome.cookies.getPartitionKey({ tabId: tab.id, frameId: 0 });
+        } catch {}
+      }
+      if (!partitionKey?.topLevelSite) {
+        partitionKey = { topLevelSite: parsedTabUrl.origin };
+      }
+      if (!partitionKey?.topLevelSite) {
+        continue;
+      }
+
+      const sourceUrls = getIcloudCookieSourceUrls(tabFamily, `${parsedTabUrl.origin}/`);
+      for (const sourceUrl of sourceUrls) {
+        const cacheKey = JSON.stringify({
+          topLevelSite: partitionKey.topLevelSite,
+          hasCrossSiteAncestor: Boolean(partitionKey.hasCrossSiteAncestor),
+          sourceUrl,
+        });
+        if (seenPartitionContexts.has(cacheKey)) {
+          continue;
+        }
+        seenPartitionContexts.add(cacheKey);
+        partitionLookupContexts.push({ partitionKey, sourceUrl });
+      }
+    }
+  }
+
+  async function loadDebuggerCookies() {
+    if (debuggerCookiesCache) {
+      return debuggerCookiesCache;
+    }
+
+    debuggerCookiesCache = [];
+    if (!orderedTabs.length
+      || !chrome.debugger?.attach
+      || !chrome.debugger?.sendCommand
+      || !chrome.debugger?.detach) {
+      return debuggerCookiesCache;
+    }
+
+    const seenDebuggerCookies = new Set();
+    for (const tab of orderedTabs) {
+      const target = { tabId: tab.id };
+      let attached = false;
+      try {
+        await chrome.debugger.attach(target, '1.3');
+        attached = true;
+
+        let tabUrl;
+        try {
+          tabUrl = new URL(tab.url);
+        } catch {
+          continue;
+        }
+        const tabFamily = resolveIcloudFamily(tabUrl.hostname);
+        if (!tabFamily) {
+          continue;
+        }
+
+        const response = await chrome.debugger.sendCommand(target, 'Network.getCookies', {
+          urls: getIcloudCookieSourceUrls(tabFamily, tab.url),
+        });
+        for (const cookie of response?.cookies || []) {
+          if (!cookie?.name || !cookie?.value || !resolveIcloudFamily(cookie.domain || '')) {
+            continue;
+          }
+
+          const key = JSON.stringify({
+            name: cookie.name,
+            domain: cookie.domain || '',
+            path: cookie.path || '',
+            value: cookie.value || '',
+            expires: cookie.expires,
+          });
+          if (seenDebuggerCookies.has(key)) {
+            continue;
+          }
+          seenDebuggerCookies.add(key);
+
+          const expires = Number(cookie.expires);
+          debuggerCookiesCache.push({
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain || '',
+            path: cookie.path || '/',
+            secure: cookie.secure !== false,
+            httpOnly: Boolean(cookie.httpOnly),
+            session: !Number.isFinite(expires) || expires <= 0,
+            expirationDate: Number.isFinite(expires) && expires > 0 ? expires : undefined,
+            sameSite: cookie.sameSite,
+          });
+        }
+      } catch (debuggerError) {
+        await addLog(`iCloud：调试器读取 ${tab.icloudHost || tab.id} cookie 失败：${getErrorMessage(debuggerError).slice(0, 160)}`, 'warn');
+      } finally {
+        if (attached) {
+          await chrome.debugger.detach(target).catch(() => { });
+        }
+      }
+    }
+
+    return debuggerCookiesCache;
+  }
+
+  for (const name of ICLOUD_AUTH_COOKIE_NAMES) {
+    const cookies = [];
+    const seenCookieKeys = new Set();
+    async function collectCookies(details) {
+      let foundCookies = [];
+      try {
+        foundCookies = await chrome.cookies.getAll(details);
+      } catch {
+        return;
+      }
+
+      for (const cookie of foundCookies || []) {
+        const key = JSON.stringify({
+          name: cookie?.name || '',
+          domain: cookie?.domain || '',
+          path: cookie?.path || '',
+          value: cookie?.value || '',
+          storeId: cookie?.storeId || '',
+          topLevelSite: cookie?.partitionKey?.topLevelSite || '',
+          hasCrossSiteAncestor: Boolean(cookie?.partitionKey?.hasCrossSiteAncestor),
+        });
+        if (seenCookieKeys.has(key)) {
+          continue;
+        }
+        seenCookieKeys.add(key);
+        cookies.push(cookie);
+      }
+    }
+
+    await collectCookies({ name });
+    for (const context of partitionLookupContexts) {
+      await collectCookies({
+        name,
+        url: context.sourceUrl,
+        partitionKey: context.partitionKey,
+      });
+    }
+    if (!cookies.length) {
+      const debuggerCookies = await loadDebuggerCookies();
+      for (const cookie of debuggerCookies.filter((entry) => entry?.name === name)) {
+        const key = JSON.stringify({
+          name: cookie?.name || '',
+          domain: cookie?.domain || '',
+          path: cookie?.path || '',
+          value: cookie?.value || '',
+          storeId: cookie?.storeId || '',
+          topLevelSite: cookie?.partitionKey?.topLevelSite || '',
+          hasCrossSiteAncestor: Boolean(cookie?.partitionKey?.hasCrossSiteAncestor),
+        });
+        if (seenCookieKeys.has(key)) {
+          continue;
+        }
+        seenCookieKeys.add(key);
+        cookies.push(cookie);
+      }
+    }
+
+    try {
+      const candidateCookies = (cookies || []).filter((cookie) => cookie?.value && resolveIcloudFamily(cookie.domain || ''));
+      const sourceCookie = candidateCookies.find((cookie) => resolveIcloudFamily(cookie.domain || '') === targetFamily)
+        || candidateCookies[0];
+      if (!sourceCookie) {
+        continue;
+      }
+
+      const cookieDetails = {
+        url: targetCookieUrl,
+        name: sourceCookie.name,
+        value: sourceCookie.value,
+        path: sourceCookie.path || '/',
+        secure: sourceCookie.secure !== false,
+        httpOnly: Boolean(sourceCookie.httpOnly),
+        storeId: sourceCookie.storeId,
+      };
+      if (!sourceCookie.session && Number.isFinite(sourceCookie.expirationDate)) {
+        cookieDetails.expirationDate = sourceCookie.expirationDate;
+      }
+      cookieDetails.sameSite = 'no_restriction';
+
+      await chrome.cookies.set(cookieDetails);
+      syncedCount += 1;
+    } catch {}
+  }
+
+  if (!syncedCount && partitionLookupContexts.length) {
+    await addLog(`iCloud：未命中可复制的鉴权 cookie，已尝试 ${partitionLookupContexts.length} 个分区 cookie 上下文。`, 'warn');
+  }
+
+  return syncedCount;
+}
+
 async function checkIcloudSession() {
   return withIcloudLoginHelp('检查 iCloud 会话', async () => {
     const { setupUrl } = await resolveIcloudPremiumMailService();
@@ -3385,27 +4749,142 @@ async function checkIcloudSession() {
 
 async function listIcloudAliases() {
   return withIcloudLoginHelp('加载 iCloud 隐私邮箱列表', async () => {
-    const { serviceUrl } = await resolveIcloudPremiumMailService();
-    const response = await icloudRequest('GET', `${serviceUrl}/v2/hme/list`);
     const state = await getState();
-    return normalizeIcloudAliasList(response, {
+    const options = {
       usedEmails: getEffectiveUsedEmails(state),
       preservedEmails: getPreservedAliasMap(state),
-    });
+    };
+    const preferredAliasSource = String(state?.preferredIcloudAliasSource || '').trim().toLowerCase();
+    const preferAppleAccountAliases = preferredAliasSource === 'apple-account';
+    let primaryAliases = [];
+    let hmeError = null;
+
+    if (preferAppleAccountAliases) {
+      try {
+        const preferredAccountAliases = await listAppleAccountAliases(state, options);
+        if (preferredAccountAliases.length) {
+          return preferredAccountAliases;
+        }
+      } catch (accountError) {
+        if (isAppleAccountLoginRequiredError(accountError)) {
+          await promptAppleAccountLogin(accountError, '加载 Apple Account 隐私邮箱列表');
+          throw new Error('请先在新打开的 Apple Account 页面中完成登录，再回来点击“我已登录”。');
+        }
+      }
+    }
+
+    try {
+      const primaryService = await resolveIcloudPremiumMailService();
+      primaryAliases = await runIcloudActionWithAutoHostFallback(
+        state,
+        primaryService,
+        async (service) => {
+          const response = await icloudRequest('GET', `${service.serviceUrl}/v2/hme/list`);
+          if (response?.success === false) {
+            throw new Error(getIcloudBusinessErrorMessage(response, 'iCloud 隐私邮箱列表加载失败。'));
+          }
+          return normalizeIcloudAliasList(response, options);
+        },
+        {
+          actionLabel: '加载 iCloud 隐私邮箱列表',
+        }
+      );
+      if (primaryAliases.length) {
+        if (preferAppleAccountAliases) {
+          await setState({ preferredIcloudAliasSource: '' });
+        }
+        return primaryAliases;
+      }
+
+      if (!getConfiguredIcloudHostPreference(state)) {
+        const latestState = await getState();
+        const primaryHost = normalizeIcloudHost(latestState?.preferredIcloudHost)
+          || normalizeIcloudHost(new URL(primaryService.setupUrl).host);
+        const setupUrls = await getPreferredIcloudSetupUrls(latestState);
+        for (const setupUrl of setupUrls) {
+          const fallbackHost = normalizeIcloudHost(new URL(setupUrl).host);
+          if (!fallbackHost || fallbackHost === primaryHost) {
+            continue;
+          }
+
+          let fallbackService;
+          try {
+            fallbackService = await resolveIcloudPremiumMailServiceForSetupUrl(setupUrl, latestState, {
+              persistPreferredHost: false,
+            });
+          } catch {
+            continue;
+          }
+
+          const fallbackResponse = await icloudRequest('GET', `${fallbackService.serviceUrl}/v2/hme/list`);
+          if (fallbackResponse?.success === false) {
+            throw new Error(getIcloudBusinessErrorMessage(fallbackResponse, 'iCloud 隐私邮箱列表加载失败。'));
+          }
+
+          const fallbackAliases = normalizeIcloudAliasList(fallbackResponse, options);
+          if (!fallbackAliases.length) {
+            continue;
+          }
+
+          if (fallbackHost !== normalizeIcloudHost(latestState.preferredIcloudHost) || preferAppleAccountAliases) {
+            await setState({
+              preferredIcloudHost: fallbackHost,
+              ...(preferAppleAccountAliases ? { preferredIcloudAliasSource: '' } : {}),
+            });
+          }
+          await addLog(`iCloud：首选 ${primaryHost || '当前'} 未返回别名，已切换到 ${fallbackHost} 重新加载。`, 'warn');
+          return fallbackAliases;
+        }
+      }
+    } catch (error) {
+      hmeError = error;
+      if (!shouldFallbackToAppleAccountAliases(error)) {
+        throw error;
+      }
+    }
+
+    try {
+      const accountAliases = await listAppleAccountAliases(state, {
+        ...options,
+        logMessage: hmeError
+          ? 'iCloud：Hide My Email 接口不可用，已改用 Apple Account 隐私列表'
+          : 'iCloud：Hide My Email 接口未返回别名，已改用 Apple Account 隐私列表',
+      });
+      if (!preferAppleAccountAliases) {
+        await setState({ preferredIcloudAliasSource: 'apple-account' });
+      }
+      if (accountAliases.length || hmeError) {
+        return accountAliases;
+      }
+      return primaryAliases;
+    } catch (accountError) {
+      if (isAppleAccountLoginRequiredError(accountError)) {
+        await promptAppleAccountLogin(accountError, '加载 Apple Account 隐私邮箱列表');
+        throw new Error('请先在新打开的 Apple Account 页面中完成登录，再回来点击“我已登录”。');
+      }
+      if (hmeError) {
+        throw new Error(`${getErrorMessage(hmeError)} | Apple Account 隐私邮箱列表也失败：${getErrorMessage(accountError)}`);
+      }
+      throw accountError;
+    }
   });
 }
 
 async function deleteIcloudAlias(payload) {
   return withIcloudLoginHelp('删除 iCloud 隐私邮箱', async () => {
     const alias = typeof payload === 'string'
-      ? { email: String(payload).trim().toLowerCase(), anonymousId: '' }
+      ? { email: String(payload).trim().toLowerCase(), anonymousId: '', source: '' }
       : {
           email: String(payload?.email || '').trim().toLowerCase(),
           anonymousId: String(payload?.anonymousId || '').trim(),
+          source: String(payload?.source || '').trim().toLowerCase(),
         };
 
     if (!alias.email) {
       throw new Error('未提供需要删除的 iCloud 隐私邮箱。');
+    }
+    if (alias.source === 'apple-account') {
+      throw new Error('Apple Account 隐私邮箱别名暂不支持在扩展内直接删除，请前往 account.apple.com 管理。');
     }
     if (!alias.anonymousId) {
       throw new Error(`缺少 ${alias.email} 的 anonymousId，请先刷新 iCloud 别名列表。`);
@@ -3480,49 +4959,143 @@ async function fetchIcloudHideMyEmail() {
     throwIfStopped();
     await addLog('iCloud：正在校验当前浏览器登录状态...', 'info');
 
-    const { serviceUrl, setupUrl } = await resolveIcloudPremiumMailService();
-    await addLog(`iCloud：已通过 ${new URL(setupUrl).host} 验证会话`, 'ok');
-
-    const existingAliasesResponse = await icloudRequest('GET', `${serviceUrl}/v2/hme/list`);
     const state = await getState();
-    const existingAliases = normalizeIcloudAliasList(existingAliasesResponse, {
+    const preferredAliasSource = String(state?.preferredIcloudAliasSource || '').trim().toLowerCase();
+    const preferAppleAccountAliases = preferredAliasSource === 'apple-account';
+    const aliasOptions = {
       usedEmails: getEffectiveUsedEmails(state),
       preservedEmails: getPreservedAliasMap(state),
-    });
+    };
+    let hmeError = null;
 
-    const reusableAlias = pickReusableIcloudAlias(existingAliases);
+    if (preferAppleAccountAliases) {
+      try {
+        const preferredAccountAliases = await listAppleAccountAliases(state, aliasOptions);
+        const preferredReusableAlias = pickReusableIcloudAlias(preferredAccountAliases);
+        if (preferredReusableAlias) {
+          await setEmailState(preferredReusableAlias.email);
+          await addLog(`iCloud：已复用 Apple Account 现有别名 ${preferredReusableAlias.email}`, 'ok');
+          broadcastIcloudAliasesChanged({ reason: 'selected', email: preferredReusableAlias.email });
+          return preferredReusableAlias.email;
+        }
+      } catch (accountError) {
+        if (isAppleAccountLoginRequiredError(accountError)) {
+          await promptAppleAccountLogin(accountError, '获取 Apple Account 隐私邮箱');
+          throw new Error('请先在新打开的 Apple Account 页面中完成登录，再回来点击“我已登录”。');
+        }
+      }
+    }
+
+    try {
+      const primaryService = await resolveIcloudPremiumMailService();
+      await addLog(`iCloud：已通过 ${new URL(primaryService.setupUrl).host} 验证会话`, 'ok');
+
+      return await runIcloudActionWithAutoHostFallback(
+        state,
+        primaryService,
+        async (service) => {
+          const existingAliasesResponse = await icloudRequest('GET', `${service.serviceUrl}/v2/hme/list`);
+          if (existingAliasesResponse?.success === false) {
+            throw new Error(getIcloudBusinessErrorMessage(existingAliasesResponse, 'iCloud 隐私邮箱列表加载失败。'));
+          }
+
+          const existingAliases = normalizeIcloudAliasList(existingAliasesResponse, {
+            usedEmails: aliasOptions.usedEmails,
+            preservedEmails: aliasOptions.preservedEmails,
+          });
+
+          const reusableAlias = pickReusableIcloudAlias(existingAliases);
+          if (reusableAlias) {
+            if (preferAppleAccountAliases) {
+              await setState({ preferredIcloudAliasSource: '' });
+            }
+            await setEmailState(reusableAlias.email);
+            await addLog(`iCloud：复用未使用别名 ${reusableAlias.email}`, 'ok');
+            broadcastIcloudAliasesChanged({ reason: 'selected', email: reusableAlias.email });
+            return reusableAlias.email;
+          }
+
+          await addLog('iCloud：没有可复用别名，开始生成新的 Hide My Email 地址...', 'warn');
+
+          const generated = await icloudRequest('POST', `${service.serviceUrl}/v1/hme/generate`);
+          if (!generated?.success || !generated?.result?.hme) {
+            throw new Error(getIcloudBusinessErrorMessage(generated, 'iCloud 隐私邮箱生成失败。'));
+          }
+
+          const reserved = await icloudRequest('POST', `${service.serviceUrl}/v1/hme/reserve`, {
+            data: {
+              hme: generated.result.hme,
+              label: getIcloudAliasLabel(),
+              note: 'Generated through Multi-Page Automation',
+            },
+          });
+
+          if (!reserved?.success || !reserved?.result?.hme?.hme) {
+            throw new Error(getIcloudBusinessErrorMessage(reserved, 'iCloud 隐私邮箱保留失败。'));
+          }
+
+          const alias = String(reserved.result.hme.hme || '').trim().toLowerCase();
+          if (preferAppleAccountAliases) {
+            await setState({ preferredIcloudAliasSource: '' });
+          }
+          await setEmailState(alias);
+          await addLog(`iCloud：已创建并保留新别名 ${alias}`, 'ok');
+          broadcastIcloudAliasesChanged({ reason: 'created', email: alias });
+          return alias;
+        },
+        {
+          actionLabel: '获取 iCloud 隐私邮箱',
+        }
+      );
+    } catch (error) {
+      hmeError = error;
+      if (!shouldFallbackToAppleAccountAliases(error)) {
+        throw error;
+      }
+    }
+
+    let accountAliases = [];
+    try {
+      accountAliases = await listAppleAccountAliases(state, {
+        usedEmails: aliasOptions.usedEmails,
+        preservedEmails: aliasOptions.preservedEmails,
+        logMessage: 'iCloud：Hide My Email 接口不可用，已改用 Apple Account 现有隐藏邮件地址',
+      });
+      if (!preferAppleAccountAliases) {
+        await setState({ preferredIcloudAliasSource: 'apple-account' });
+      }
+    } catch (accountError) {
+      if (isAppleAccountLoginRequiredError(accountError)) {
+        await promptAppleAccountLogin(accountError, '获取 Apple Account 隐私邮箱');
+        throw new Error('请先在新打开的 Apple Account 页面中完成登录，再回来点击“我已登录”。');
+      }
+      throw new Error(`${getErrorMessage(hmeError)} | Apple Account 隐私邮箱列表也失败：${getErrorMessage(accountError)}`);
+    }
+
+    const reusableAlias = pickReusableIcloudAlias(accountAliases);
     if (reusableAlias) {
       await setEmailState(reusableAlias.email);
-      await addLog(`iCloud：复用未使用别名 ${reusableAlias.email}`, 'ok');
+      await addLog(`iCloud：已复用 Apple Account 现有别名 ${reusableAlias.email}`, 'ok');
       broadcastIcloudAliasesChanged({ reason: 'selected', email: reusableAlias.email });
       return reusableAlias.email;
     }
 
-    await addLog('iCloud：没有可复用别名，开始生成新的 Hide My Email 地址...', 'warn');
-
-    const generated = await icloudRequest('POST', `${serviceUrl}/v1/hme/generate`);
-    if (!generated?.success || !generated?.result?.hme) {
-      throw new Error(generated?.error?.errorMessage || 'iCloud 隐私邮箱生成失败。');
-    }
-
-    const reserved = await icloudRequest('POST', `${serviceUrl}/v1/hme/reserve`, {
-      data: {
-        hme: generated.result.hme,
-        label: getIcloudAliasLabel(),
-        note: 'Generated through Multi-Page Automation',
-      },
-    });
-
-    if (!reserved?.success || !reserved?.result?.hme?.hme) {
-      throw new Error(reserved?.error?.errorMessage || 'iCloud 隐私邮箱保留失败。');
-    }
-
-    const alias = String(reserved.result.hme.hme || '').trim().toLowerCase();
-    await setEmailState(alias);
-    await addLog(`iCloud：已创建并保留新别名 ${alias}`, 'ok');
-    broadcastIcloudAliasesChanged({ reason: 'created', email: alias });
-    return alias;
+    throw new Error('当前账号只能读取 Apple Account 中已有的隐藏邮件地址，暂时无法通过 iCloud+ 接口创建新地址；请先准备未使用别名后再试。');
   });
+}
+
+async function fetchIcloudListEmail(state = null) {
+  throwIfStopped();
+  const latestState = state || await getState();
+  const entries = getIcloudListEntries(latestState);
+  const entry = allocateIcloudListEntry(entries);
+  if (!entry) {
+    throw new Error('iCloud 列表里没有可用邮箱，请导入新列表或手动把某条标记为未用。');
+  }
+
+  await setEmailState(entry.email);
+  await addLog(`iCloud 列表：已选择 ${entry.email}`, 'ok');
+  return entry.email;
 }
 
 async function finalizeIcloudAliasAfterSuccessfulFlow(state) {
@@ -3561,6 +5134,10 @@ async function finalizeIcloudAliasAfterSuccessfulFlow(state) {
       await addLog(`iCloud：${email} 在最新别名列表中已是保留状态，跳过自动删除。`, 'info');
       return { handled: true, deleted: false };
     }
+    if (alias.source === 'apple-account') {
+      await addLog(`iCloud：${email} 来自 Apple Account 隐私邮箱列表，跳过自动删除。`, 'info');
+      return { handled: true, deleted: false };
+    }
     if (!alias.anonymousId) {
       await addLog(`iCloud：自动删除跳过，${email} 缺少 anonymousId，请先刷新列表后重试。`, 'warn');
       return { handled: true, deleted: false };
@@ -3572,6 +5149,40 @@ async function finalizeIcloudAliasAfterSuccessfulFlow(state) {
     await addLog(`iCloud：自动删除 ${email} 失败：${getErrorMessage(err)}`, 'warn');
     return { handled: true, deleted: false };
   }
+}
+
+async function finalizeIcloudListEntryAfterSuccessfulFlow(state) {
+  const email = normalizeIcloudListEmail(state?.email);
+  if (!email) {
+    return { handled: false, updated: false };
+  }
+
+  const usedIcloudListMode = normalizeEmailGenerator(state?.emailGenerator) === ICLOUD_LIST_PROVIDER
+    || normalizeMailProvider(state?.mailProvider) === ICLOUD_LIST_PROVIDER;
+  if (!usedIcloudListMode) {
+    return { handled: false, updated: false };
+  }
+
+  const entries = getIcloudListEntries(state);
+  const currentEntry = findIcloudListEntryByEmail(entries, email);
+  if (!currentEntry) {
+    await addLog(`iCloud 列表：流程成功后未在当前列表中找到 ${email}，跳过已用标记。`, 'warn');
+    return { handled: true, updated: false };
+  }
+
+  const nextEntries = patchIcloudListEntry(entries, email, {
+    used: true,
+    lastUsedAt: Date.now(),
+  });
+  await setIcloudListEntriesState(nextEntries, {
+    state: {
+      ...state,
+      icloudListEntries: nextEntries,
+      currentIcloudListEmail: email,
+    },
+  });
+  await addLog(`iCloud 列表：流程成功后已标记 ${email} 为已用。`, 'ok');
+  return { handled: true, updated: true };
 }
 
 // ============================================================
@@ -5396,6 +7007,9 @@ function getEmailGeneratorLabel(generator) {
   if (generator === 'icloud') {
     return 'iCloud 隐私邮箱';
   }
+  if (generator === ICLOUD_LIST_PROVIDER) {
+    return 'iCloud 列表';
+  }
   if (generator === 'cloudflare') return 'Cloudflare 邮箱';
   if (generator === CLOUDFLARE_TEMP_EMAIL_GENERATOR) return 'Cloudflare Temp Email';
   return 'Duck 邮箱';
@@ -5495,6 +7109,7 @@ const generatedEmailHelpers = self.MultiPageGeneratedEmailHelpers?.createGenerat
   DUCK_AUTOFILL_URL,
   fetch,
   fetchIcloudHideMyEmail,
+  fetchIcloudListEmail,
   getCloudflareTempEmailAddressFromResponse,
   getCloudflareTempEmailConfig,
   getState,
@@ -5551,6 +7166,7 @@ let autoRunSessionSeed = 0;
 const EMAIL_FETCH_MAX_ATTEMPTS = 5;
 const VERIFICATION_POLL_MAX_ROUNDS = 5;
 const STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS = 25000;
+const ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS = 90000;
 const MAIL_2925_VERIFICATION_MAX_ATTEMPTS = 15;
 const MAIL_2925_VERIFICATION_INTERVAL_MS = 15000;
 const AUTO_STEP_DELAYS = {
@@ -5572,6 +7188,7 @@ const accountRunHistoryHelpers = self.MultiPageBackgroundAccountRunHistory?.crea
   getErrorMessage,
   getState,
   normalizeAccountRunHistoryHelperBaseUrl,
+  resolveAccountRunRecordContext,
 });
 const contributionOAuthManager = self.MultiPageBackgroundContributionOAuth?.createContributionOAuthManager({
   addLog,
@@ -6183,6 +7800,7 @@ const signupFlowHelpers = self.MultiPageSignupFlowHelpers?.createSignupFlowHelpe
   isLuckmailProvider,
   isSignupPasswordPageUrl,
   isTabAlive,
+  prepareSignupEntryForLoggedOutState: runSignupEntryPreCookieCleanup,
   reuseOrCreateTab,
   sendToContentScriptResilient,
   setEmailState,
@@ -6202,9 +7820,11 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   getHotmailVerificationPollConfig,
   getHotmailVerificationRequestTimestamp,
   handleMail2925LimitReachedError,
+  ICLOUD_LIST_PROVIDER,
   getState,
   getTabId,
   HOTMAIL_PROVIDER,
+  isRetryableContentScriptTransportError,
   isMail2925LimitReachedError,
   isStopError,
   LUCKMAIL_PROVIDER,
@@ -6212,8 +7832,10 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
   pollCloudflareTempEmailVerificationCode,
   pollHotmailVerificationCode,
+  pollIcloudListVerificationCode,
   pollLuckmailVerificationCode,
   sendToContentScript,
+  sendToContentScriptResilient,
   sendToMailContentScriptResilient,
   setState,
   setStepStatus,
@@ -6221,6 +7843,26 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
 });
+const browserProxyManager = self.MultiPageBackgroundBrowserProxy?.createBrowserProxyManager({
+  addLog,
+  chrome,
+  getState,
+});
+if (chrome.webRequest?.onAuthRequired && browserProxyManager?.handleAuthRequiredAsync) {
+  chrome.webRequest.onAuthRequired.addListener(
+    (details, callback) => browserProxyManager.handleAuthRequiredAsync(details, callback),
+    { urls: ['<all_urls>'] },
+    ['asyncBlocking']
+  );
+}
+
+if (chrome.proxy?.onProxyError && browserProxyManager?.handleProxyError) {
+  chrome.proxy.onProxyError.addListener((details) => {
+    browserProxyManager.handleProxyError(details).catch((err) => {
+      console.error(LOG_PREFIX, 'Failed to record proxy error:', err);
+    });
+  });
+}
 const step1Executor = self.MultiPageBackgroundStep1?.createStep1Executor({
   addLog,
   completeStepFromBackground,
@@ -6260,6 +7902,8 @@ const step4Executor = self.MultiPageBackgroundStep4?.createStep4Executor({
   getMailConfig,
   getTabId,
   HOTMAIL_PROVIDER,
+  ICLOUD_LIST_PROVIDER,
+  ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS,
   isTabAlive,
   LUCKMAIL_PROVIDER,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
@@ -6311,6 +7955,8 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   getState,
   getTabId,
   HOTMAIL_PROVIDER,
+  ICLOUD_LIST_PROVIDER,
+  ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS,
   isTabAlive,
   isVerificationMailPollingError,
   LUCKMAIL_PROVIDER,
@@ -6357,6 +8003,7 @@ const stepExecutorsByKey = {
 };
 const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter({
   addLog,
+  applyIcloudListText,
   appendAccountRunRecord: (...args) => appendAndBroadcastAccountRunRecord(...args),
   batchUpdateLuckmailPurchases,
   buildLocalhostCleanupPrefix,
@@ -6365,6 +8012,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   broadcastDataUpdate,
   cancelScheduledAutoRun,
   checkIcloudSession,
+  clearIcloudListEntries,
   clearAccountRunHistory: (...args) => clearAndBroadcastAccountRunHistory(...args),
   deleteAccountRunHistoryRecords: (...args) => deleteAndBroadcastAccountRunHistoryRecords(...args),
   clearAutoRunTimerAlarm,
@@ -6375,6 +8023,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   deleteHotmailAccount,
   deleteHotmailAccounts,
   deleteIcloudAlias,
+  deleteIcloudListEmailEntry,
   deleteUsedIcloudAliases,
   disableUsedLuckmailPurchases,
   doesStepUseCompletionSignal,
@@ -6394,9 +8043,11 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
     );
   },
   finalizeIcloudAliasAfterSuccessfulFlow,
+  finalizeIcloudListEntryAfterSuccessfulFlow,
   findHotmailAccount,
   flushCommand,
   getCurrentLuckmailPurchase,
+  getIcloudListEntries,
   getPendingAutoRunTimerPlan,
   getSourceLabel,
   getState,
@@ -6436,17 +8087,20 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   setEmailStateSilently,
   setIcloudAliasPreservedState,
   setIcloudAliasUsedState,
+  setIcloudListEntryUsedState,
   setLuckmailPurchaseDisabledState,
   setLuckmailPurchasePreservedState,
   setLuckmailPurchaseUsedState,
   setPersistentSettings,
   setState,
+  syncBrowserProxyFromState,
   setStepStatus,
   skipAutoRunCountdown,
   skipStep,
   startContributionFlow: (...args) => contributionOAuthManager?.startContributionFlow?.(...args),
   startAutoRunLoop,
   pollContributionStatus: (...args) => contributionOAuthManager?.pollContributionStatus?.(...args),
+  resetIcloudListUsageState,
   syncHotmailAccounts,
   deleteMail2925Account,
   deleteMail2925Accounts,
@@ -6472,6 +8126,10 @@ async function requestCpaOAuthUrl(state, options = {}) {
 
 async function requestSub2ApiOAuthUrl(state, options = {}) {
   return panelBridge.requestSub2ApiOAuthUrl(state, options);
+}
+
+async function syncBrowserProxyFromState(state = null) {
+  return browserProxyManager?.syncBrowserProxyFromState?.(state);
 }
 
 async function openSignupEntryTab(step = 1) {
@@ -6523,12 +8181,44 @@ async function executeStep3(state) {
 // ============================================================
 
 function getMailConfig(state) {
-  const provider = state.mailProvider || 'qq';
+  const provider = String(state?.mailProvider || 'qq').trim().toLowerCase();
+  const useIcloudListProvider = provider === ICLOUD_LIST_PROVIDER
+    || String(state?.emailGenerator || '').trim().toLowerCase() === ICLOUD_LIST_PROVIDER;
   if (provider === 'custom') {
     return { provider: 'custom', label: '自定义邮箱' };
   }
   if (provider === HOTMAIL_PROVIDER) {
     return { provider: HOTMAIL_PROVIDER, label: 'Hotmail（API对接/本地助手）' };
+  }
+  if (useIcloudListProvider) {
+    const currentEntry = getCurrentIcloudListEntry(state);
+    if (!state?.email) {
+      return { provider: ICLOUD_LIST_PROVIDER, label: 'iCloud 列表', error: '当前还没有 iCloud 列表邮箱，请先获取邮箱或手动填写。' };
+    }
+    if (!currentEntry) {
+      return {
+        provider: ICLOUD_LIST_PROVIDER,
+        label: 'iCloud 列表',
+        error: `当前邮箱 ${String(state.email || state.currentIcloudListEmail || '').trim() || '(空)'} 不在 iCloud 列表中，请重新应用列表或改回列表内邮箱。`,
+      };
+    }
+    if (!currentEntry.codeUrl) {
+      return {
+        provider: ICLOUD_LIST_PROVIDER,
+        label: 'iCloud 列表',
+        error: `当前邮箱 ${currentEntry.email} 缺少验证码链接。`,
+      };
+    }
+    return {
+      provider: ICLOUD_LIST_PROVIDER,
+      source: 'icloud-list-mail',
+      url: currentEntry.codeUrl,
+      label: 'iCloud 列表',
+      entry: currentEntry,
+      navigateOnReuse: true,
+      inject: ['content/activation-utils.js', 'content/utils.js', 'content/icloud-list-mail.js'],
+      injectSource: 'icloud-list-mail',
+    };
   }
   if (provider === ICLOUD_PROVIDER) {
     const configuredHost = getConfiguredIcloudHostPreference(state)
@@ -6739,17 +8429,10 @@ async function removeCookieDirectly(cookie) {
   }
 }
 
-async function runPreStep6CookieCleanup() {
-  await addLog(
-    `步骤 6：开始前等待 ${Math.round(STEP6_PRE_LOGIN_COOKIE_CLEAR_DELAY_MS / 1000)} 秒，然后直接删除 ChatGPT / OpenAI cookies...`,
-    'info'
-  );
-
-  await sleepWithStop(STEP6_PRE_LOGIN_COOKIE_CLEAR_DELAY_MS);
-
+async function clearPreLoginCookiesDirectly(stepLabel = '预清理') {
   if (!chrome.cookies?.getAll || !chrome.cookies?.remove) {
-    await addLog('步骤 6：当前浏览器不支持 cookies API，无法直接删除 cookies。', 'warn');
-    return;
+    await addLog(`${stepLabel}：当前浏览器不支持 cookies API，无法直接删除 cookies。`, 'warn');
+    return { removedCount: 0 };
   }
 
   const cookies = await collectCookiesForPreLoginCleanup();
@@ -6769,9 +8452,28 @@ async function runPreStep6CookieCleanup() {
         origins: PRE_LOGIN_COOKIE_CLEAR_ORIGINS,
       });
     } catch (err) {
-      await addLog(`步骤 6：browsingData 补扫 cookies 失败：${getErrorMessage(err)}`, 'warn');
+      await addLog(`${stepLabel}：browsingData 补扫 cookies 失败：${getErrorMessage(err)}`, 'warn');
     }
   }
+
+  return { removedCount };
+}
+
+async function runSignupEntryPreCookieCleanup(step = 1) {
+  const stepLabel = `步骤 ${step}`;
+  await addLog(`${stepLabel}：打开 ChatGPT 官网前先清理登录 cookies，避免落到已登录首页。`, 'info');
+  const { removedCount } = await clearPreLoginCookiesDirectly(stepLabel);
+  await addLog(`${stepLabel}：已清理 ${removedCount} 个 ChatGPT / OpenAI cookies，准备重新打开官网入口。`, 'ok');
+}
+
+async function runPreStep6CookieCleanup() {
+  await addLog(
+    `步骤 6：开始前等待 ${Math.round(STEP6_PRE_LOGIN_COOKIE_CLEAR_DELAY_MS / 1000)} 秒，然后直接删除 ChatGPT / OpenAI cookies...`,
+    'info'
+  );
+
+  await sleepWithStop(STEP6_PRE_LOGIN_COOKIE_CLEAR_DELAY_MS);
+  const { removedCount } = await clearPreLoginCookiesDirectly('步骤 6');
 
   await addLog(`步骤 6：已直接删除 ${removedCount} 个 ChatGPT / OpenAI cookies，准备继续获取链接并登录。`, 'ok');
 }
@@ -7551,14 +9253,23 @@ chrome.runtime.onStartup.addListener(() => {
   restoreAutoRunTimerIfNeeded().catch((err) => {
     console.error(LOG_PREFIX, 'Failed to restore auto run timer on startup:', err);
   });
+  syncBrowserProxyFromState().catch((err) => {
+    console.error(LOG_PREFIX, 'Failed to restore browser proxy on startup:', err);
+  });
 });
 
 chrome.runtime.onInstalled.addListener(() => {
   restoreAutoRunTimerIfNeeded().catch((err) => {
     console.error(LOG_PREFIX, 'Failed to restore auto run timer on install/update:', err);
   });
+  syncBrowserProxyFromState().catch((err) => {
+    console.error(LOG_PREFIX, 'Failed to restore browser proxy on install/update:', err);
+  });
 });
 
 restoreAutoRunTimerIfNeeded().catch((err) => {
   console.error(LOG_PREFIX, 'Failed to restore auto run timer:', err);
+});
+syncBrowserProxyFromState().catch((err) => {
+  console.error(LOG_PREFIX, 'Failed to restore browser proxy:', err);
 });

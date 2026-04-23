@@ -119,3 +119,53 @@ test('step 4 does not request a fresh code first for Cloudflare temp mail', asyn
   assert.equal(capturedOptions.requestFreshCodeFirst, false);
   assert.equal(capturedOptions.resendIntervalMs, 25000);
 });
+
+test('step 4 does not request a fresh code first for standard mailbox providers', async () => {
+  let capturedOptions = null;
+  const realDateNow = Date.now;
+  Date.now = () => 700000;
+
+  const executor = api.createStep4Executor({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    completeStepFromBackground: async () => {},
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureMail2925MailboxSession: async () => {},
+    getMailConfig: () => ({
+      provider: 'qq',
+      label: 'QQ 邮箱',
+      source: 'qq-mail',
+      url: 'https://mail.qq.com',
+    }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    resolveVerificationStep: async (_step, _state, _mail, options) => {
+      capturedOptions = options;
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScriptResilient: async () => ({}),
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    throwIfStopped: () => {},
+  });
+
+  try {
+    await executor.executeStep4({
+      email: 'user@example.com',
+      password: 'secret',
+    });
+  } finally {
+    Date.now = realDateNow;
+  }
+
+  assert.equal(capturedOptions.filterAfterTimestamp, 700000);
+  assert.equal(capturedOptions.requestFreshCodeFirst, false);
+  assert.equal(capturedOptions.resendIntervalMs, 25000);
+});

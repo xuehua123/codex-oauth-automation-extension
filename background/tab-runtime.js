@@ -294,6 +294,15 @@
         retryDelayMs = 700,
         logMessage = '',
       } = options;
+      const preInjectRetryCount = Number.isInteger(options.preInjectRetryCount)
+        ? Math.max(0, options.preInjectRetryCount)
+        : (
+            source === 'signup-page'
+            && Array.isArray(inject)
+            && inject.includes('content/signup-page.js')
+              ? 2
+              : 0
+          );
 
       const start = Date.now();
       let lastError = null;
@@ -316,6 +325,11 @@
 
         if (!inject || !inject.length) {
           throw new Error(`${getSourceLabel(source)} 内容脚本未就绪，且未提供可用的注入文件。`);
+        }
+
+        if (attempt <= preInjectRetryCount) {
+          await sleepOrStop(retryDelayMs);
+          continue;
         }
 
         const registry = await getTabRegistry();

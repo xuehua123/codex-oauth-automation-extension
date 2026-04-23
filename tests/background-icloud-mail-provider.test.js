@@ -53,8 +53,9 @@ function extractFunction(name) {
 
 test('normalizeMailProvider keeps icloud provider', () => {
   const bundle = extractFunction('normalizeMailProvider');
-  const api = new Function(`
+const api = new Function(`
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
@@ -70,8 +71,9 @@ return { normalizeMailProvider };
 
 test('getMailConfig returns icloud mail tab config with host preference', () => {
   const bundle = extractFunction('getMailConfig');
-  const api = new Function(`
+const api = new Function(`
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
@@ -108,8 +110,9 @@ return { getMailConfig };
 
 test('getMailConfig reuses preferred icloud host when preference is auto', () => {
   const bundle = extractFunction('getMailConfig');
-  const api = new Function(`
+const api = new Function(`
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
@@ -148,6 +151,7 @@ test('getMailConfig keeps provider metadata for 2925 mailboxes', () => {
   const bundle = extractFunction('getMailConfig');
   const api = new Function(`
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
@@ -170,5 +174,49 @@ return { getMailConfig };
     label: '2925 邮箱',
     inject: ['content/utils.js', 'content/mail-2925.js'],
     injectSource: 'mail-2925',
+  });
+});
+
+test('getMailConfig routes icloud-list generator through the list mail config even when the provider differs', () => {
+  const bundle = extractFunction('getMailConfig');
+  const api = new Function(`
+const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
+const GMAIL_PROVIDER = 'gmail';
+const HOTMAIL_PROVIDER = 'hotmail-api';
+const LUCKMAIL_PROVIDER = 'luckmail-api';
+const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+function normalizeEmailGenerator(value = '') { return String(value || '').trim().toLowerCase(); }
+function getCurrentIcloudListEntry(state = {}) {
+  return (Array.isArray(state.icloudListEntries) ? state.icloudListEntries : []).find((entry) => entry?.email === state.email) || null;
+}
+function normalizeIcloudHost(value = '') { return String(value || '').trim().toLowerCase(); }
+function normalizeInbucketOrigin(value) { return String(value || '').trim(); }
+function getConfiguredIcloudHostPreference() { return ''; }
+function getIcloudLoginUrlForHost(host) { return host; }
+function getIcloudMailUrlForHost(host) { return host; }
+${bundle}
+return { getMailConfig };
+`)();
+
+  const entry = {
+    email: 'alias@icloud.com',
+    codeUrl: 'https://example.com/code/alias',
+  };
+
+  assert.deepEqual(api.getMailConfig({
+    mailProvider: '163',
+    emailGenerator: 'icloud-list',
+    email: 'alias@icloud.com',
+    icloudListEntries: [entry],
+  }), {
+    provider: 'icloud-list',
+    source: 'icloud-list-mail',
+    url: 'https://example.com/code/alias',
+    label: 'iCloud 列表',
+    entry,
+    navigateOnReuse: true,
+    inject: ['content/activation-utils.js', 'content/utils.js', 'content/icloud-list-mail.js'],
+    injectSource: 'icloud-list-mail',
   });
 });

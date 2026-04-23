@@ -11,15 +11,16 @@ const STATUS_ICONS = {
 };
 
 const logArea = document.getElementById('log-area');
+const btnMainTabRun = document.getElementById('btn-main-tab-run');
 const btnOpenAccountRecords = document.getElementById('btn-open-account-records');
-const accountRecordsOverlay = document.getElementById('account-records-overlay');
+const accountRecordsSection = document.getElementById('account-records-section');
 const accountRecordsMeta = document.getElementById('account-records-meta');
 const accountRecordsStats = document.getElementById('account-records-stats');
 const accountRecordsList = document.getElementById('account-records-list');
 const accountRecordsPageLabel = document.getElementById('account-records-page-label');
 const btnAccountRecordsPrev = document.getElementById('btn-account-records-prev');
 const btnAccountRecordsNext = document.getElementById('btn-account-records-next');
-const btnCloseAccountRecords = document.getElementById('btn-close-account-records');
+const btnExportAccountRecords = document.getElementById('btn-export-account-records');
 const btnClearAccountRecords = document.getElementById('btn-clear-account-records');
 const btnToggleAccountRecordsSelection = document.getElementById('btn-toggle-account-records-selection');
 const btnDeleteSelectedAccountRecords = document.getElementById('btn-delete-selected-account-records');
@@ -94,6 +95,11 @@ const rowSub2ApiGroup = document.getElementById('row-sub2api-group');
 const inputSub2ApiGroup = document.getElementById('input-sub2api-group');
 const rowSub2ApiDefaultProxy = document.getElementById('row-sub2api-default-proxy');
 const inputSub2ApiDefaultProxy = document.getElementById('input-sub2api-default-proxy');
+const rowBrowserProxyEnabled = document.getElementById('row-browser-proxy-enabled');
+const inputBrowserProxyEnabled = document.getElementById('input-browser-proxy-enabled');
+const rowBrowserProxySpec = document.getElementById('row-browser-proxy-spec');
+const inputBrowserProxySpec = document.getElementById('input-browser-proxy-spec');
+const btnToggleBrowserProxySpec = document.getElementById('btn-toggle-browser-proxy-spec');
 const rowCustomPassword = document.getElementById('row-custom-password');
 const selectMailProvider = document.getElementById('select-mail-provider');
 const btnMailLogin = document.getElementById('btn-mail-login');
@@ -118,6 +124,7 @@ const hotmailSection = document.getElementById('hotmail-section');
 const mail2925Section = document.getElementById('mail2925-section');
 const luckmailSection = document.getElementById('luckmail-section');
 const icloudSection = document.getElementById('icloud-section');
+const icloudListSection = document.getElementById('icloud-list-section');
 const icloudSummary = document.getElementById('icloud-summary');
 const icloudList = document.getElementById('icloud-list');
 const icloudLoginHelp = document.getElementById('icloud-login-help');
@@ -137,6 +144,15 @@ const btnIcloudBulkUnused = document.getElementById('btn-icloud-bulk-unused');
 const btnIcloudBulkPreserve = document.getElementById('btn-icloud-bulk-preserve');
 const btnIcloudBulkUnpreserve = document.getElementById('btn-icloud-bulk-unpreserve');
 const btnIcloudBulkDelete = document.getElementById('btn-icloud-bulk-delete');
+const inputIcloudList = document.getElementById('input-icloud-list');
+const inputIcloudListFile = document.getElementById('input-icloud-list-file');
+const btnIcloudListImportFile = document.getElementById('btn-icloud-list-import-file');
+const btnIcloudListApply = document.getElementById('btn-icloud-list-apply');
+const btnIcloudListResetUnused = document.getElementById('btn-icloud-list-reset-unused');
+const btnIcloudListClear = document.getElementById('btn-icloud-list-clear');
+const icloudListSummary = document.getElementById('icloud-list-summary');
+const icloudListErrors = document.getElementById('icloud-list-errors');
+const icloudListRecords = document.getElementById('icloud-list-records');
 const rowHotmailServiceMode = document.getElementById('row-hotmail-service-mode');
 const hotmailServiceModeButtons = Array.from(document.querySelectorAll('[data-hotmail-service-mode]'));
 const rowHotmailRemoteBaseUrl = document.getElementById('row-hotmail-remote-base-url');
@@ -253,12 +269,51 @@ const AUTO_RUN_FALLBACK_RISK_WARNING_MIN_RUNS = 3;
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
 const ICLOUD_PROVIDER = 'icloud';
+const ICLOUD_LIST_PROVIDER = 'icloud-list';
 const GMAIL_PROVIDER = 'gmail';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const DEFAULT_LUCKMAIL_BASE_URL = 'https://mails.luckyous.com';
 const DEFAULT_LUCKMAIL_EMAIL_TYPE = 'ms_graph';
 const DISPLAY_TIMEZONE = 'Asia/Shanghai';
 const DEFAULT_ACCOUNT_RUN_HISTORY_HELPER_BASE_URL = 'http://127.0.0.1:17373';
+const MAIN_TAB_RUN = 'run';
+const MAIN_TAB_RECORDS = 'records';
+const MAIN_TAB_STORAGE_KEY = 'multipage-main-tab';
+
+function normalizeMainTabValue(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === MAIN_TAB_RECORDS ? MAIN_TAB_RECORDS : MAIN_TAB_RUN;
+}
+
+function syncMainTabButtons(activeTab = MAIN_TAB_RUN) {
+  [
+    { value: MAIN_TAB_RUN, button: btnMainTabRun },
+    { value: MAIN_TAB_RECORDS, button: btnOpenAccountRecords },
+  ].forEach(({ value, button }) => {
+    if (!button) {
+      return;
+    }
+    const isActive = value === activeTab;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.setAttribute('aria-selected', String(isActive));
+  });
+}
+
+function setActiveMainTab(value, options = {}) {
+  const nextTab = normalizeMainTabValue(value);
+  document.body?.setAttribute('data-main-tab', nextTab);
+  syncMainTabButtons(nextTab);
+  if (options.persist !== false) {
+    localStorage.setItem(MAIN_TAB_STORAGE_KEY, nextTab);
+  }
+  return nextTab;
+}
+
+function initMainTab() {
+  const savedTab = localStorage.getItem(MAIN_TAB_STORAGE_KEY);
+  return setActiveMainTab(savedTab, { persist: false });
+}
 
 function getManagedAliasUtils() {
   return window.MultiPageManagedAliasUtils || null;
@@ -1479,13 +1534,15 @@ function collectSettingsPayload() {
     sub2apiPassword: inputSub2ApiPassword.value,
     sub2apiGroupName: inputSub2ApiGroup.value.trim(),
     sub2apiDefaultProxyName: inputSub2ApiDefaultProxy.value.trim(),
+    browserProxyEnabled: Boolean(inputBrowserProxyEnabled?.checked),
+    browserProxySpec: inputBrowserProxySpec.value.trim(),
     ...(contributionModeEnabled ? {} : {
       customPassword: inputPassword.value,
     }),
     mailProvider: selectMailProvider.value,
     mail2925Mode: getSelectedMail2925Mode(),
     mail2925UseAccountPool,
-    emailGenerator: selectEmailGenerator.value,
+    emailGenerator: getSelectedEmailGenerator(),
     autoDeleteUsedIcloudAlias: checkboxAutoDeleteIcloud?.checked,
     icloudHostPreference: selectIcloudHostPreference?.value || 'auto',
     ...(contributionModeEnabled ? {} : {
@@ -1858,8 +1915,10 @@ function applySettingsState(state) {
   inputSub2ApiPassword.value = state?.sub2apiPassword || '';
   inputSub2ApiGroup.value = state?.sub2apiGroupName || '';
   inputSub2ApiDefaultProxy.value = state?.sub2apiDefaultProxyName || '';
+  inputBrowserProxyEnabled.checked = Boolean(state?.browserProxyEnabled);
+  inputBrowserProxySpec.value = state?.browserProxySpec || '';
   const restoredMailProvider = isCustomMailProvider(state?.mailProvider)
-    || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', 'qq', 'inbucket', '2925', 'cloudflare-temp-email'].includes(String(state?.mailProvider || '').trim())
+    || [ICLOUD_PROVIDER, ICLOUD_LIST_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', 'qq', 'inbucket', '2925', 'cloudflare-temp-email'].includes(String(state?.mailProvider || '').trim())
     ? String(state?.mailProvider || '163').trim()
     : (String(state?.emailGenerator || '').trim().toLowerCase() === 'custom'
       || String(state?.emailGenerator || '').trim().toLowerCase() === 'manual'
@@ -1871,6 +1930,8 @@ function applySettingsState(state) {
     const restoredEmailGenerator = String(state?.emailGenerator || '').trim().toLowerCase();
     if (restoredEmailGenerator === 'icloud') {
       selectEmailGenerator.value = 'icloud';
+    } else if (restoredEmailGenerator === ICLOUD_LIST_PROVIDER) {
+      selectEmailGenerator.value = ICLOUD_LIST_PROVIDER;
     } else if (restoredEmailGenerator === 'cloudflare') {
       selectEmailGenerator.value = 'cloudflare';
     } else if (restoredEmailGenerator === 'cloudflare-temp-email') {
@@ -1878,6 +1939,10 @@ function applySettingsState(state) {
     } else {
       selectEmailGenerator.value = 'duck';
     }
+  }
+  syncEmailGeneratorSelectionForMailProvider(restoredMailProvider);
+  if (!String(state?.email || '').trim() && getSelectedEmailGenerator() === ICLOUD_LIST_PROVIDER) {
+    inputEmail.value = state?.currentIcloudListEmail || '';
   }
   if (selectIcloudHostPreference) {
     selectIcloudHostPreference.value = String(state?.icloudHostPreference || '').trim().toLowerCase() === 'icloud.com'
@@ -1942,6 +2007,7 @@ function applySettingsState(state) {
   updateAutoDelayInputState();
   updateFallbackThreadIntervalInputState();
   updateAccountRunHistorySettingsUI();
+  updateBrowserProxySettingsUI();
   updatePanelModeUI();
   updateMailProviderUI();
   if (isLuckmailProvider(state?.mailProvider)) {
@@ -1956,6 +2022,9 @@ async function restoreState() {
     applySettingsState(state);
     if (getSelectedEmailGenerator() === 'icloud' && icloudSection?.style.display !== 'none') {
       refreshIcloudAliases({ silent: true }).catch(() => { });
+    }
+    if (icloudListSection?.style.display !== 'none') {
+      refreshIcloudListEntries({ silent: true }).catch(() => { });
     }
 
     if (state.oauthUrl) {
@@ -2358,6 +2427,21 @@ function isIcloudMailProvider(provider = selectMailProvider.value) {
   return String(provider || '').trim().toLowerCase() === ICLOUD_PROVIDER;
 }
 
+function isIcloudListMailProvider(provider = selectMailProvider.value) {
+  return String(provider || '').trim().toLowerCase() === ICLOUD_LIST_PROVIDER;
+}
+
+function syncEmailGeneratorSelectionForMailProvider(provider = selectMailProvider.value) {
+  if (!selectEmailGenerator || !isIcloudListMailProvider(provider)) {
+    return false;
+  }
+  if (String(selectEmailGenerator.value || '').trim().toLowerCase() === ICLOUD_LIST_PROVIDER) {
+    return false;
+  }
+  selectEmailGenerator.value = ICLOUD_LIST_PROVIDER;
+  return true;
+}
+
 function normalizeLuckmailBaseUrl(value = '') {
   const trimmed = String(value || '').trim();
   if (!trimmed) {
@@ -2386,12 +2470,18 @@ function normalizeLuckmailEmailType(value = '') {
 }
 
 function getSelectedEmailGenerator() {
+  if (isIcloudListMailProvider()) {
+    return ICLOUD_LIST_PROVIDER;
+  }
   const generator = String(selectEmailGenerator.value || '').trim().toLowerCase();
   if (generator === 'custom' || generator === 'manual') {
     return 'custom';
   }
   if (generator === 'icloud') {
     return 'icloud';
+  }
+  if (generator === ICLOUD_LIST_PROVIDER) {
+    return ICLOUD_LIST_PROVIDER;
   }
   if (generator === 'cloudflare') return 'cloudflare';
   if (generator === 'cloudflare-temp-email') return 'cloudflare-temp-email';
@@ -2408,6 +2498,14 @@ function getEmailGeneratorUiCopy() {
       placeholder: '点击获取 iCloud 隐私邮箱，或手动粘贴邮箱',
       successVerb: '获取',
       label: 'iCloud 隐私邮箱',
+    };
+  }
+  if (getSelectedEmailGenerator() === ICLOUD_LIST_PROVIDER) {
+    return {
+      buttonLabel: '获取',
+      placeholder: '点击获取 iCloud 列表邮箱，或手动粘贴列表内邮箱',
+      successVerb: '获取',
+      label: 'iCloud 列表',
     };
   }
   if (getSelectedEmailGenerator() === 'cloudflare') {
@@ -2648,6 +2746,7 @@ function updateMailProviderUI() {
   const useLuckmail = isLuckmailProvider();
   const useCustomEmail = isCustomMailProvider();
   const useIcloudProvider = isIcloudMailProvider();
+  const useIcloudListProvider = isIcloudListMailProvider();
   const useEmailGenerator = !useHotmail && !useLuckmail && !useGeneratedAlias && !useCustomEmail;
   const useCloudflareTempEmailProvider = selectMailProvider.value === 'cloudflare-temp-email';
   const aliasUiCopy = useGeneratedAlias
@@ -2665,9 +2764,11 @@ function updateMailProviderUI() {
   const hotmailServiceMode = getSelectedHotmailServiceMode();
   rowInbucketHost.style.display = useInbucket ? '' : 'none';
   rowInbucketMailbox.style.display = useInbucket ? '' : 'none';
+  syncEmailGeneratorSelectionForMailProvider();
   const selectedGenerator = getSelectedEmailGenerator();
   const useCloudflare = selectedGenerator === 'cloudflare';
   const useIcloud = selectedGenerator === 'icloud';
+  const useIcloudList = selectedGenerator === ICLOUD_LIST_PROVIDER;
   const useCloudflareTempEmailGenerator = selectedGenerator === 'cloudflare-temp-email';
   const showCloudflareDomain = useEmailGenerator && useCloudflare;
   const showCloudflareTempEmailSettings = useCloudflareTempEmailProvider || (useEmailGenerator && useCloudflareTempEmailGenerator);
@@ -2684,6 +2785,13 @@ function updateMailProviderUI() {
     }
     if (!showIcloudSection) {
       hideIcloudLoginHelp();
+    }
+  }
+  if (icloudListSection) {
+    const showIcloudListSection = (useEmailGenerator && useIcloudList) || useIcloudListProvider;
+    icloudListSection.style.display = showIcloudListSection ? '' : 'none';
+    if (showIcloudListSection) {
+      renderIcloudListEntries();
     }
   }
   rowCfDomain.style.display = showCloudflareDomain ? '' : 'none';
@@ -2726,7 +2834,7 @@ function updateMailProviderUI() {
   }
   inputEmailPrefix.style.display = '';
   inputEmailPrefix.readOnly = false;
-  selectEmailGenerator.disabled = useHotmail || useLuckmail || useGeneratedAlias || useCustomEmail;
+  selectEmailGenerator.disabled = useHotmail || useLuckmail || useGeneratedAlias || useCustomEmail || useIcloudListProvider;
   if (useGmail) {
     labelEmailPrefix.textContent = 'Gmail 原邮箱';
     inputEmailPrefix.placeholder = '例如 yourname@gmail.com';
@@ -3104,7 +3212,7 @@ async function fetchGeneratedEmail(options = {}) {
       source: 'sidepanel',
       payload: {
         generateNew: true,
-        generator: selectEmailGenerator.value,
+        generator: getSelectedEmailGenerator(),
         mailProvider: selectMailProvider.value,
         mail2925Mode: getSelectedMail2925Mode(),
         ...buildManagedAliasBaseEmailPayload(),
@@ -3121,6 +3229,8 @@ async function fetchGeneratedEmail(options = {}) {
     inputEmail.value = response.email;
     if (getSelectedEmailGenerator() === 'icloud') {
       queueIcloudAliasRefresh();
+    } else if (getSelectedEmailGenerator() === ICLOUD_LIST_PROVIDER) {
+      renderIcloudListEntries();
     }
     showToast(`已${uiCopy.successVerb} ${uiCopy.label}：${response.email}`, 'success', 2500);
     return response.email;
@@ -3310,6 +3420,47 @@ const bindIcloudEvents = icloudManager?.bindIcloudEvents
   || (() => { });
 bindIcloudEvents();
 
+const icloudListManager = window.SidepanelIcloudListManager?.createIcloudListManager({
+  state: {
+    getLatestState: () => latestState,
+    syncLatestState,
+  },
+  dom: {
+    btnIcloudListApply,
+    btnIcloudListClear,
+    btnIcloudListImportFile,
+    btnIcloudListResetUnused,
+    icloudListErrors,
+    icloudListRecords,
+    icloudListSummary,
+    inputIcloudList,
+    inputIcloudListFile,
+  },
+  helpers: {
+    escapeHtml,
+    openConfirmModal,
+    showToast,
+  },
+  runtime: {
+    sendMessage: (message) => chrome.runtime.sendMessage(message),
+  },
+  constants: {
+    displayTimeZone: DISPLAY_TIMEZONE,
+  },
+  icloudListUtils: window.IcloudListUtils || {},
+});
+const refreshIcloudListEntries = icloudListManager?.refreshIcloudListEntries
+  || (async () => { });
+const renderIcloudListEntries = icloudListManager?.renderIcloudListEntries
+  || (() => { });
+const renderIcloudListErrors = icloudListManager?.renderErrors
+  || (() => { });
+const resetIcloudListManager = icloudListManager?.reset
+  || (() => { });
+const bindIcloudListEvents = icloudListManager?.bindIcloudListEvents
+  || (() => { });
+bindIcloudListEvents();
+
 const luckmailManager = window.SidepanelLuckmailManager?.createLuckmailManager({
   dom: {
     btnLuckmailBulkDisable,
@@ -3365,18 +3516,17 @@ const accountRecordsManager = window.SidepanelAccountRecordsManager?.createAccou
   dom: {
     accountRecordsList,
     accountRecordsMeta,
-    accountRecordsOverlay,
     accountRecordsPageLabel,
     accountRecordsStats,
     btnAccountRecordsNext,
     btnAccountRecordsPrev,
     btnClearAccountRecords,
     btnDeleteSelectedAccountRecords,
-    btnCloseAccountRecords,
-    btnOpenAccountRecords,
+    btnExportAccountRecords,
     btnToggleAccountRecordsSelection,
   },
   helpers: {
+    downloadTextFile,
     escapeHtml,
     openConfirmModal,
     showToast,
@@ -3393,8 +3543,9 @@ const renderAccountRecords = accountRecordsManager?.render
   || (() => { });
 const bindAccountRecordEvents = accountRecordsManager?.bindEvents
   || (() => { });
-const closeAccountRecordsPanel = accountRecordsManager?.closePanel
-  || (() => { });
+const closeAccountRecordsPanel = () => {
+  setActiveMainTab(MAIN_TAB_RUN);
+};
 bindAccountRecordEvents();
 const contributionModeManager = window.SidepanelContributionMode?.createContributionModeManager({
   state: {
@@ -3573,6 +3724,29 @@ function syncVpsPasswordToggleLabel() {
   });
 }
 
+function syncBrowserProxySpecToggleLabel() {
+  syncToggleButtonLabel(btnToggleBrowserProxySpec, inputBrowserProxySpec, {
+    show: '显示动态代理',
+    hide: '隐藏动态代理',
+  });
+}
+
+function updateBrowserProxySettingsUI() {
+  const enabled = Boolean(inputBrowserProxyEnabled?.checked);
+  if (rowBrowserProxyEnabled) {
+    rowBrowserProxyEnabled.style.display = '';
+  }
+  if (rowBrowserProxySpec) {
+    rowBrowserProxySpec.style.display = '';
+  }
+  if (inputBrowserProxySpec) {
+    inputBrowserProxySpec.disabled = !enabled;
+  }
+  if (btnToggleBrowserProxySpec) {
+    btnToggleBrowserProxySpec.disabled = !enabled;
+  }
+}
+
 async function maybeTakeoverAutoRun(actionLabel) {
   if (!isAutoRunPausedPhase()) {
     return true;
@@ -3709,6 +3883,11 @@ btnToggleVpsUrl.addEventListener('click', () => {
 btnToggleVpsPassword.addEventListener('click', () => {
   inputVpsPassword.type = inputVpsPassword.type === 'password' ? 'text' : 'password';
   syncVpsPasswordToggleLabel();
+});
+
+btnToggleBrowserProxySpec?.addEventListener('click', () => {
+  inputBrowserProxySpec.type = inputBrowserProxySpec.type === 'password' ? 'text' : 'password';
+  syncBrowserProxySpecToggleLabel();
 });
 
 btnMailLogin?.addEventListener('click', async () => {
@@ -4104,6 +4283,9 @@ selectMailProvider.addEventListener('change', async () => {
   if (nextProvider === LUCKMAIL_PROVIDER) {
     queueLuckmailPurchaseRefresh();
   }
+  if (nextProvider === ICLOUD_LIST_PROVIDER) {
+    refreshIcloudListEntries({ silent: true }).catch(() => { });
+  }
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
@@ -4135,6 +4317,9 @@ mail2925ModeButtons.forEach((button) => {
 selectEmailGenerator.addEventListener('change', () => {
   updateMailProviderUI();
   clearRegistrationEmail({ silent: true }).catch(() => { });
+  if (getSelectedEmailGenerator() === ICLOUD_LIST_PROVIDER) {
+    refreshIcloudListEntries({ silent: true }).catch(() => { });
+  }
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
@@ -4267,6 +4452,20 @@ inputSub2ApiDefaultProxy.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputSub2ApiDefaultProxy.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputBrowserProxyEnabled?.addEventListener('change', () => {
+  updateBrowserProxySettingsUI();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputBrowserProxySpec?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputBrowserProxySpec?.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
@@ -4545,6 +4744,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       statusBar.className = 'status-bar';
       logArea.innerHTML = '';
       resetIcloudManager();
+      resetIcloudListManager();
       resetLuckmailManager();
       document.querySelectorAll('.step-row').forEach(row => row.className = 'step-row');
       document.querySelectorAll('.step-status').forEach(el => el.textContent = '');
@@ -4646,12 +4846,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.autoDeleteUsedIcloudAlias !== undefined && checkboxAutoDeleteIcloud) {
         checkboxAutoDeleteIcloud.checked = Boolean(message.payload.autoDeleteUsedIcloudAlias);
       }
+      if (message.payload.icloudListEntries !== undefined || message.payload.currentIcloudListEmail !== undefined) {
+        renderIcloudListEntries();
+      }
       if (message.payload.accountRunHistoryTextEnabled !== undefined && inputAccountRunHistoryTextEnabled) {
         inputAccountRunHistoryTextEnabled.checked = Boolean(message.payload.accountRunHistoryTextEnabled);
         updateAccountRunHistorySettingsUI();
       }
       if (message.payload.accountRunHistoryHelperBaseUrl !== undefined && inputAccountRunHistoryHelperBaseUrl) {
         inputAccountRunHistoryHelperBaseUrl.value = normalizeAccountRunHistoryHelperBaseUrlValue(message.payload.accountRunHistoryHelperBaseUrl);
+      }
+      if (message.payload.browserProxyEnabled !== undefined && inputBrowserProxyEnabled) {
+        inputBrowserProxyEnabled.checked = Boolean(message.payload.browserProxyEnabled);
+        updateBrowserProxySettingsUI();
+      }
+      if (message.payload.browserProxySpec !== undefined && inputBrowserProxySpec) {
+        inputBrowserProxySpec.value = message.payload.browserProxySpec || '';
       }
       if (message.payload.icloudHostPreference !== undefined && selectIcloudHostPreference) {
         const hostPreference = String(message.payload.icloudHostPreference || '').trim().toLowerCase();
@@ -4702,7 +4912,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     case 'ICLOUD_LOGIN_REQUIRED': {
-      const loginMessage = '需要登录 iCloud，我已经为你打开登录页。';
+      const loginMessage = message.payload?.message || '需要登录 iCloud，我已经为你打开登录页。';
       showToast(loginMessage, 'warn', 5000);
       if (icloudSummary) {
         icloudSummary.textContent = loginMessage;
@@ -4761,6 +4971,15 @@ btnTheme.addEventListener('click', () => {
   setTheme(current === 'dark' ? 'light' : 'dark');
 });
 
+btnMainTabRun?.addEventListener('click', () => {
+  setActiveMainTab(MAIN_TAB_RUN);
+});
+
+btnOpenAccountRecords?.addEventListener('click', () => {
+  setActiveMainTab(MAIN_TAB_RECORDS);
+  renderAccountRecords(latestState);
+});
+
 document.addEventListener('click', (event) => {
   if (!configMenuOpen) {
     return;
@@ -4791,6 +5010,7 @@ document.addEventListener('scroll', () => {
 
 initializeManualStepActions();
 initTheme();
+initMainTab();
 initHotmailListExpandedState();
 initMail2925ListExpandedState();
 updateSaveButtonState();
@@ -4804,6 +5024,8 @@ restoreState().then(() => {
   syncPasswordToggleLabel();
   syncVpsUrlToggleLabel();
   syncVpsPasswordToggleLabel();
+  syncBrowserProxySpecToggleLabel();
+  updateBrowserProxySettingsUI();
   updatePanelModeUI();
   updateButtonStates();
   updateStatusDisplay(latestState);

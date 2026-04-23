@@ -152,6 +152,78 @@ test('verification flow runs beforeSubmit hook before filling the code', async (
   ]);
 });
 
+test('verification flow treats signup-page transport disconnect after code submit as a page-transition success when the page has already reached step 5', async () => {
+  const events = [];
+
+  const helpers = api.createVerificationFlowHelpers({
+    addLog: async (message, level) => {
+      events.push(['log', level || 'info', message]);
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeStepFromBackground: async (_step, payload) => {
+      events.push(['complete', payload.code]);
+    },
+    confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+    getHotmailVerificationPollConfig: () => ({}),
+    getHotmailVerificationRequestTimestamp: () => 0,
+    getState: async () => ({}),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isRetryableContentScriptTransportError: (error) => /A listener indicated an asynchronous response/i.test(String(error?.message || error || '')),
+    isStopError: () => false,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+    MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+    pollCloudflareTempEmailVerificationCode: async () => ({}),
+    pollHotmailVerificationCode: async () => ({}),
+    pollLuckmailVerificationCode: async () => ({}),
+    sendToContentScript: async (_source, message) => {
+      if (message.type === 'FILL_CODE') {
+        throw new Error('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received');
+      }
+      return {};
+    },
+    sendToContentScriptResilient: async (_source, message) => {
+      if (message.type === 'GET_VERIFICATION_SUBMIT_STATE') {
+        return {
+          state: 'step5',
+          url: 'https://auth.openai.com/create-account/profile',
+        };
+      }
+      throw new Error(`unexpected message: ${message.type}`);
+    },
+    sendToMailContentScriptResilient: async () => ({
+      code: '654321',
+      emailTimestamp: 123,
+    }),
+    setState: async (payload) => {
+      events.push(['state', payload.lastSignupCode || payload.lastLoginCode]);
+    },
+    setStepStatus: async () => {},
+    sleepWithStop: async () => {},
+    throwIfStopped: () => {},
+    VERIFICATION_POLL_MAX_ROUNDS: 5,
+  });
+
+  await helpers.resolveVerificationStep(
+    4,
+    { email: 'user@example.com', lastSignupCode: null },
+    { provider: 'qq', label: 'QQ 邮箱' }
+  );
+
+  assert.deepStrictEqual(events.filter((entry) => entry[0] === 'complete'), [
+    ['complete', '654321'],
+  ]);
+  assert.deepStrictEqual(events.filter((entry) => entry[0] === 'state'), [
+    ['state', '654321'],
+  ]);
+});
+
 test('verification flow skips 2925 mailbox preclear when using a fixed login mail window and still clears after success', async () => {
   const mailMessages = [];
 
@@ -712,4 +784,233 @@ test('verification flow uses configured login resend count for step 8', async ()
 
   assert.deepStrictEqual(resendSteps, [8, 8]);
   assert.equal(pollCalls, 3);
+});
+
+test('verification flow routes icloud-list polling through the dedicated helper and expands the first 90-second window', async () => {
+  const pollCalls = [];
+
+  const originalNow = Date.now;
+  Date.now = () => 1000;
+
+  try {
+    const helpers = api.createVerificationFlowHelpers({
+      addLog: async () => {},
+      chrome: { tabs: { update: async () => {} } },
+      CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+      completeStepFromBackground: async () => {},
+      confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+      getHotmailVerificationPollConfig: () => ({}),
+      getHotmailVerificationRequestTimestamp: () => 0,
+      getState: async () => ({}),
+      getTabId: async () => 1,
+      HOTMAIL_PROVIDER: 'hotmail-api',
+      ICLOUD_LIST_PROVIDER: 'icloud-list',
+      isStopError: () => false,
+      LUCKMAIL_PROVIDER: 'luckmail-api',
+      MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+      MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+      pollCloudflareTempEmailVerificationCode: async () => ({}),
+      pollHotmailVerificationCode: async () => ({}),
+      pollIcloudListVerificationCode: async (_step, _state, _mail, payload) => {
+        pollCalls.push(payload);
+        return { code: '654321', emailTimestamp: 123456 };
+      },
+      pollLuckmailVerificationCode: async () => ({}),
+      sendToContentScript: async (_source, message) => {
+        if (message.type === 'FILL_CODE') {
+          return {};
+        }
+        return {};
+      },
+      sendToMailContentScriptResilient: async () => {
+        throw new Error('generic mail polling should not run for icloud-list');
+      },
+      setState: async () => {},
+      setStepStatus: async () => {},
+      sleepWithStop: async () => {},
+      throwIfStopped: () => {},
+      VERIFICATION_POLL_MAX_ROUNDS: 5,
+    });
+
+    await helpers.resolveVerificationStep(
+      4,
+      {
+        email: 'alias@icloud.com',
+        lastSignupCode: null,
+      },
+      {
+        provider: 'icloud-list',
+        label: 'iCloud 列表',
+        entry: { email: 'alias@icloud.com', codeUrl: 'https://example.com/code' },
+      },
+      {
+        requestFreshCodeFirst: false,
+        resendIntervalMs: 90000,
+        filterAfterTimestamp: 123456,
+      }
+    );
+
+    assert.equal(pollCalls.length, 1);
+    assert.equal(pollCalls[0].filterAfterTimestamp, 123456);
+    assert.ok(pollCalls[0].maxAttempts >= 30);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('verification flow updates icloud-list filter timestamp after resend', async () => {
+  const pollPayloads = [];
+  const resendSteps = [];
+  let pollCount = 0;
+
+  const originalNow = Date.now;
+  Date.now = () => 200000;
+
+  try {
+    const helpers = api.createVerificationFlowHelpers({
+      addLog: async () => {},
+      chrome: { tabs: { update: async () => {} } },
+      CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+      completeStepFromBackground: async () => {},
+      confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+      getHotmailVerificationPollConfig: () => ({}),
+      getHotmailVerificationRequestTimestamp: () => 0,
+      getState: async () => ({}),
+      getTabId: async () => 1,
+      HOTMAIL_PROVIDER: 'hotmail-api',
+      ICLOUD_LIST_PROVIDER: 'icloud-list',
+      isStopError: () => false,
+      LUCKMAIL_PROVIDER: 'luckmail-api',
+      MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+      MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+      pollCloudflareTempEmailVerificationCode: async () => ({}),
+      pollHotmailVerificationCode: async () => ({}),
+      pollIcloudListVerificationCode: async (_step, _state, _mail, payload) => {
+        pollPayloads.push(payload);
+        pollCount += 1;
+        if (pollCount === 1) {
+          throw new Error('no code yet');
+        }
+        return { code: '654321', emailTimestamp: 200001 };
+      },
+      pollLuckmailVerificationCode: async () => ({}),
+      sendToContentScript: async (_source, message) => {
+        if (message.type === 'RESEND_VERIFICATION_CODE') {
+          resendSteps.push(message.step);
+          return {};
+        }
+        if (message.type === 'FILL_CODE') {
+          return {};
+        }
+        return {};
+      },
+      sendToMailContentScriptResilient: async () => {
+        throw new Error('generic mail polling should not run for icloud-list');
+      },
+      setState: async () => {},
+      setStepStatus: async () => {},
+      sleepWithStop: async () => {},
+      throwIfStopped: () => {},
+      VERIFICATION_POLL_MAX_ROUNDS: 5,
+    });
+
+    await helpers.resolveVerificationStep(
+      8,
+      {
+        email: 'alias@icloud.com',
+        verificationResendCount: 1,
+        lastLoginCode: null,
+      },
+      {
+        provider: 'icloud-list',
+        label: 'iCloud 列表',
+        entry: { email: 'alias@icloud.com', codeUrl: 'https://example.com/code' },
+      },
+      {
+        filterAfterTimestamp: 123456,
+        requestFreshCodeFirst: false,
+        resendIntervalMs: 0,
+        updateFilterAfterTimestampOnResend: true,
+      }
+    );
+
+    assert.deepStrictEqual(resendSteps, [8]);
+    assert.equal(pollPayloads.length, 2);
+    assert.equal(pollPayloads[0].filterAfterTimestamp, 123456);
+    assert.equal(pollPayloads[1].filterAfterTimestamp, 200000);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('verification flow caps icloud-list polling attempts to the remaining resend window', async () => {
+  const pollCalls = [];
+
+  const originalNow = Date.now;
+  Date.now = () => 200000;
+
+  try {
+    const helpers = api.createVerificationFlowHelpers({
+      addLog: async () => {},
+      chrome: { tabs: { update: async () => {} } },
+      CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+      completeStepFromBackground: async () => {},
+      confirmCustomVerificationStepBypassRequest: async () => ({ confirmed: true }),
+      getHotmailVerificationPollConfig: () => ({}),
+      getHotmailVerificationRequestTimestamp: () => 0,
+      getState: async () => ({}),
+      getTabId: async () => 1,
+      HOTMAIL_PROVIDER: 'hotmail-api',
+      ICLOUD_LIST_PROVIDER: 'icloud-list',
+      isStopError: () => false,
+      LUCKMAIL_PROVIDER: 'luckmail-api',
+      MAIL_2925_VERIFICATION_INTERVAL_MS: 15000,
+      MAIL_2925_VERIFICATION_MAX_ATTEMPTS: 15,
+      pollCloudflareTempEmailVerificationCode: async () => ({}),
+      pollHotmailVerificationCode: async () => ({}),
+      pollIcloudListVerificationCode: async (_step, _state, _mail, payload) => {
+        pollCalls.push(payload);
+        return { code: '654321', emailTimestamp: 200000 };
+      },
+      pollLuckmailVerificationCode: async () => ({}),
+      sendToContentScript: async (_source, message) => {
+        if (message.type === 'FILL_CODE') {
+          return {};
+        }
+        return {};
+      },
+      sendToMailContentScriptResilient: async () => {
+        throw new Error('generic mail polling should not run for icloud-list');
+      },
+      setState: async () => {},
+      setStepStatus: async () => {},
+      sleepWithStop: async () => {},
+      throwIfStopped: () => {},
+      VERIFICATION_POLL_MAX_ROUNDS: 5,
+    });
+
+    await helpers.resolveVerificationStep(
+      8,
+      {
+        email: 'alias@icloud.com',
+        lastLoginCode: null,
+      },
+      {
+        provider: 'icloud-list',
+        label: 'iCloud 列表',
+        entry: { email: 'alias@icloud.com', codeUrl: 'https://example.com/code' },
+      },
+      {
+        filterAfterTimestamp: 123456,
+        requestFreshCodeFirst: false,
+        resendIntervalMs: 4000,
+        lastResendAt: 197000,
+      }
+    );
+
+    assert.equal(pollCalls.length, 1);
+    assert.equal(pollCalls[0].maxAttempts, 1);
+  } finally {
+    Date.now = originalNow;
+  }
 });

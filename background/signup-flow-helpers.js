@@ -15,6 +15,7 @@
       isLuckmailProvider,
       isSignupEmailVerificationPageUrl,
       isSignupPasswordPageUrl,
+      prepareSignupEntryForLoggedOutState,
       reuseOrCreateTab,
       sendToContentScriptResilient,
       setEmailState,
@@ -24,9 +25,14 @@
     } = deps;
 
     async function openSignupEntryTab(step = 1) {
+      if (typeof prepareSignupEntryForLoggedOutState === 'function') {
+        await prepareSignupEntryForLoggedOutState(step);
+      }
+
       const tabId = await reuseOrCreateTab('signup-page', SIGNUP_ENTRY_URL, {
         inject: SIGNUP_PAGE_INJECT_FILES,
         injectSource: 'signup-page',
+        reloadIfSameUrl: true,
       });
 
       await ensureContentScriptReadyOnTab('signup-page', tabId, {

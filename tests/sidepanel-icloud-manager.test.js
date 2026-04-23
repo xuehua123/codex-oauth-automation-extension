@@ -59,3 +59,77 @@ test('icloud manager exposes a factory and renders empty state', () => {
   manager.renderIcloudAliases([]);
   assert.equal(manager.hasDeletableUsedAliases(), false);
 });
+
+test('icloud manager retries alias refresh instead of CHECK_ICLOUD_SESSION when the login help is for Apple Account', async () => {
+  const source = fs.readFileSync('sidepanel/icloud-manager.js', 'utf8');
+  const windowObject = {};
+  const api = new Function('window', `${source}; return window.SidepanelIcloudManager;`)(windowObject);
+
+  const listeners = {};
+  const runtimeCalls = [];
+  const createButton = () => ({
+    disabled: false,
+    addEventListener() {},
+  });
+  const dom = {
+    btnIcloudBulkDelete: createButton(),
+    btnIcloudBulkPreserve: createButton(),
+    btnIcloudBulkUnpreserve: createButton(),
+    btnIcloudBulkUnused: createButton(),
+    btnIcloudBulkUsed: createButton(),
+    btnIcloudDeleteUsed: createButton(),
+    btnIcloudLoginDone: {
+      disabled: false,
+      addEventListener(type, handler) {
+        listeners[type] = handler;
+      },
+    },
+    btnIcloudRefresh: createButton(),
+    checkboxIcloudSelectAll: { checked: false, indeterminate: false, disabled: false, addEventListener() {} },
+    icloudList: { innerHTML: '' },
+    icloudLoginHelp: { style: { display: 'none' } },
+    icloudLoginHelpText: { textContent: '' },
+    icloudLoginHelpTitle: { textContent: '' },
+    icloudSection: { style: { display: '' } },
+    icloudSelectionSummary: { textContent: '' },
+    icloudSummary: { textContent: '' },
+    inputIcloudSearch: { value: '', disabled: false, addEventListener() {} },
+    selectIcloudFilter: { value: 'all', disabled: false, addEventListener() {} },
+  };
+
+  const manager = api.createIcloudManager({
+    dom,
+    helpers: {
+      escapeHtml: (value) => String(value || ''),
+      openConfirmModal: async () => true,
+      showToast() {},
+    },
+    runtime: {
+      async sendMessage(message) {
+        runtimeCalls.push(message);
+        if (message.type === 'LIST_ICLOUD_ALIASES') {
+          return {
+            aliases: [
+              { email: 'fresh@icloud.com', anonymousId: 'alias-1', active: true, used: false, preserved: false, source: 'apple-account' },
+            ],
+          };
+        }
+        return { ok: true };
+      },
+    },
+  });
+
+  manager.bindIcloudEvents();
+  manager.showIcloudLoginHelp({
+    loginContext: 'apple-account',
+    title: '需要登录 Apple Account',
+    text: '我已经为你打开 account.apple.com。请登录后再回来点击“我已登录”。',
+    loginUrl: 'https://account.apple.com/account/manage/section/privacy',
+  });
+
+  await listeners.click();
+
+  assert.equal(runtimeCalls.length, 1);
+  assert.equal(runtimeCalls[0]?.type, 'LIST_ICLOUD_ALIASES');
+  assert.equal(dom.icloudLoginHelp.style.display, 'none');
+});

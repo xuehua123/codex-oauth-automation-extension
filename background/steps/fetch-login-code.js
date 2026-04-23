@@ -16,6 +16,8 @@
       getState,
       getTabId,
       HOTMAIL_PROVIDER,
+      ICLOUD_LIST_PROVIDER,
+      ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS,
       isTabAlive,
       isVerificationMailPollingError,
       LUCKMAIL_PROVIDER,
@@ -130,6 +132,7 @@
         mail.provider === HOTMAIL_PROVIDER
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
+        || mail.provider === ICLOUD_LIST_PROVIDER
       ) {
         await addLog(`步骤 8：正在通过 ${mail.label} 轮询验证码...`);
       } else {
@@ -150,9 +153,12 @@
         getRemainingTimeMs: getStep8RemainingTimeResolver(state?.oauthUrl || ''),
         requestFreshCodeFirst: false,
         targetEmail: fixedTargetEmail,
-        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
-          ? 0
-          : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
+        resendIntervalMs: mail.provider === ICLOUD_LIST_PROVIDER
+          ? ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS
+          : ((mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
+            ? 0
+            : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS),
+        updateFilterAfterTimestampOnResend: mail.provider === ICLOUD_LIST_PROVIDER,
       });
     }
 

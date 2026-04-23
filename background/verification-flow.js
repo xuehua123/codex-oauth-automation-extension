@@ -11,18 +11,22 @@
       getHotmailVerificationPollConfig,
       getHotmailVerificationRequestTimestamp,
       handleMail2925LimitReachedError,
+      ICLOUD_LIST_PROVIDER,
       getState,
       getTabId,
       HOTMAIL_PROVIDER,
       isMail2925LimitReachedError,
+      isRetryableContentScriptTransportError,
       isStopError,
       LUCKMAIL_PROVIDER,
       MAIL_2925_VERIFICATION_INTERVAL_MS,
       MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
       pollCloudflareTempEmailVerificationCode,
       pollHotmailVerificationCode,
+      pollIcloudListVerificationCode,
       pollLuckmailVerificationCode,
       sendToContentScript,
+      sendToContentScriptResilient,
       sendToMailContentScriptResilient,
       setState,
       sleepWithStop,
@@ -354,12 +358,14 @@
       const maxRounds = totalRounds;
       const resendIntervalMs = Math.max(0, Number(pollOverrides.resendIntervalMs) || 0);
       let lastResendAt = Number(pollOverrides.lastResendAt) || 0;
+      let resendWindowStartedAt = lastResendAt || Date.now();
       let usedResendRequests = 0;
 
       for (let round = 1; round <= totalRounds; round++) {
         throwIfStopped();
         if (round > 1) {
           lastResendAt = await requestVerificationCodeResend(step, pollOverrides);
+          resendWindowStartedAt = lastResendAt || Date.now();
           usedResendRequests += 1;
           if (onResendRequestedAt) {
             const nextFilterAfterTimestamp = await onResendRequestedAt(lastResendAt);
@@ -377,11 +383,10 @@
             excludeCodes: [...rejectedCodes],
           });
 
-          if (lastResendAt > 0) {
-            const remainingBeforeResendMs = Math.max(0, resendIntervalMs - (Date.now() - lastResendAt));
-            const baseMaxAttempts = Math.max(1, Number(payload.maxAttempts) || 5);
+          if (resendWindowStartedAt > 0) {
+            const remainingBeforeResendMs = Math.max(0, resendIntervalMs - (Date.now() - resendWindowStartedAt));
             const intervalMs = Math.max(1, Number(payload.intervalMs) || 3000);
-            payload.maxAttempts = Math.max(1, Math.min(baseMaxAttempts, Math.floor(remainingBeforeResendMs / intervalMs) + 1));
+            payload.maxAttempts = Math.max(1, Math.floor(remainingBeforeResendMs / intervalMs) + 1);
           }
 
           try {
@@ -391,20 +396,22 @@
               pollOverrides,
               `轮询${getVerificationCodeLabel(step)}验证码邮箱`
             );
-            const result = await sendToMailContentScriptResilient(
-              mail,
-              {
-                type: 'POLL_EMAIL',
-                step,
-                source: 'background',
-                payload: timedPoll.payload,
-              },
-              {
-                timeoutMs: timedPoll.timeoutMs,
-                maxRecoveryAttempts: 2,
-                responseTimeoutMs: timedPoll.responseTimeoutMs,
-              }
-            );
+            const result = mail.provider === ICLOUD_LIST_PROVIDER
+              ? await pollIcloudListVerificationCode(step, state, mail, timedPoll.payload)
+              : await sendToMailContentScriptResilient(
+                mail,
+                {
+                  type: 'POLL_EMAIL',
+                  step,
+                  source: 'background',
+                  payload: timedPoll.payload,
+                },
+                {
+                  timeoutMs: timedPoll.timeoutMs,
+                  maxRecoveryAttempts: 2,
+                  responseTimeoutMs: timedPoll.responseTimeoutMs,
+                }
+              );
 
             if (result && result.error) {
               throw new Error(result.error);
@@ -437,8 +444,8 @@
             await addLog(`步骤 ${step}：${err.message}`, 'warn');
           }
 
-          const remainingBeforeResendMs = lastResendAt > 0
-            ? Math.max(0, resendIntervalMs - (Date.now() - lastResendAt))
+          const remainingBeforeResendMs = resendWindowStartedAt > 0
+            ? Math.max(0, resendIntervalMs - (Date.now() - resendWindowStartedAt))
             : 0;
           if (remainingBeforeResendMs > 0) {
             await addLog(
@@ -449,7 +456,8 @@
           }
 
           if (round < maxRounds) {
-            await addLog(`步骤 ${step}：已到 25 秒重发间隔，准备重新发送验证码（第 ${round + 1}/${maxRounds} 轮）...`, 'warn');
+            const resendSeconds = Math.max(1, Math.round(resendIntervalMs / 1000));
+            await addLog(`步骤 ${step}：已到 ${resendSeconds} 秒重发间隔，准备重新发送验证码（第 ${round + 1}/${maxRounds} 轮）...`, 'warn');
           }
           break;
         }
@@ -489,11 +497,9 @@
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudflareTempEmailVerificationCode(step, state, timedPoll.payload);
       }
-
       if (Number(pollOverrides.resendIntervalMs) > 0) {
         return pollFreshVerificationCodeWithResendInterval(step, state, mail, pollOverrides);
       }
-
       const stateKey = getVerificationCodeStateKey(step);
       const rejectedCodes = new Set();
       if (state[stateKey]) {
@@ -535,20 +541,22 @@
             pollOverrides,
             `轮询${getVerificationCodeLabel(step)}验证码邮箱`
           );
-          const result = await sendToMailContentScriptResilient(
-            mail,
-            {
-              type: 'POLL_EMAIL',
-              step,
-              source: 'background',
-              payload: timedPoll.payload,
-            },
-            {
-              timeoutMs: timedPoll.timeoutMs,
-              maxRecoveryAttempts: 2,
-              responseTimeoutMs: timedPoll.responseTimeoutMs,
-            }
-          );
+          const result = mail.provider === ICLOUD_LIST_PROVIDER
+            ? await pollIcloudListVerificationCode(step, state, mail, timedPoll.payload)
+            : await sendToMailContentScriptResilient(
+              mail,
+              {
+                type: 'POLL_EMAIL',
+                step,
+                source: 'background',
+                payload: timedPoll.payload,
+              },
+              {
+                timeoutMs: timedPoll.timeoutMs,
+                maxRecoveryAttempts: 2,
+                responseTimeoutMs: timedPoll.responseTimeoutMs,
+              }
+            );
 
           if (result && result.error) {
             throw new Error(result.error);
@@ -594,25 +602,207 @@
       }
 
       await chrome.tabs.update(signupTabId, { active: true });
-      const result = await sendToContentScript('signup-page', {
-        type: 'FILL_CODE',
-        step,
-        source: 'background',
-        payload: { code },
-      }, {
-        responseTimeoutMs: await getResponseTimeoutMsForStep(
+      let result = null;
+      try {
+        result = await sendToContentScript('signup-page', {
+          type: 'FILL_CODE',
           step,
-          options,
-          step === 7 ? 45000 : 30000,
-          `填写${getVerificationCodeLabel(step)}验证码`
-        ),
-      });
+          source: 'background',
+          payload: { code },
+        }, {
+          responseTimeoutMs: await getResponseTimeoutMsForStep(
+            step,
+            options,
+            step === 8 ? 45000 : 30000,
+            `填写${getVerificationCodeLabel(step)}验证码`
+          ),
+        });
+      } catch (error) {
+        result = await recoverVerificationSubmitOutcomeAfterTransportError(step, error, options);
+      }
 
       if (result && result.error) {
         throw new Error(result.error);
       }
 
       return result || {};
+    }
+
+    async function getVerificationSubmitState(step, options = {}) {
+      const sender = typeof sendToContentScriptResilient === 'function'
+        ? sendToContentScriptResilient
+        : sendToContentScript;
+      const responseTimeoutMs = await getResponseTimeoutMsForStep(
+        step,
+        options,
+        12000,
+        `确认${getVerificationCodeLabel(step)}验证码提交结果`
+      );
+      const result = await sender('signup-page', {
+        type: 'GET_VERIFICATION_SUBMIT_STATE',
+        step,
+        source: 'background',
+        payload: {},
+      }, typeof sendToContentScriptResilient === 'function'
+        ? {
+            timeoutMs: responseTimeoutMs,
+            responseTimeoutMs,
+            retryDelayMs: 500,
+            logMessage: `步骤 ${step}：认证页正在切换，等待页面重新就绪后继续确认验证码提交结果...`,
+          }
+        : {
+            responseTimeoutMs,
+          });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || null;
+    }
+
+    async function recoverVerificationRetryPageAfterSubmit(step, options = {}) {
+      const sender = typeof sendToContentScriptResilient === 'function'
+        ? sendToContentScriptResilient
+        : sendToContentScript;
+      const responseTimeoutMs = await getResponseTimeoutMsForStep(
+        step,
+        options,
+        12000,
+        `恢复${getVerificationCodeLabel(step)}验证码提交后的认证重试页`
+      );
+      const result = await sender('signup-page', {
+        type: 'RECOVER_AUTH_RETRY_PAGE',
+        step,
+        source: 'background',
+        payload: {
+          flow: step === 4 ? 'signup' : 'login',
+          logLabel: `步骤 ${step}：验证码提交后检测到认证重试页，正在点击“重试”恢复`,
+          step,
+          timeoutMs: 12000,
+        },
+      }, typeof sendToContentScriptResilient === 'function'
+        ? {
+            timeoutMs: responseTimeoutMs,
+            responseTimeoutMs,
+            retryDelayMs: 500,
+            logMessage: `步骤 ${step}：认证重试页正在切换，等待页面重新就绪后继续恢复...`,
+          }
+        : {
+            responseTimeoutMs,
+          });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function recoverVerificationSubmitOutcomeAfterTransportError(step, error, options = {}) {
+      if (!(typeof isRetryableContentScriptTransportError === 'function'
+        && isRetryableContentScriptTransportError(error))) {
+        throw error;
+      }
+
+      const fallbackTimeoutMs = await getResponseTimeoutMsForStep(
+        step,
+        options,
+        15000,
+        `确认${getVerificationCodeLabel(step)}验证码提交后的页面状态`
+      );
+      const startedAt = Date.now();
+      let retryRecovered = false;
+
+      await addLog(`步骤 ${step}：验证码提交后页面正在跳转，消息通道已断开，正在重新连接认证页确认结果...`, 'warn');
+
+      while (Date.now() - startedAt < fallbackTimeoutMs) {
+        throwIfStopped();
+
+        let snapshot = null;
+        try {
+          snapshot = await getVerificationSubmitState(step, options);
+        } catch (snapshotError) {
+          if (typeof isRetryableContentScriptTransportError === 'function'
+            && isRetryableContentScriptTransportError(snapshotError)) {
+            await sleepWithStop(300);
+            continue;
+          }
+          throw snapshotError;
+        }
+
+        if (!snapshot) {
+          await sleepWithStop(300);
+          continue;
+        }
+
+        if (step === 4) {
+          if (snapshot.userAlreadyExistsBlocked || snapshot.state === 'email_exists') {
+            throw new Error('SIGNUP_USER_ALREADY_EXISTS::步骤 4：检测到 user_already_exists，说明当前用户已存在，当前轮将直接停止。');
+          }
+          if (snapshot.state === 'step5') {
+            return { success: true, transportRecovered: true };
+          }
+          if (snapshot.state === 'verification') {
+            return {
+              invalidCode: true,
+              errorText: snapshot.errorText || '提交后仍停留在验证码页面，准备重新发送验证码。',
+              transportRecovered: true,
+            };
+          }
+          if (snapshot.state === 'error') {
+            if (!retryRecovered) {
+              retryRecovered = true;
+              try {
+                await recoverVerificationRetryPageAfterSubmit(step, options);
+              } catch (recoveryError) {
+                if (isStopError(recoveryError)) {
+                  throw recoveryError;
+                }
+                await addLog(`步骤 ${step}：验证码提交后自动恢复认证重试页失败：${recoveryError.message}`, 'warn');
+              }
+            }
+            await sleepWithStop(300);
+            continue;
+          }
+        } else {
+          if (snapshot.addPhonePage || snapshot.state === 'add_phone_page') {
+            return {
+              success: true,
+              addPhonePage: true,
+              url: snapshot.url || '',
+              transportRecovered: true,
+            };
+          }
+          if (snapshot.consentReady || snapshot.oauthConsentPage || snapshot.state === 'oauth_consent_page') {
+            return { success: true, transportRecovered: true };
+          }
+          if (snapshot.state === 'verification_page') {
+            return {
+              invalidCode: true,
+              errorText: snapshot.errorText || '提交后仍停留在验证码页面，准备重新发送验证码。',
+              transportRecovered: true,
+            };
+          }
+          if (snapshot.state === 'login_timeout_error_page') {
+            if (!retryRecovered) {
+              retryRecovered = true;
+              try {
+                await recoverVerificationRetryPageAfterSubmit(step, options);
+              } catch (recoveryError) {
+                if (isStopError(recoveryError)) {
+                  throw recoveryError;
+                }
+                await addLog(`步骤 ${step}：验证码提交后自动恢复登录重试页失败：${recoveryError.message}`, 'warn');
+              }
+            }
+            await sleepWithStop(300);
+            continue;
+          }
+        }
+
+        await sleepWithStop(300);
+      }
+
+      throw error;
     }
 
     async function resolveVerificationStep(step, state, mail, options = {}) {
@@ -644,6 +834,12 @@
       let lastResendAt = Number(options.lastResendAt) || 0;
 
       const updateFilterAfterTimestampForVerificationStep = async (_requestedAt) => {
+        if (options.updateFilterAfterTimestampOnResend) {
+          nextFilterAfterTimestamp = Math.max(
+            Number(nextFilterAfterTimestamp || 0) || 0,
+            Number(_requestedAt || 0) || 0
+          );
+        }
         return nextFilterAfterTimestamp;
       };
 

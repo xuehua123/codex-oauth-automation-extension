@@ -13,6 +13,8 @@
       getMailConfig,
       getTabId,
       HOTMAIL_PROVIDER,
+      ICLOUD_LIST_PROVIDER,
+      ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS,
       isTabAlive,
       LUCKMAIL_PROVIDER,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
@@ -102,6 +104,7 @@
         mail.provider === HOTMAIL_PROVIDER
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
+        || mail.provider === ICLOUD_LIST_PROVIDER
       ) {
         await addLog(`步骤 4：正在通过 ${mail.label} 轮询验证码...`);
       } else if (mail.provider === '2925') {
@@ -122,19 +125,21 @@
         await focusOrOpenMailTab(mail);
       }
 
-      const shouldRequestFreshCodeFirst = ![
-        HOTMAIL_PROVIDER,
-        CLOUDFLARE_TEMP_EMAIL_PROVIDER,
-      ].includes(mail.provider);
-
       await resolveVerificationStep(4, state, mail, {
         filterAfterTimestamp: verificationFilterAfterTimestamp,
         sessionKey: verificationSessionKey,
         disableTimeBudgetCap: mail.provider === '2925',
-        requestFreshCodeFirst: shouldRequestFreshCodeFirst,
-        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
-          ? 0
-          : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
+        // The verification page itself has already requested a code. Proactively
+        // clicking "resend" before the first poll is the easiest way to trigger
+        // OpenAI's /email-verification 405 route error, so only resend after a
+        // real poll miss.
+        requestFreshCodeFirst: false,
+        resendIntervalMs: mail.provider === ICLOUD_LIST_PROVIDER
+          ? ICLOUD_LIST_VERIFICATION_RESEND_INTERVAL_MS
+          : ((mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
+            ? 0
+            : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS),
+        updateFilterAfterTimestampOnResend: mail.provider === ICLOUD_LIST_PROVIDER,
       });
     }
 

@@ -4,6 +4,7 @@
   function createMessageRouter(deps = {}) {
     const {
       addLog,
+      applyIcloudListText,
       appendAccountRunRecord,
       batchUpdateLuckmailPurchases,
       buildLocalhostCleanupPrefix,
@@ -12,6 +13,7 @@
       broadcastDataUpdate,
       cancelScheduledAutoRun,
       checkIcloudSession,
+      clearIcloudListEntries,
       clearAccountRunHistory,
       deleteAccountRunHistoryRecords,
       clearAutoRunTimerAlarm,
@@ -22,6 +24,7 @@
       deleteHotmailAccount,
       deleteHotmailAccounts,
       deleteIcloudAlias,
+      deleteIcloudListEmailEntry,
       deleteUsedIcloudAliases,
       disableUsedLuckmailPurchases,
       doesStepUseCompletionSignal,
@@ -33,6 +36,7 @@
       fetchGeneratedEmail,
       finalizeStep3Completion,
       finalizeIcloudAliasAfterSuccessfulFlow,
+      finalizeIcloudListEntryAfterSuccessfulFlow,
       findHotmailAccount,
       flushCommand,
       getCurrentLuckmailPurchase,
@@ -52,6 +56,7 @@
       isStopError,
       launchAutoRunTimerPlan,
       listIcloudAliases,
+      getIcloudListEntries,
       listLuckmailPurchasesForManagement,
       normalizeHotmailAccounts,
       normalizeMail2925Accounts,
@@ -76,16 +81,19 @@
       setEmailStateSilently,
       setIcloudAliasPreservedState,
       setIcloudAliasUsedState,
+      setIcloudListEntryUsedState,
       setLuckmailPurchaseDisabledState,
       setLuckmailPurchasePreservedState,
       setLuckmailPurchaseUsedState,
       setPersistentSettings,
       setState,
+      syncBrowserProxyFromState,
       setStepStatus,
       skipAutoRunCountdown,
       skipStep,
       startContributionFlow,
       startAutoRunLoop,
+      resetIcloudListUsageState,
       deleteMail2925Account,
       deleteMail2925Accounts,
       syncHotmailAccounts,
@@ -210,6 +218,7 @@
             });
           }
           await finalizeIcloudAliasAfterSuccessfulFlow(latestState);
+          await finalizeIcloudListEntryAfterSuccessfulFlow(latestState);
           break;
         }
         default:
@@ -524,6 +533,15 @@
             ...updates,
             ...sessionUpdates,
           });
+          if (
+            typeof syncBrowserProxyFromState === 'function'
+            && (
+              updates.browserProxyEnabled !== undefined
+              || updates.browserProxySpec !== undefined
+            )
+          ) {
+            await syncBrowserProxyFromState(await getState());
+          }
           return { ok: true, state: await getState() };
         }
 
@@ -533,6 +551,9 @@
 
         case 'IMPORT_SETTINGS': {
           const state = await importSettingsBundle(message.payload?.config || null);
+          if (typeof syncBrowserProxyFromState === 'function') {
+            await syncBrowserProxyFromState(state);
+          }
           return { ok: true, state };
         }
 
@@ -725,6 +746,44 @@
           clearStopRequest();
           const aliases = await listIcloudAliases();
           return { ok: true, aliases };
+        }
+
+        case 'LIST_ICLOUD_LIST_ENTRIES': {
+          clearStopRequest();
+          return {
+            ok: true,
+            entries: getIcloudListEntries(await getState()),
+          };
+        }
+
+        case 'APPLY_ICLOUD_LIST': {
+          clearStopRequest();
+          const result = await applyIcloudListText(String(message.payload?.text || ''));
+          return { ok: true, ...result };
+        }
+
+        case 'SET_ICLOUD_LIST_ENTRY_USED_STATE': {
+          clearStopRequest();
+          const result = await setIcloudListEntryUsedState(message.payload || {});
+          return { ok: true, ...result };
+        }
+
+        case 'DELETE_ICLOUD_LIST_ENTRY': {
+          clearStopRequest();
+          const result = await deleteIcloudListEmailEntry(message.payload || {});
+          return { ok: true, ...result };
+        }
+
+        case 'RESET_ICLOUD_LIST_USAGE': {
+          clearStopRequest();
+          const result = await resetIcloudListUsageState();
+          return { ok: true, ...result };
+        }
+
+        case 'CLEAR_ICLOUD_LIST': {
+          clearStopRequest();
+          const result = await clearIcloudListEntries();
+          return { ok: true, ...result };
         }
 
         case 'SET_ICLOUD_ALIAS_USED_STATE': {

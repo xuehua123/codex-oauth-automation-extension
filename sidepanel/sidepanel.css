@@ -315,6 +315,58 @@ header {
   outline-offset: 1px;
 }
 
+.main-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.main-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-surface) 92%, var(--bg-base));
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition), transform var(--transition), box-shadow var(--transition);
+  appearance: none;
+}
+
+.main-tab-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--border));
+  color: var(--text-primary);
+}
+
+.main-tab-btn.is-active {
+  border-color: color-mix(in srgb, var(--blue) 26%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--blue-soft) 100%, transparent), color-mix(in srgb, var(--bg-surface) 88%, var(--bg-base)));
+  color: var(--blue);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 12%, transparent);
+}
+
+.main-tab-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+body[data-main-tab="run"] [data-main-view="records"] {
+  display: none !important;
+}
+
+body[data-main-tab="records"] [data-main-view="run"] {
+  display: none !important;
+}
+
 /* ============================================================
    Theme Toggle
    ============================================================ */
@@ -1460,6 +1512,106 @@ header {
   text-align: center;
 }
 
+.icloud-list-errors {
+  border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border));
+  background: var(--orange-soft);
+  color: var(--orange);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.icloud-list-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.icloud-list-table-head,
+.icloud-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.icloud-list-table-head {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 10px;
+}
+
+.icloud-list-records {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.icloud-list-row {
+  border: 1px solid var(--border);
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.icloud-list-row.is-current {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue-glow);
+}
+
+.icloud-list-cell {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.icloud-list-email-main {
+  color: var(--text-primary);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.icloud-list-email-sub {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.icloud-list-status,
+.icloud-list-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.icloud-list-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .icloud-list-table-head {
+    display: none;
+  }
+
+  .icloud-list-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .icloud-list-actions {
+    justify-content: flex-start;
+  }
+}
+
 .data-select {
   flex: 1;
   padding: 7px 10px;
@@ -1906,25 +2058,15 @@ header {
   gap: 6px;
 }
 
-.account-records-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1210;
+.account-records-section {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  background: rgba(15, 17, 23, 0.32);
-  backdrop-filter: blur(2px);
-}
-
-.account-records-overlay[hidden] {
-  display: none !important;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .account-records-panel {
-  width: min(100%, 420px);
-  max-height: calc(100vh - 24px);
+  width: 100%;
+  max-height: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2116,6 +2258,74 @@ header {
   transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
 }
 
+.account-record-item-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-record-item-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-record-item-detail.is-span-2 {
+  grid-column: 1 / -1;
+}
+
+.account-record-item-detail-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.account-record-item-detail-value {
+  color: var(--text-secondary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.account-record-item-link {
+  color: var(--blue);
+  font-size: 12px;
+  word-break: break-all;
+  text-decoration: none;
+}
+
+.account-record-item-link:hover {
+  text-decoration: underline;
+}
+
+.account-record-item-detail-note {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.account-record-item-import {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.account-record-item-import.is-imported {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.account-record-item-import.is-pending {
+  background: color-mix(in srgb, var(--bg-base) 70%, var(--orange-soft));
+  color: var(--orange);
+}
+
 .account-record-item.is-selectable {
   cursor: pointer;
 }
@@ -2204,7 +2414,6 @@ header {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.4;
@@ -2261,6 +2470,16 @@ header {
   text-align: center;
   color: var(--text-secondary);
   font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .account-record-item-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-record-item-detail.is-span-2 {
+    grid-column: auto;
+  }
 }
 
 #log-area {

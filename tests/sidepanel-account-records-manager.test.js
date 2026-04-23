@@ -128,16 +128,20 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test('sidepanel html contains account records overlay and manager script', () => {
+test('sidepanel html contains records tab section and manager script', () => {
   const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
   const managerIndex = html.indexOf('<script src="account-records-manager.js"></script>');
   const sidepanelIndex = html.indexOf('<script src="sidepanel.js"></script>');
 
+  assert.match(html, /id="btn-main-tab-run"/);
   assert.match(html, /id="btn-open-account-records"/);
-  assert.match(html, /id="account-records-overlay"/);
+  assert.match(html, /data-main-view="run"/);
+  assert.match(html, /data-main-view="records"/);
+  assert.match(html, /id="account-records-section"/);
   assert.match(html, /id="account-records-list"/);
   assert.match(html, /id="account-records-stats"/);
   assert.match(html, /id="btn-clear-account-records"/);
+  assert.match(html, /id="btn-export-account-records"/);
   assert.match(html, /id="btn-toggle-account-records-selection"/);
   assert.match(html, /id="btn-delete-selected-account-records"/);
   assert.match(html, /id="input-sub2api-default-proxy"/);
@@ -146,14 +150,61 @@ test('sidepanel html contains account records overlay and manager script', () =>
   assert.ok(managerIndex < sidepanelIndex);
 });
 
-test('sidepanel css keeps confirm modal above account records overlay', () => {
-  const css = fs.readFileSync('sidepanel/sidepanel.css', 'utf8');
-  const overlayMatch = css.match(/\.account-records-overlay\s*\{[\s\S]*?z-index:\s*(\d+);/);
-  const modalMatch = css.match(/\.modal-overlay\s*\{[\s\S]*?z-index:\s*(\d+);/);
+test('sidepanel main tab helper persists and switches between run and records', () => {
+  const bundle = [
+    extractFunction('normalizeMainTabValue'),
+    extractFunction('syncMainTabButtons'),
+    extractFunction('setActiveMainTab'),
+  ].join('\n');
 
-  assert.ok(overlayMatch, 'missing account records overlay z-index');
-  assert.ok(modalMatch, 'missing modal overlay z-index');
-  assert.ok(Number(modalMatch[1]) > Number(overlayMatch[1]));
+  const btnMainTabRun = createNode();
+  const btnOpenAccountRecords = createNode();
+  const body = {
+    dataset: {},
+    setAttribute(name, value) {
+      if (name === 'data-main-tab') {
+        this.dataset.mainTab = String(value);
+      }
+    },
+  };
+  const localStorage = {
+    values: new Map(),
+    getItem(key) {
+      return this.values.has(key) ? this.values.get(key) : null;
+    },
+    setItem(key, value) {
+      this.values.set(key, String(value));
+    },
+  };
+
+  const api = new Function('document', 'localStorage', 'btnMainTabRun', 'btnOpenAccountRecords', `
+const MAIN_TAB_RUN = 'run';
+const MAIN_TAB_RECORDS = 'records';
+const MAIN_TAB_STORAGE_KEY = 'multipage-main-tab';
+${bundle}
+return { normalizeMainTabValue, setActiveMainTab };
+`)({ body }, localStorage, btnMainTabRun, btnOpenAccountRecords);
+
+  assert.equal(api.normalizeMainTabValue('records'), 'records');
+  assert.equal(api.normalizeMainTabValue('invalid'), 'run');
+
+  api.setActiveMainTab('records');
+
+  assert.equal(body.dataset.mainTab, 'records');
+  assert.equal(btnMainTabRun.getAttribute('aria-pressed'), 'false');
+  assert.equal(btnOpenAccountRecords.getAttribute('aria-pressed'), 'true');
+  assert.equal(btnMainTabRun.classList.contains('is-active'), false);
+  assert.equal(btnOpenAccountRecords.classList.contains('is-active'), true);
+  assert.equal(localStorage.getItem('multipage-main-tab'), 'records');
+
+  api.setActiveMainTab('unknown', { persist: false });
+
+  assert.equal(body.dataset.mainTab, 'run');
+  assert.equal(btnMainTabRun.getAttribute('aria-pressed'), 'true');
+  assert.equal(btnOpenAccountRecords.getAttribute('aria-pressed'), 'false');
+  assert.equal(btnMainTabRun.classList.contains('is-active'), true);
+  assert.equal(btnOpenAccountRecords.classList.contains('is-active'), false);
+  assert.equal(localStorage.getItem('multipage-main-tab'), 'records');
 });
 
 test('sidepanel account records helper normalizes snapshot helper base url', () => {
@@ -188,6 +239,10 @@ test('account records manager supports filter chips and partial multi-select del
         password: 'secret',
         finalStatus: 'success',
         finishedAt: '2026-04-17T04:31:00.000Z',
+        verificationCodeUrl: 'https://example.com/code/1',
+        verificationCodeNote: 'main',
+        importTarget: 'cpa',
+        importedToPanel: true,
         retryCount: 0,
         failureLabel: '流程完成',
       },
@@ -197,6 +252,10 @@ test('account records manager supports filter chips and partial multi-select del
         password: 'secret',
         finalStatus: 'failed',
         finishedAt: '2026-04-17T04:29:00.000Z',
+        verificationCodeUrl: 'https://example.com/code/2',
+        verificationCodeNote: '',
+        importTarget: 'cpa',
+        importedToPanel: false,
         retryCount: 2,
         failureLabel: '出现手机号验证',
       },
@@ -206,6 +265,10 @@ test('account records manager supports filter chips and partial multi-select del
         password: 'secret',
         finalStatus: 'stopped',
         finishedAt: '2026-04-17T04:28:00.000Z',
+        verificationCodeUrl: '',
+        verificationCodeNote: '',
+        importTarget: 'sub2api',
+        importedToPanel: false,
         retryCount: 1,
         failureLabel: '步骤 7 停止',
       },
@@ -215,6 +278,7 @@ test('account records manager supports filter chips and partial multi-select del
   const btnOpenAccountRecords = createNode();
   const btnCloseAccountRecords = createNode();
   const btnClearAccountRecords = createNode();
+  const btnExportAccountRecords = createNode();
   const btnToggleAccountRecordsSelection = createNode();
   const btnDeleteSelectedAccountRecords = createNode({ hidden: true, disabled: true });
   const btnAccountRecordsPrev = createNode();
@@ -226,6 +290,7 @@ test('account records manager supports filter chips and partial multi-select del
   const pageLabel = createNode();
   const messages = [];
   const toasts = [];
+  const downloads = [];
   let manager = null;
 
   manager = api.createAccountRecordsManager({
@@ -250,11 +315,15 @@ test('account records manager supports filter chips and partial multi-select del
       btnClearAccountRecords,
       btnCloseAccountRecords,
       btnDeleteSelectedAccountRecords,
+      btnExportAccountRecords,
       btnOpenAccountRecords,
       btnToggleAccountRecordsSelection,
     },
     helpers: {
       escapeHtml: (value) => String(value || ''),
+      downloadTextFile(content, fileName, mimeType) {
+        downloads.push({ content, fileName, mimeType });
+      },
       openConfirmModal: async () => true,
       showToast(message, tone) {
         toasts.push({ message, tone });
@@ -290,6 +359,8 @@ test('account records manager supports filter chips and partial multi-select del
   assert.match(stats.innerHTML, /data-account-record-filter="retry"/);
   assert.match(list.innerHTML, /success@example\.com/);
   assert.match(list.innerHTML, /failed@example\.com/);
+  assert.match(list.innerHTML, /https:\/\/example\.com\/code\/1/);
+  assert.match(list.innerHTML, /已导入 CPA/);
   assert.equal(pageLabel.textContent, '1 / 1');
   assert.equal(btnDeleteSelectedAccountRecords.hidden, true);
 
@@ -304,6 +375,33 @@ test('account records manager supports filter chips and partial multi-select del
   assert.match(list.innerHTML, /failed@example\.com/);
   assert.match(list.innerHTML, /stopped@example\.com/);
   assert.match(list.innerHTML, /步骤 7 停止/);
+  assert.match(list.innerHTML, /未导入 CPA/);
+
+  stats.listeners.click({
+    target: createClosestTarget({
+      '[data-account-record-filter]': createDataNode('data-account-record-filter', 'success'),
+    }),
+  });
+
+  assert.match(meta.textContent, /当前筛选 成功 1 条/);
+  assert.equal(typeof btnExportAccountRecords.listeners.click, 'function');
+  btnExportAccountRecords.listeners.click();
+
+  assert.equal(downloads.length, 1);
+  assert.match(downloads[0].fileName, /^account-run-records-success-\d{8}-\d{6}\.txt$/);
+  assert.equal(downloads[0].mimeType, 'text/plain;charset=utf-8');
+  assert.match(downloads[0].content, /^账号\t密码\t验证码获取链接\t状态\t导入状态\t完成时间\t失败摘要\t重试次数/m);
+  assert.match(downloads[0].content, /success@example\.com\tsecret\thttps:\/\/example\.com\/code\/1\t成功\t已导入 CPA\t/);
+  assert.deepStrictEqual(toasts.at(-1), {
+    message: '已导出 1 条账号记录。',
+    tone: 'success',
+  });
+
+  stats.listeners.click({
+    target: createClosestTarget({
+      '[data-account-record-filter]': createDataNode('data-account-record-filter', 'retry'),
+    }),
+  });
 
   btnToggleAccountRecordsSelection.listeners.click();
 

@@ -67,6 +67,10 @@
       return count > 0 ? count : 0;
     }
 
+    function normalizeText(value) {
+      return String(value || '').trim();
+    }
+
     function buildRecordId(record = {}) {
       return String(record.recordId || record.email || '')
         .trim()
@@ -136,6 +140,23 @@
       }).replace(/\//g, '-');
     }
 
+    function formatExportTimestamp(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+      return date.toLocaleString('zh-CN', {
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: displayTimeZone,
+      }).replace(/\//g, '-');
+    }
+
     function getStatusMeta(record = {}) {
       if (record.finalStatus === 'success') {
         return { kind: 'success', label: '成功' };
@@ -152,6 +173,20 @@
       }
 
       return String(record.failureLabel || '').trim() || '流程失败';
+    }
+
+    function getImportTargetLabel(record = {}) {
+      return normalizeText(record.importTarget).toLowerCase() === 'sub2api' ? 'SUB2API' : 'CPA';
+    }
+
+    function getImportStatusText(record = {}) {
+      return `${Boolean(record.importedToPanel) ? '已导入' : '未导入'} ${getImportTargetLabel(record)}`;
+    }
+
+    function buildExportFileName(date = new Date()) {
+      const pad = (value) => String(value).padStart(2, '0');
+      const filterSuffix = activeFilter === 'all' ? 'all' : activeFilter;
+      return `account-run-records-${filterSuffix}-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}.txt`;
     }
 
     function getFilterConfig(filterKey = activeFilter) {
@@ -295,9 +330,10 @@
       ].join('');
     }
 
-    function updateToolbarState(allRecords) {
+    function updateToolbarState(allRecords, filteredRecords = getFilteredRecords(allRecords)) {
       const totalRecords = allRecords.length;
       setNodeDisabled(dom.btnClearAccountRecords, totalRecords === 0);
+      setNodeDisabled(dom.btnExportAccountRecords, filteredRecords.length === 0);
       setNodeDisabled(dom.btnToggleAccountRecordsSelection, totalRecords === 0);
       setNodeHidden(dom.btnClearAccountRecords, selectionMode);
       toggleNodeClass(dom.btnToggleAccountRecordsSelection, 'is-active', selectionMode);
@@ -360,6 +396,9 @@
         const statusMeta = getStatusMeta(record);
         const summaryText = getRecordSummaryText(record);
         const retryCount = normalizeRetryCount(record.retryCount);
+        const verificationCodeUrl = normalizeText(record.verificationCodeUrl);
+        const verificationCodeNote = normalizeText(record.verificationCodeNote);
+        const importStatusText = getImportStatusText(record);
         const isSelected = selectedRecordIds.has(recordId);
         const itemClassNames = [
           'account-record-item',
@@ -395,6 +434,23 @@
                 <span class="account-record-item-time mono">${escapeHtml(formatAccountRecordTime(record.finishedAt))}</span>
               </div>
             </div>
+            <div class="account-record-item-detail-grid">
+              <div class="account-record-item-detail">
+                <span class="account-record-item-detail-label">密码</span>
+                <span class="account-record-item-detail-value mono">${escapeHtml(String(record.password || '无'))}</span>
+              </div>
+              <div class="account-record-item-detail">
+                <span class="account-record-item-detail-label">导入状态</span>
+                <span class="account-record-item-import ${record.importedToPanel ? 'is-imported' : 'is-pending'}">${escapeHtml(importStatusText)}</span>
+              </div>
+              <div class="account-record-item-detail is-span-2">
+                <span class="account-record-item-detail-label">验证码链接</span>
+                ${verificationCodeUrl
+          ? `<a class="account-record-item-link mono" href="${escapeHtml(verificationCodeUrl)}" target="_blank" rel="noreferrer">${escapeHtml(verificationCodeUrl)}</a>`
+          : '<span class="account-record-item-detail-value">-</span>'}
+                ${verificationCodeNote ? `<span class="account-record-item-detail-note">${escapeHtml(verificationCodeNote)}</span>` : ''}
+              </div>
+            </div>
             <div class="account-record-item-bottom">
               <div class="account-record-item-summary">${escapeHtml(summaryText)}</div>
               <span class="account-record-item-retry mono">重试 ${escapeHtml(String(retryCount))}</span>
@@ -419,7 +475,7 @@
       const filteredRecords = getFilteredRecords(allRecords);
       updateHeader(allRecords, filteredRecords);
       updateStats(allRecords);
-      updateToolbarState(allRecords);
+      updateToolbarState(allRecords, filteredRecords);
       renderRecordList(allRecords, filteredRecords);
     }
 
@@ -537,6 +593,45 @@
       helpers.showToast?.(`已删除 ${Math.max(0, Number(response?.deletedCount) || 0)} 条邮箱记录。`, 'success', 2200);
     }
 
+    function buildExportContent(records = []) {
+      const lines = [
+        ['账号', '密码', '验证码获取链接', '状态', '导入状态', '完成时间', '失败摘要', '重试次数'].join('\t'),
+      ];
+
+      records.forEach((record) => {
+        lines.push([
+          normalizeText(record.email),
+          normalizeText(record.password) || '无',
+          normalizeText(record.verificationCodeUrl),
+          getStatusMeta(record).label,
+          getImportStatusText(record),
+          formatExportTimestamp(record.finishedAt),
+          normalizeText(record.failureLabel),
+          String(normalizeRetryCount(record.retryCount)),
+        ].join('\t'));
+      });
+
+      return lines.join('\r\n');
+    }
+
+    function exportVisibleRecords() {
+      const filteredRecords = getFilteredRecords(getAccountRunRecords());
+      if (!filteredRecords.length) {
+        helpers.showToast?.('当前筛选下没有可导出的账号记录。', 'warn', 1800);
+        return;
+      }
+      if (typeof helpers.downloadTextFile !== 'function') {
+        throw new Error('缺少文件导出能力。');
+      }
+
+      helpers.downloadTextFile(
+        buildExportContent(filteredRecords),
+        buildExportFileName(),
+        'text/plain;charset=utf-8'
+      );
+      helpers.showToast?.(`已导出 ${filteredRecords.length} 条账号记录。`, 'success', 2200);
+    }
+
     function handleStatsClick(event) {
       const filterNode = findClosest(event?.target, '[data-account-record-filter]');
       if (!filterNode) {
@@ -615,6 +710,13 @@
       dom.btnToggleAccountRecordsSelection?.addEventListener('click', () => {
         toggleSelectionMode();
       });
+      dom.btnExportAccountRecords?.addEventListener('click', () => {
+        try {
+          exportVisibleRecords();
+        } catch (error) {
+          helpers.showToast?.(`导出账号记录失败：${error.message}`, 'error');
+        }
+      });
       dom.btnDeleteSelectedAccountRecords?.addEventListener('click', async () => {
         try {
           await deleteSelectedRecords();
@@ -651,6 +753,7 @@
       setSelectionMode,
       summarizeAccountRunHistory,
       toggleSelectionMode,
+      exportVisibleRecords,
     };
   }
 

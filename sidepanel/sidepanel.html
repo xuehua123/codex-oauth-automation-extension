@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 
-<body>
+<body data-main-tab="run">
   <header>
     <div class="header-left">
       <button id="btn-repo-home" class="header-icon-link" type="button" aria-label="打开 GitHub 仓库"
@@ -91,7 +91,14 @@
     </div>
   </div>
 
-  <section id="update-section" hidden>
+  <div class="main-tab-bar" role="tablist" aria-label="侧边栏主视图">
+    <button id="btn-main-tab-run" class="main-tab-btn is-active" type="button" role="tab" aria-selected="true"
+      aria-pressed="true">运行</button>
+    <button id="btn-open-account-records" class="main-tab-btn" type="button" role="tab" aria-selected="false"
+      aria-pressed="false">记录</button>
+  </div>
+
+  <section id="update-section" data-main-view="run" hidden>
     <div class="update-card">
       <div class="update-card-header">
         <div class="update-card-copy">
@@ -105,7 +112,7 @@
     </div>
   </section>
 
-  <section id="data-section">
+  <section id="data-section" data-main-view="run">
     <div id="settings-card" class="data-card">
       <div class="data-row">
         <span class="data-label">来源</span>
@@ -192,6 +199,28 @@
         <input type="text" id="input-sub2api-default-proxy" class="data-input"
           placeholder="留空则不使用代理；或填写代理名称 / ID" />
       </div>
+      <div class="data-row" id="row-browser-proxy-enabled">
+        <span class="data-label">浏览器代理</span>
+        <div class="data-inline setting-pair">
+          <div class="setting-group setting-group-primary">
+            <label class="toggle-switch" for="input-browser-proxy-enabled">
+              <input type="checkbox" id="input-browser-proxy-enabled" />
+              <span class="toggle-switch-track" aria-hidden="true">
+                <span class="toggle-switch-thumb"></span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="data-row" id="row-browser-proxy-spec">
+        <span class="data-label">动态代理</span>
+        <div class="input-with-icon">
+          <input type="password" id="input-browser-proxy-spec" class="data-input data-input-with-icon"
+            placeholder="host:port:user:pass" />
+          <button id="btn-toggle-browser-proxy-spec" class="input-icon-btn" type="button" aria-label="显示动态代理"
+            title="显示动态代理"></button>
+        </div>
+      </div>
       <div class="data-row" id="row-custom-password">
         <span class="data-label">账户密码</span>
         <div class="input-with-icon">
@@ -208,6 +237,7 @@
             <option value="hotmail-api">Hotmail（账号池）</option>
             <option value="luckmail-api">LuckMail（API 购邮）</option>
             <option value="icloud">iCloud 邮箱</option>
+            <option value="icloud-list">iCloud 列表（链接取码）</option>
             <option value="163">163 邮箱 (mail.163.com)</option>
             <option value="163-vip">163 VIP 邮箱 (vip.163.com)</option>
             <option value="qq">QQ 邮箱 (wx.mail.qq.com)</option>
@@ -232,6 +262,7 @@
           <option value="duck">DuckDuckGo</option>
           <option value="cloudflare">Cloudflare</option>
           <option value="icloud">iCloud 隐私邮箱</option>
+          <option value="icloud-list">iCloud 列表</option>
           <option value="cloudflare-temp-email">Cloudflare Temp Email</option>
         </select>
       </div>
@@ -625,6 +656,43 @@
         <div id="icloud-list" class="icloud-list"></div>
       </div>
     </div>
+    <div id="icloud-list-section" class="data-card hotmail-card" style="display:none;">
+      <div class="section-mini-header">
+        <div class="section-mini-copy">
+          <span class="section-label">iCloud 列表</span>
+          <span class="data-value">邮箱和验证码链接一一对应，和现有 iCloud 隐私邮箱互不干扰</span>
+        </div>
+        <div class="section-mini-actions">
+          <button id="btn-icloud-list-reset-unused" class="btn btn-ghost btn-xs" type="button">批量标记未用</button>
+          <button id="btn-icloud-list-clear" class="btn btn-ghost btn-xs" type="button">清空列表</button>
+        </div>
+      </div>
+      <div class="luckmail-manager-card">
+        <div class="data-row hotmail-import-row">
+          <span class="data-label">导入内容</span>
+          <div class="hotmail-import-box">
+            <textarea id="input-icloud-list" class="data-input data-textarea" rows="6" placeholder="每行一条：邮箱&lt;TAB&gt;验证码链接&lt;TAB&gt;备注(可选)"></textarea>
+            <div class="section-mini-actions">
+              <button id="btn-icloud-list-import-file" class="btn btn-outline btn-xs" type="button">导入 TXT</button>
+              <button id="btn-icloud-list-apply" class="btn btn-primary btn-xs" type="button">应用列表</button>
+            </div>
+            <div class="data-value">格式：邮箱&lt;TAB&gt;验证码链接&lt;TAB&gt;备注(可选)</div>
+            <div id="icloud-list-errors" class="icloud-list-errors" style="display:none;"></div>
+          </div>
+        </div>
+        <div id="icloud-list-summary" class="luckmail-summary">导入后会在这里管理 iCloud 列表邮箱。</div>
+        <div class="icloud-list-table">
+          <div class="icloud-list-table-head">
+            <span>邮箱</span>
+            <span>备注</span>
+            <span>状态</span>
+            <span>最近使用</span>
+            <span>操作</span>
+          </div>
+          <div id="icloud-list-records" class="icloud-list-records"></div>
+        </div>
+      </div>
+    </div>
     <div id="status-bar" class="status-bar">
       <div class="status-dot"></div>
       <span id="display-status">就绪</span>
@@ -654,7 +722,7 @@
     </div>
   </section>
 
-  <section id="steps-section">
+  <section id="steps-section" data-main-view="run">
     <div class="steps-header">
       <span class="section-label">流程</span>
       <span id="steps-progress" class="steps-progress">0 / 9</span>
@@ -662,31 +730,28 @@
     <div class="steps-list"></div>
   </section>
 
-  <section id="log-section">
+  <section id="log-section" data-main-view="run">
     <div class="log-header">
       <span class="section-label">日志</span>
       <div class="log-header-actions">
-        <button id="btn-open-account-records" class="btn btn-ghost btn-xs" title="查看邮箱记录">记录</button>
         <button id="btn-clear-log" class="btn btn-ghost btn-xs" title="清空日志">清空</button>
       </div>
     </div>
     <div id="log-area"></div>
   </section>
 
-  <div id="account-records-overlay" class="account-records-overlay" hidden>
+  <section id="account-records-section" class="account-records-section" data-main-view="records">
     <div class="account-records-panel">
       <div class="account-records-panel-header">
         <div class="account-records-panel-copy">
           <span class="account-records-panel-title">邮箱记录</span>
           <span id="account-records-meta" class="account-records-panel-meta">暂无邮箱记录</span>
         </div>
-        <div class="account-records-panel-actions">
-          <button id="btn-close-account-records" class="modal-close" type="button" aria-label="关闭">×</button>
-        </div>
       </div>
       <div class="account-records-toolbar">
         <div id="account-records-stats" class="account-records-stats" role="group" aria-label="邮箱记录筛选"></div>
         <div class="account-records-toolbar-actions">
+          <button id="btn-export-account-records" class="btn btn-ghost btn-xs" type="button">导出</button>
           <button id="btn-toggle-account-records-selection" class="btn btn-ghost btn-xs" type="button">多选</button>
           <button id="btn-delete-selected-account-records" class="btn btn-ghost btn-xs" type="button" hidden disabled>删除选中</button>
           <button id="btn-clear-account-records" class="btn btn-ghost btn-xs" type="button">清理记录</button>
@@ -699,7 +764,7 @@
         <button id="btn-account-records-next" class="btn btn-outline btn-xs" type="button">下一页</button>
       </div>
     </div>
-  </div>
+  </section>
 
   <div id="auto-start-modal" class="modal-overlay" hidden>
     <div class="modal-card">
@@ -725,9 +790,11 @@
 
   <div id="toast-container"></div>
   <input id="input-import-settings-file" type="file" accept=".json,application/json" hidden />
+  <input id="input-icloud-list-file" type="file" accept=".txt,text/plain" hidden />
   <script src="../managed-alias-utils.js"></script>
   <script src="../mail2925-utils.js"></script>
   <script src="../icloud-utils.js"></script>
+  <script src="../icloud-list-utils.js"></script>
   <script src="../hotmail-utils.js"></script>
   <script src="../luckmail-utils.js"></script>
   <script src="../data/step-definitions.js"></script>
@@ -737,6 +804,7 @@
   <script src="hotmail-manager.js"></script>
   <script src="mail-2925-manager.js"></script>
   <script src="icloud-manager.js"></script>
+  <script src="icloud-list-manager.js"></script>
   <script src="luckmail-manager.js"></script>
   <script src="contribution-mode.js"></script>
   <script src="account-records-manager.js"></script>

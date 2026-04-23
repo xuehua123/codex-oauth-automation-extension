@@ -11,6 +11,7 @@
     let selectedEmails = new Set();
     let searchTerm = '';
     let filterMode = 'all';
+    let currentLoginContext = 'icloud';
 
     function normalizeIcloudSearchText(value) {
       return String(value || '').trim().toLowerCase();
@@ -89,6 +90,9 @@
 
     function showIcloudLoginHelp(payload = {}) {
       if (!dom.icloudLoginHelp) return;
+      currentLoginContext = String(payload.loginContext || '').trim().toLowerCase() === 'apple-account'
+        ? 'apple-account'
+        : 'icloud';
       const loginUrl = String(payload.loginUrl || '').trim();
       let host = 'icloud.com.cn / icloud.com';
       if (loginUrl) {
@@ -98,8 +102,12 @@
           host = loginUrl;
         }
       }
-      if (dom.icloudLoginHelpTitle) dom.icloudLoginHelpTitle.textContent = '需要登录 iCloud';
-      if (dom.icloudLoginHelpText) dom.icloudLoginHelpText.textContent = `我已经为你打开 ${host}。请在那个页面完成登录，然后回到这里点击“我已登录”。`;
+      const defaultTitle = currentLoginContext === 'apple-account' ? '需要登录 Apple Account' : '需要登录 iCloud';
+      const defaultText = currentLoginContext === 'apple-account'
+        ? `我已经为你打开 ${host}。请在那个页面完成登录，然后回到这里点击“我已登录”。`
+        : `我已经为你打开 ${host}。请在那个页面完成登录，然后回到这里点击“我已登录”。`;
+      if (dom.icloudLoginHelpTitle) dom.icloudLoginHelpTitle.textContent = String(payload.title || defaultTitle);
+      if (dom.icloudLoginHelpText) dom.icloudLoginHelpText.textContent = String(payload.text || defaultText);
       dom.icloudLoginHelp.style.display = 'flex';
     }
 
@@ -107,6 +115,7 @@
       if (dom.icloudLoginHelp) {
         dom.icloudLoginHelp.style.display = 'none';
       }
+      currentLoginContext = 'icloud';
     }
 
     function renderIcloudAliases(aliases = []) {
@@ -183,7 +192,7 @@
     }
 
     async function refreshIcloudAliases(options = {}) {
-      const { silent = false } = options;
+      const { silent = false, throwOnError = false } = options;
       if (!dom.icloudSection || dom.icloudSection.style.display === 'none') {
         return;
       }
@@ -207,6 +216,9 @@
           dom.icloudSummary.textContent = err.message;
         }
         updateIcloudBulkUI([]);
+        if (throwOnError) {
+          throw err;
+        }
         if (!silent) helpers.showToast(`iCloud 别名加载失败：${err.message}`, 'error');
       } finally {
         setIcloudLoadingState(false);
@@ -393,17 +405,22 @@
         dom.btnIcloudLoginDone.disabled = true;
       }
       try {
-        const response = await runtime.sendMessage({
-          type: 'CHECK_ICLOUD_SESSION',
-          source: 'sidepanel',
-          payload: {},
-        });
-        if (response?.error) {
-          throw new Error(response.error);
+        if (currentLoginContext === 'apple-account') {
+          await refreshIcloudAliases({ silent: true, throwOnError: true });
+          helpers.showToast('Apple Account 会话已恢复，别名列表已刷新。', 'success', 2600);
+        } else {
+          const response = await runtime.sendMessage({
+            type: 'CHECK_ICLOUD_SESSION',
+            source: 'sidepanel',
+            payload: {},
+          });
+          if (response?.error) {
+            throw new Error(response.error);
+          }
+          hideIcloudLoginHelp();
+          helpers.showToast('iCloud 会话已恢复，别名列表已刷新。', 'success', 2600);
+          await refreshIcloudAliases({ silent: true });
         }
-        hideIcloudLoginHelp();
-        helpers.showToast('iCloud 会话已恢复，别名列表已刷新。', 'success', 2600);
-        await refreshIcloudAliases({ silent: true });
       } catch (err) {
         helpers.showToast(`看起来还没有登录完成：${err.message}`, 'warn', 4200);
       } finally {

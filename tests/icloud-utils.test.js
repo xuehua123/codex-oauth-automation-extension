@@ -9,6 +9,8 @@ const {
   getIcloudLoginUrlForHost,
   getIcloudMailUrlForHost,
   getIcloudSetupUrlForHost,
+  normalizeAppleAccountAliasList,
+  normalizeAppleAccountAliasRecord,
   normalizeBooleanMap,
   normalizeIcloudAliasList,
   normalizeIcloudAliasRecord,
@@ -93,6 +95,113 @@ test('normalizeIcloudAliasList orders active unused aliases before used aliases'
     'inactive@icloud.com',
   ]);
   assert.equal(aliases[2].preserved, true);
+});
+
+test('normalizeAppleAccountAliasRecord maps Apple Account private email records to alias objects', () => {
+  const alias = normalizeAppleAccountAliasRecord({
+    id: 'alias-1',
+    emailAddress: 'Demo@iCloud.com',
+    label: 'Shopping',
+    note: 'Created in settings',
+    createdDate: '2026年4月12日',
+    forwardToEmail: 'Forward@Target.com',
+    active: true,
+  }, {
+    usedEmails: ['demo@icloud.com'],
+  });
+
+  assert.deepEqual(alias, {
+    anonymousId: 'alias-1',
+    email: 'demo@icloud.com',
+    label: 'Shopping',
+    note: 'Created in settings',
+    state: 'active',
+    active: true,
+    used: true,
+    preserved: false,
+    createdAt: '2026年4月12日',
+    forwardToEmail: 'forward@target.com',
+    source: 'apple-account',
+  });
+});
+
+test('normalizeAppleAccountAliasList merges active and inactive Apple Account aliases and preserves forward targets', () => {
+  const aliases = normalizeAppleAccountAliasList({
+    privateEmailList: [
+      {
+        id: 'fresh-1',
+        emailAddress: 'fresh@icloud.com',
+        label: 'Fresh',
+        note: '',
+        createdDate: '2026年4月12日',
+        active: true,
+      },
+      {
+        id: 'used-1',
+        emailAddress: 'used@icloud.com',
+        label: 'Used',
+        note: '',
+        forwardToEmail: 'alias-target@icloud.com',
+        createdDate: '2026年4月10日',
+        active: true,
+      },
+    ],
+    inactivePrivateEmailList: [
+      {
+        id: 'inactive-1',
+        emailAddress: 'inactive@icloud.com',
+        label: 'Inactive',
+        note: 'Disabled',
+        createdDate: '2026年4月8日',
+      },
+    ],
+    forwardToEmailAddress: 'default-target@icloud.com',
+  }, {
+    usedEmails: ['used@icloud.com'],
+    preservedEmails: ['inactive@icloud.com'],
+  });
+
+  assert.deepEqual(aliases, [
+    {
+      anonymousId: 'fresh-1',
+      email: 'fresh@icloud.com',
+      label: 'Fresh',
+      note: '',
+      state: 'active',
+      active: true,
+      used: false,
+      preserved: false,
+      createdAt: '2026年4月12日',
+      forwardToEmail: 'default-target@icloud.com',
+      source: 'apple-account',
+    },
+    {
+      anonymousId: 'used-1',
+      email: 'used@icloud.com',
+      label: 'Used',
+      note: '',
+      state: 'active',
+      active: true,
+      used: true,
+      preserved: false,
+      createdAt: '2026年4月10日',
+      forwardToEmail: 'alias-target@icloud.com',
+      source: 'apple-account',
+    },
+    {
+      anonymousId: 'inactive-1',
+      email: 'inactive@icloud.com',
+      label: 'Inactive',
+      note: 'Disabled',
+      state: 'inactive',
+      active: false,
+      used: false,
+      preserved: true,
+      createdAt: '2026年4月8日',
+      forwardToEmail: 'default-target@icloud.com',
+      source: 'apple-account',
+    },
+  ]);
 });
 
 test('pickReusableIcloudAlias and findIcloudAliasByEmail select expected aliases', () => {

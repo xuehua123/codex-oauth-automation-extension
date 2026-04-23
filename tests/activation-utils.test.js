@@ -6,7 +6,7 @@ const {
   isRecoverableStep9AuthFailure,
 } = require('../content/activation-utils.js');
 
-test('getActivationStrategy prefers requestSubmit for submit buttons inside forms', () => {
+test('getActivationStrategy keeps native click for submit buttons on email verification routes', () => {
   assert.deepEqual(
     getActivationStrategy({
       tagName: 'button',
@@ -14,7 +14,7 @@ test('getActivationStrategy prefers requestSubmit for submit buttons inside form
       hasForm: true,
       pathname: '/email-verification',
     }),
-    { method: 'requestSubmit' }
+    { method: 'click' }
   );
 });
 
@@ -38,7 +38,7 @@ test('getActivationStrategy uses native click for non-submit actions', () => {
   );
 });
 
-test('getActivationStrategy only uses requestSubmit on email verification routes', () => {
+test('getActivationStrategy keeps click for submit buttons on non-email-verification routes too', () => {
   assert.deepEqual(
     getActivationStrategy({
       tagName: 'button',
@@ -56,7 +56,7 @@ test('getActivationStrategy only uses requestSubmit on email verification routes
       hasForm: true,
       pathname: '/email-verification',
     }),
-    { method: 'requestSubmit' }
+    { method: 'click' }
   );
 });
 
