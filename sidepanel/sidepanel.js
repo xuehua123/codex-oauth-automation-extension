@@ -4628,6 +4628,9 @@ inputBrowserProxySpec?.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputBrowserProxySpec?.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
 inputCodex2ApiUrl.addEventListener('input', () => {
   markSettingsDirty(true);
   scheduleSettingsAutoSave();
