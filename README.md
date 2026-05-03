@@ -10,26 +10,12 @@
 
 <table>
   <tr>
-    <td align="center" width="50%">
-      <img src="docs/images/交流群.jpg" alt="QQ交流群，便于大家交流" width="100%" />
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/images/十轮自动.png" alt="最新版本运行日志" width="100%" />
-    </td>
-  </tr>
-</table>
-
-## 打赏一下
-
-佬们觉得好用的话，也可以打赏小弟一杯奶茶哦
-
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <img src="docs/images/支付宝.jpg" alt="支付宝收款码" width="100%" />
-    </td>
-    <td align="center" width="50%">
-      <img src="docs/images/微信.png" alt="微信收款码" width="100%" />
+    <td align="center" width="100%">
+      <a href="https://apikey.qzz.io/" target="_blank" rel="noreferrer">
+        <img src="docs/images/交流群.jpg" alt="QQ交流群，便于大家交流" width="100%" />
+      </a><br />
+      <strong><a href="https://apikey.qzz.io/" target="_blank" rel="noreferrer">官网 / QQ交流群入口</a></strong><br />
+      点击进入官网，查看最新地址与交流入口
     </td>
   </tr>
 </table>

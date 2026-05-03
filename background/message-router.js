@@ -61,6 +61,9 @@
       isStopError,
       isTabAlive,
       launchAutoRunTimerPlan,
+      ensureIpProxyAutoSyncAlarm,
+      clearIpProxyAutoSyncAlarm,
+      runIpProxyAutoSync,
       listIcloudAliases,
       listLuckmailPurchasesForManagement,
       refreshIpProxyPool,
@@ -328,7 +331,11 @@
             const step5Status = latestState.stepStatuses?.[5];
             if (step5Status !== 'running' && step5Status !== 'completed' && step5Status !== 'manual_completed') {
               await setStepStatus(5, 'skipped');
-              await addLog('步骤 4：检测到账号已直接进入已登录态，已自动跳过步骤 5。', 'warn');
+              if (payload.skipProfileStepReason === 'combined_verification_profile') {
+                await addLog('步骤 4：当前验证码页已内嵌完成注册资料提交，已自动跳过步骤 5。', 'warn');
+              } else {
+                await addLog('步骤 4：检测到账号已直接进入已登录态，已自动跳过步骤 5。', 'warn');
+              }
             }
           }
           break;
@@ -704,11 +711,23 @@
           const nextPlusModeEnabled = Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
             ? Boolean(updates.plusModeEnabled)
             : Boolean(currentState?.plusModeEnabled);
+          const oauthFlowTimeoutDisabled = Object.prototype.hasOwnProperty.call(updates, 'oauthFlowTimeoutEnabled')
+            && updates.oauthFlowTimeoutEnabled === false;
           await setPersistentSettings(updates);
           const stateUpdates = {
             ...updates,
             ...sessionUpdates,
+            ...(oauthFlowTimeoutDisabled ? {
+              oauthFlowDeadlineAt: null,
+              oauthFlowDeadlineSourceUrl: null,
+            } : {}),
           };
+          if (Object.prototype.hasOwnProperty.call(updates, 'icloudHostPreference')) {
+            const nextHostPreference = String(updates.icloudHostPreference || '').trim().toLowerCase();
+            stateUpdates.preferredIcloudHost = nextHostPreference === 'icloud.com' || nextHostPreference === 'icloud.com.cn'
+              ? nextHostPreference
+              : '';
+          }
           const nextStateForSteps = { ...currentState, ...stateUpdates };
           const currentStepIds = typeof getStepIdsForState === 'function'
             ? getStepIdsForState(currentState)
@@ -742,6 +761,19 @@
           }
           await setState(stateUpdates);
           const mergedState = await getState();
+          const hasIpProxyAutoSyncSettingChanged = (
+            Object.prototype.hasOwnProperty.call(updates, 'ipProxyAutoSyncEnabled')
+            || Object.prototype.hasOwnProperty.call(updates, 'ipProxyAutoSyncIntervalMinutes')
+          );
+          if (hasIpProxyAutoSyncSettingChanged) {
+            if (Boolean(mergedState?.ipProxyAutoSyncEnabled)) {
+              if (typeof ensureIpProxyAutoSyncAlarm === 'function') {
+                await ensureIpProxyAutoSyncAlarm(mergedState);
+              }
+            } else if (typeof clearIpProxyAutoSyncAlarm === 'function') {
+              await clearIpProxyAutoSyncAlarm();
+            }
+          }
           const hasIpProxyUpdates = Object.keys(updates).some((key) => key.startsWith('ipProxy'));
           const hasIpProxyEnabledUpdate = Object.prototype.hasOwnProperty.call(updates, 'ipProxyEnabled');
           const previousIpProxyEnabled = Boolean(currentState?.ipProxyEnabled);
@@ -790,7 +822,7 @@
             ).trim().toLowerCase() === 'gopay'
               ? 'GoPay'
               : 'PayPal';
-            await addLog(`Plus 鏀粯鏂瑰紡宸插垏鎹负 ${selectedPlusPaymentMethod}锛屽凡鏇存柊瀵瑰簲鐨?Plus 姝ラ銆?`, 'info');
+            await addLog(`Plus 支付方式已切换为 ${selectedPlusPaymentMethod}，已更新对应的 Plus 步骤。`, 'info');
           } else if (
             typeof isCodex2ApiLoginOnlyMode === 'function'
             && isCodex2ApiLoginOnlyMode(currentState) !== isCodex2ApiLoginOnlyMode(nextStateForSteps)
@@ -805,6 +837,14 @@
           return { ok: true, state: await getState(), proxyRouting };
         }
 
+        case 'RUN_IP_PROXY_AUTO_SYNC_NOW': {
+          if (typeof runIpProxyAutoSync !== 'function') {
+            throw new Error('IP 代理自动同步能力尚未接入。');
+          }
+          const result = await runIpProxyAutoSync('manual');
+          return { ok: true, ...result };
+        }
+
         case 'REFRESH_IP_PROXY_POOL': {
           if (typeof refreshIpProxyPool !== 'function') {
             throw new Error('IP 代理池能力尚未接入。');
@@ -812,6 +852,7 @@
           const result = await refreshIpProxyPool({
             maxItems: message.payload?.maxItems,
             mode: message.payload?.mode,
+            skipExitProbe: message.payload?.skipExitProbe,
           });
           return { ok: true, ...result };
         }
@@ -824,6 +865,7 @@
             maxItems: message.payload?.maxItems,
             mode: message.payload?.mode,
             forceRefresh: message.payload?.forceRefresh,
+            skipExitProbe: message.payload?.skipExitProbe,
           });
           return { ok: true, ...result };
         }
@@ -834,6 +876,7 @@
           }
           const result = await changeIpProxyExit({
             mode: message.payload?.mode,
+            skipExitProbe: message.payload?.skipExitProbe,
           });
           return { ok: true, ...result };
         }
@@ -860,7 +903,7 @@
           );
           const timeoutMs = Number(message.payload?.timeoutMs) > 0
             ? Number(message.payload.timeoutMs)
-            : (is711AccountMode ? (shouldPreRebindBeforeProbe ? 8000 : 6000) : undefined);
+            : (is711AccountMode ? (shouldPreRebindBeforeProbe ? 15000 : 12000) : undefined);
 
           // 手动“检测出口”前先轻量应用当前配置，避免读取到旧代理链路状态。
           if (probeState?.ipProxyEnabled && typeof applyIpProxySettingsFromState === 'function') {

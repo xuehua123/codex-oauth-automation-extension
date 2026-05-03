@@ -9,6 +9,7 @@
       clickWithDebugger,
       completeStepFromBackground,
       ensureStep8SignupPageReady,
+      getOAuthFlowRemainingMs,
       getOAuthFlowStepTimeoutMs,
       getStep8CallbackUrlFromNavigation,
       getStep8CallbackUrlFromTabUpdate,
@@ -34,6 +35,9 @@
       setStep8TabUpdatedListener,
     } = deps;
 
+    const LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS = 240000;
+    const CALLBACK_TIMEOUT_CHECK_INTERVAL_MS = 1000;
+
     function getVisibleStep(state, fallback = 9) {
       const visibleStep = Math.floor(Number(state?.visibleStep) || 0);
       return visibleStep > 0 ? visibleStep : fallback;
@@ -54,17 +58,17 @@
 
       await addLog(`步骤 ${visibleStep}：正在监听 localhost 回调地址...`);
 
-      let callbackTimeoutMs = 240000;
+      let callbackTimeoutMs = LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS;
       let timeoutRecoveryAttempted = false;
       while (true) {
         try {
           callbackTimeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
-            ? await getOAuthFlowStepTimeoutMs(240000, {
+            ? await getOAuthFlowStepTimeoutMs(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS, {
               step: visibleStep,
               actionLabel: 'OAuth localhost 回调',
               oauthUrl: activeState?.oauthUrl || '',
             })
-            : 240000;
+            : LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS;
           break;
         } catch (error) {
           if (timeoutRecoveryAttempted || typeof recoverOAuthLocalhostTimeout !== 'function') {
@@ -86,8 +90,14 @@
       return new Promise((resolve, reject) => {
         let resolved = false;
         let signupTabId = null;
+        const callbackWaitStartedAt = Date.now();
+        let timeoutCheckTimer = null;
 
         const cleanupListener = () => {
+          if (timeoutCheckTimer) {
+            clearTimeout(timeoutCheckTimer);
+            timeoutCheckTimer = null;
+          }
           cleanupStep8NavigationListeners();
           setStep8PendingReject(null);
         };
@@ -95,7 +105,6 @@
         const rejectStep9 = (error) => {
           if (resolved) return;
           resolved = true;
-          clearTimeout(timeout);
           cleanupListener();
           reject(error);
         };
@@ -105,7 +114,6 @@
 
           resolved = true;
           cleanupListener();
-          clearTimeout(timeout);
 
           addLog(`步骤 ${visibleStep}：已捕获 localhost 地址：${callbackUrl}`, 'ok').then(() => {
             return completeStepFromBackground(visibleStep, { localhostUrl: callbackUrl });
@@ -116,9 +124,39 @@
           });
         };
 
-        const timeout = setTimeout(() => {
-          rejectStep9(new Error(`${Math.round(callbackTimeoutMs / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
-        }, callbackTimeoutMs);
+        const checkCallbackTimeout = async () => {
+          if (resolved) {
+            return;
+          }
+          const elapsedMs = Date.now() - callbackWaitStartedAt;
+          if (elapsedMs >= LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS) {
+            rejectStep9(new Error(`${Math.round(LOCALHOST_CALLBACK_LOCAL_TIMEOUT_MS / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
+            return;
+          }
+
+          if (typeof getOAuthFlowRemainingMs === 'function') {
+            try {
+              await getOAuthFlowRemainingMs({
+                step: visibleStep,
+                actionLabel: 'OAuth localhost 回调',
+                oauthUrl: activeState?.oauthUrl || '',
+              });
+            } catch (error) {
+              rejectStep9(error);
+              return;
+            }
+          } else if (elapsedMs >= callbackTimeoutMs) {
+            rejectStep9(new Error(`${Math.round(callbackTimeoutMs / 1000)} 秒内未捕获到 localhost 回调跳转，步骤 ${visibleStep} 的点击可能被拦截了。`));
+            return;
+          }
+
+          timeoutCheckTimer = setTimeout(checkCallbackTimeout, CALLBACK_TIMEOUT_CHECK_INTERVAL_MS);
+        };
+
+        timeoutCheckTimer = setTimeout(
+          checkCallbackTimeout,
+          Math.min(CALLBACK_TIMEOUT_CHECK_INTERVAL_MS, Math.max(1, callbackTimeoutMs))
+        );
 
         setStep8PendingReject((error) => {
           rejectStep9(error);
