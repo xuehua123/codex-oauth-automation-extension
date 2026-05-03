@@ -58,6 +58,10 @@ test('sidepanel html exposes Codex2API login-only controls', () => {
   assert.match(html, /id="input-codex2api-login-only-mode"/);
   assert.match(html, /id="row-codex2api-login-accounts"/);
   assert.match(html, /id="input-codex2api-login-accounts"/);
+  assert.match(html, /id="row-codex2api-login-code-provider"/);
+  assert.match(html, /id="select-codex2api-login-code-provider"/);
+  assert.match(html, /id="row-ikona-oni-base-url"/);
+  assert.match(html, /id="input-ikona-oni-api-key"/);
 });
 
 test('sidepanel locks run count to Codex2API login-only account pool size', () => {
@@ -69,6 +73,8 @@ test('sidepanel locks run count to Codex2API login-only account pool size', () =
     extractFunction('getCustomEmailPoolSize'),
     extractFunction('normalizeCodex2ApiLoginAccountEntries'),
     extractFunction('formatCodex2ApiLoginAccountEntries'),
+    extractFunction('normalizeCodex2ApiLoginCodeProvider'),
+    extractFunction('normalizeIkonaOniBaseUrl'),
     extractFunction('isCodex2ApiLoginOnlyModeEnabled'),
     extractFunction('getCodex2ApiLoginAccountPoolSize'),
     extractFunction('getLockedRunCountFromEmailPool'),
@@ -79,9 +85,12 @@ test('sidepanel locks run count to Codex2API login-only account pool size', () =
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
+const TEMPMAIL_PUBLIC_PROVIDER = 'tempmail-public';
+const IKONA_ONI_PROVIDER = 'ikona-oni';
+const DEFAULT_IKONA_ONI_BASE_URL = 'https://tempmail-worker.hasildia1.workers.dev';
 const selectPanelMode = { value: 'codex2api' };
 const inputCodex2ApiLoginOnlyMode = { checked: true };
-const inputCodex2ApiLoginAccounts = { value: 'alpha@example.com | pass-1\\nbeta@example.com| pass-2' };
+const inputCodex2ApiLoginAccounts = { value: 'alpha@example.com | pass-1\\nbeta@example.com| pass-2\\ngamma@example.com' };
 const selectMailProvider = { value: '163' };
 const selectEmailGenerator = { value: 'duck' };
 const inputCustomMailProviderPool = { value: '' };
@@ -101,25 +110,32 @@ return {
   getRunCountValue,
   isCodex2ApiLoginOnlyModeEnabled,
   normalizeCodex2ApiLoginAccountEntries,
+  normalizeCodex2ApiLoginCodeProvider,
+  normalizeIkonaOniBaseUrl,
 };
 `)();
 
   assert.deepStrictEqual(
-    api.normalizeCodex2ApiLoginAccountEntries(' Foo@Example.com | pass-1 \\ninvalid\\nbar@example.com| pass-2 '),
+    api.normalizeCodex2ApiLoginAccountEntries(' Foo@Example.com | pass-1 \\ninvalid\\nbar@example.com| pass-2 \\nbaz@example.com\\nqux@example.com | '),
     [
       { email: 'foo@example.com', password: 'pass-1' },
       { email: 'bar@example.com', password: 'pass-2' },
+      { email: 'baz@example.com', password: '' },
+      { email: 'qux@example.com', password: '' },
     ]
   );
   assert.equal(
     api.formatCodex2ApiLoginAccountEntries([
       { email: 'alpha@example.com', password: 'pass-1' },
-      { email: 'beta@example.com', password: 'pass-2' },
+      { email: 'beta@example.com', password: '' },
     ]),
-    'alpha@example.com | pass-1\nbeta@example.com | pass-2'
+    'alpha@example.com | pass-1\nbeta@example.com'
   );
   assert.equal(api.isCodex2ApiLoginOnlyModeEnabled(), true);
-  assert.equal(api.getCodex2ApiLoginAccountPoolSize(), 2);
-  assert.equal(api.getLockedRunCountFromEmailPool(), 2);
-  assert.equal(api.getRunCountValue(), 2);
+  assert.equal(api.normalizeCodex2ApiLoginCodeProvider('ikona-oni'), 'ikona-oni');
+  assert.equal(api.normalizeCodex2ApiLoginCodeProvider('unknown'), 'tempmail-public');
+  assert.equal(api.normalizeIkonaOniBaseUrl('https://ikona-oni.com///'), 'https://ikona-oni.com');
+  assert.equal(api.getCodex2ApiLoginAccountPoolSize(), 3);
+  assert.equal(api.getLockedRunCountFromEmailPool(), 3);
+  assert.equal(api.getRunCountValue(), 3);
 });

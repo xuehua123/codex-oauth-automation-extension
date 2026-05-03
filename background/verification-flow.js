@@ -18,6 +18,7 @@
       getState,
       getTabId,
       HOTMAIL_PROVIDER,
+      IKONA_ONI_PROVIDER,
       isMail2925LimitReachedError,
       isStopError,
       LUCKMAIL_PROVIDER,
@@ -25,6 +26,7 @@
       MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
       pollCloudflareTempEmailVerificationCode,
       pollHotmailVerificationCode,
+      pollIkonaOniVerificationCode,
       pollLuckmailVerificationCode,
       pollTempmailPublicVerificationCode,
       sendToContentScript,
@@ -896,12 +898,19 @@
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudflareTempEmailVerificationCode(step, state, timedPoll.payload);
       }
-      if (mail.provider === TEMPMAIL_PUBLIC_PROVIDER) {
+      if (TEMPMAIL_PUBLIC_PROVIDER && mail.provider === TEMPMAIL_PUBLIC_PROVIDER) {
         const timedPoll = await applyMailPollingTimeBudget(step, {
           ...getVerificationPollPayload(step, state),
           ...cleanPollOverrides,
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollTempmailPublicVerificationCode(step, state, timedPoll.payload);
+      }
+      if (IKONA_ONI_PROVIDER && mail.provider === IKONA_ONI_PROVIDER) {
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollIkonaOniVerificationCode(step, state, timedPoll.payload);
       }
 
       if (Number(pollOverrides.resendIntervalMs) > 0) {

@@ -163,6 +163,12 @@ const rowCodex2ApiLoginOnlyMode = document.getElementById('row-codex2api-login-o
 const inputCodex2ApiLoginOnlyMode = document.getElementById('input-codex2api-login-only-mode');
 const rowCodex2ApiLoginAccounts = document.getElementById('row-codex2api-login-accounts');
 const inputCodex2ApiLoginAccounts = document.getElementById('input-codex2api-login-accounts');
+const rowCodex2ApiLoginCodeProvider = document.getElementById('row-codex2api-login-code-provider');
+const selectCodex2ApiLoginCodeProvider = document.getElementById('select-codex2api-login-code-provider');
+const rowIkonaOniBaseUrl = document.getElementById('row-ikona-oni-base-url');
+const inputIkonaOniBaseUrl = document.getElementById('input-ikona-oni-base-url');
+const rowIkonaOniApiKey = document.getElementById('row-ikona-oni-api-key');
+const inputIkonaOniApiKey = document.getElementById('input-ikona-oni-api-key');
 const rowCustomPassword = document.getElementById('row-custom-password');
 const rowPlusMode = document.getElementById('row-plus-mode');
 const inputPlusModeEnabled = document.getElementById('input-plus-mode-enabled');
@@ -650,6 +656,9 @@ const ICLOUD_PROVIDER = 'icloud';
 const GMAIL_PROVIDER = 'gmail';
 const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
+const TEMPMAIL_PUBLIC_PROVIDER = 'tempmail-public';
+const IKONA_ONI_PROVIDER = 'ikona-oni';
+const DEFAULT_IKONA_ONI_BASE_URL = 'https://tempmail-worker.hasildia1.workers.dev';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const DEFAULT_LUCKMAIL_BASE_URL = 'https://mails.luckyous.com';
 const DEFAULT_LUCKMAIL_EMAIL_TYPE = 'ms_graph';
@@ -2077,8 +2086,8 @@ function normalizeCodex2ApiLoginAccountEntries(value = '') {
   for (const item of source) {
     if (item && typeof item === 'object' && !Array.isArray(item)) {
       const email = String(item.email || '').trim().toLowerCase();
-      const password = String(item.password || '').trim();
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+      const password = item.password == null ? '' : String(item.password).trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         entries.push({ email, password });
       }
       continue;
@@ -2090,13 +2099,9 @@ function normalizeCodex2ApiLoginAccountEntries(value = '') {
     }
 
     const separatorIndex = line.indexOf('|');
-    if (separatorIndex <= 0) {
-      continue;
-    }
-
-    const email = line.slice(0, separatorIndex).trim().toLowerCase();
-    const password = line.slice(separatorIndex + 1).trim();
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+    const email = (separatorIndex >= 0 ? line.slice(0, separatorIndex) : line).trim().toLowerCase();
+    const password = separatorIndex >= 0 ? line.slice(separatorIndex + 1).trim() : '';
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       entries.push({ email, password });
     }
   }
@@ -2106,8 +2111,32 @@ function normalizeCodex2ApiLoginAccountEntries(value = '') {
 
 function formatCodex2ApiLoginAccountEntries(entries = []) {
   return normalizeCodex2ApiLoginAccountEntries(entries)
-    .map((entry) => `${entry.email} | ${entry.password}`)
+    .map((entry) => (entry.password ? `${entry.email} | ${entry.password}` : entry.email))
     .join('\n');
+}
+
+function normalizeCodex2ApiLoginCodeProvider(value = '') {
+  return String(value || '').trim().toLowerCase() === IKONA_ONI_PROVIDER
+    ? IKONA_ONI_PROVIDER
+    : TEMPMAIL_PUBLIC_PROVIDER;
+}
+
+function normalizeIkonaOniBaseUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return DEFAULT_IKONA_ONI_BASE_URL;
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return DEFAULT_IKONA_ONI_BASE_URL;
+    }
+    url.hash = '';
+    url.search = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch (_err) {
+    return DEFAULT_IKONA_ONI_BASE_URL;
+  }
 }
 
 function isCodex2ApiLoginOnlyModeEnabled() {
@@ -2120,7 +2149,7 @@ function getCodex2ApiLoginAccountPoolSize() {
 }
 
 function getLockedRunCountFromEmailPool(provider = selectMailProvider.value) {
-  if (isCodex2ApiLoginOnlyModeEnabled()) {
+  if (typeof isCodex2ApiLoginOnlyModeEnabled === 'function' && isCodex2ApiLoginOnlyModeEnabled()) {
     return getCodex2ApiLoginAccountPoolSize();
   }
   if (usesCustomMailProviderPool(provider)) {
@@ -2945,6 +2974,19 @@ function collectSettingsPayload() {
         ? selectPlusPaymentMethod.value
         : latestState?.plusPaymentMethod) || ''
     ).trim().toLowerCase() === 'gopay' ? 'gopay' : 'paypal');
+  const fallbackLoginCodeProvider = typeof TEMPMAIL_PUBLIC_PROVIDER !== 'undefined'
+    ? TEMPMAIL_PUBLIC_PROVIDER
+    : 'tempmail-public';
+  const normalizeLoginCodeProviderSafe = typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+    ? normalizeCodex2ApiLoginCodeProvider
+    : ((value = '') => String(value || '').trim().toLowerCase() === 'ikona-oni' ? 'ikona-oni' : fallbackLoginCodeProvider);
+  const normalizeIkonaOniBaseUrlSafe = typeof normalizeIkonaOniBaseUrl === 'function'
+    ? normalizeIkonaOniBaseUrl
+    : ((value = '') => String(value || '').trim() || (
+      typeof DEFAULT_IKONA_ONI_BASE_URL !== 'undefined'
+        ? DEFAULT_IKONA_ONI_BASE_URL
+        : 'https://tempmail-worker.hasildia1.workers.dev'
+    ));
   return {
     ...(contributionModeEnabled ? {} : {
       panelMode: selectPanelMode.value,
@@ -2985,6 +3027,15 @@ function collectSettingsPayload() {
     codex2apiLoginAccounts: typeof inputCodex2ApiLoginAccounts !== 'undefined' && inputCodex2ApiLoginAccounts
       ? normalizeCodex2ApiLoginAccountEntries(inputCodex2ApiLoginAccounts.value)
       : [],
+    codex2apiLoginCodeProvider: typeof selectCodex2ApiLoginCodeProvider !== 'undefined' && selectCodex2ApiLoginCodeProvider
+      ? normalizeLoginCodeProviderSafe(selectCodex2ApiLoginCodeProvider.value)
+      : fallbackLoginCodeProvider,
+    ikonaOniBaseUrl: typeof inputIkonaOniBaseUrl !== 'undefined' && inputIkonaOniBaseUrl
+      ? normalizeIkonaOniBaseUrlSafe(inputIkonaOniBaseUrl.value)
+      : normalizeIkonaOniBaseUrlSafe(''),
+    ikonaOniApiKey: typeof inputIkonaOniApiKey !== 'undefined' && inputIkonaOniApiKey
+      ? String(inputIkonaOniApiKey.value || '').trim()
+      : '',
     plusModeEnabled: typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
       ? Boolean(inputPlusModeEnabled.checked)
       : Boolean(latestState?.plusModeEnabled),
@@ -7092,11 +7143,26 @@ function applySettingsState(state) {
   }
   inputCodex2ApiUrl.value = state?.codex2apiUrl || '';
   inputCodex2ApiAdminKey.value = state?.codex2apiAdminKey || '';
-  if (inputCodex2ApiLoginOnlyMode) {
+  if (typeof inputCodex2ApiLoginOnlyMode !== 'undefined' && inputCodex2ApiLoginOnlyMode) {
     inputCodex2ApiLoginOnlyMode.checked = Boolean(state?.codex2apiLoginOnlyMode);
   }
-  if (inputCodex2ApiLoginAccounts) {
+  if (typeof inputCodex2ApiLoginAccounts !== 'undefined' && inputCodex2ApiLoginAccounts) {
     inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(state?.codex2apiLoginAccounts || []);
+  }
+  const normalizeLoginCodeProviderSafe = typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+    ? normalizeCodex2ApiLoginCodeProvider
+    : ((value = '') => String(value || '').trim().toLowerCase() === 'ikona-oni' ? 'ikona-oni' : 'tempmail-public');
+  const normalizeIkonaOniBaseUrlSafe = typeof normalizeIkonaOniBaseUrl === 'function'
+    ? normalizeIkonaOniBaseUrl
+    : ((value = '') => String(value || '').trim() || 'https://tempmail-worker.hasildia1.workers.dev');
+  if (typeof selectCodex2ApiLoginCodeProvider !== 'undefined' && selectCodex2ApiLoginCodeProvider) {
+    selectCodex2ApiLoginCodeProvider.value = normalizeLoginCodeProviderSafe(state?.codex2apiLoginCodeProvider);
+  }
+  if (typeof inputIkonaOniBaseUrl !== 'undefined' && inputIkonaOniBaseUrl) {
+    inputIkonaOniBaseUrl.value = normalizeIkonaOniBaseUrlSafe(state?.ikonaOniBaseUrl);
+  }
+  if (typeof inputIkonaOniApiKey !== 'undefined' && inputIkonaOniApiKey) {
+    inputIkonaOniApiKey.value = String(state?.ikonaOniApiKey || '');
   }
   const restoredMailProvider = isCustomMailProvider(state?.mailProvider)
     || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email'].includes(String(state?.mailProvider || '').trim())
@@ -7163,7 +7229,9 @@ function applySettingsState(state) {
   if (inputCustomEmailPool) {
     inputCustomEmailPool.value = normalizeCustomEmailPoolEntries(state?.customEmailPool).join('\n');
   }
-  syncRunCountFromConfiguredEmailPool();
+  if (typeof syncRunCountFromConfiguredEmailPool === 'function') {
+    syncRunCountFromConfiguredEmailPool();
+  }
   setHotmailServiceMode(state?.hotmailServiceMode);
   inputHotmailRemoteBaseUrl.value = state?.hotmailRemoteBaseUrl || '';
   inputHotmailLocalBaseUrl.value = state?.hotmailLocalBaseUrl || '';
@@ -8292,7 +8360,22 @@ function updateMailProviderUI() {
   const useCloudflare = selectedGenerator === 'cloudflare';
   const useIcloud = selectedGenerator === 'icloud';
   const useCloudflareTempEmailGenerator = selectedGenerator === 'cloudflare-temp-email';
-  const useCodex2ApiLoginOnly = isCodex2ApiLoginOnlyModeEnabled();
+  const useCodex2ApiLoginOnly = typeof isCodex2ApiLoginOnlyModeEnabled === 'function'
+    ? isCodex2ApiLoginOnlyModeEnabled()
+    : false;
+  const selectedLoginCodeProviderValue = typeof selectCodex2ApiLoginCodeProvider !== 'undefined'
+    ? selectCodex2ApiLoginCodeProvider?.value
+    : '';
+  const loginCodeProviderForHint = (
+    typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+      ? normalizeCodex2ApiLoginCodeProvider(selectedLoginCodeProviderValue)
+      : (String(selectedLoginCodeProviderValue || '').trim().toLowerCase() === 'ikona-oni'
+        ? 'ikona-oni'
+        : 'tempmail-public')
+  );
+  const loginCodeProviderLabel = loginCodeProviderForHint === 'ikona-oni'
+    ? 'Ikona-Oni'
+    : 'TempMail 公共收件箱';
   const showCloudflareDomain = useEmailGenerator && useCloudflare;
   const showCloudflareTempEmailSettings = useCloudflareTempEmailProvider || (useEmailGenerator && useCloudflareTempEmailGenerator);
   const showCloudflareTempEmailReceiveMailbox = useCloudflareTempEmailProvider && !useCloudflareTempEmailGenerator;
@@ -8437,8 +8520,8 @@ function updateMailProviderUI() {
   }
   if (autoHintText && useCodex2ApiLoginOnly) {
     autoHintText.textContent = getCodex2ApiLoginAccountPoolSize() > 0
-      ? `仅登录模式已启用，共 ${getCodex2ApiLoginAccountPoolSize()} 组账号；验证码会通过 TempMail 公共收件箱自动获取`
-      : '请先在登录账号池中每行填写一个“邮箱 | 密码”';
+      ? `仅登录模式已启用，共 ${getCodex2ApiLoginAccountPoolSize()} 组账号；验证码会通过 ${loginCodeProviderLabel} 自动获取`
+      : '请先在登录账号池中每行填写一个邮箱；如需密码登录可写“邮箱 | 密码”';
   }
   if (autoHintText && useGmail && useGeneratedAlias) {
     autoHintText.textContent = '请先填写 Gmail 原邮箱，步骤 3 会自动生成 Gmail +tag 地址';
@@ -8573,6 +8656,24 @@ function updatePanelModeUI() {
   }
   if (rowCodex2ApiLoginAccounts) {
     rowCodex2ApiLoginAccounts.style.display = useCodex2ApiLoginOnly ? '' : 'none';
+  }
+  if (rowCodex2ApiLoginCodeProvider) {
+    rowCodex2ApiLoginCodeProvider.style.display = useCodex2ApiLoginOnly ? '' : 'none';
+  }
+  const normalizeLoginCodeProviderSafe = typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+    ? normalizeCodex2ApiLoginCodeProvider
+    : ((value = '') => String(value || '').trim().toLowerCase() === 'ikona-oni' ? 'ikona-oni' : 'tempmail-public');
+  const ikonaOniProviderValue = typeof IKONA_ONI_PROVIDER !== 'undefined' ? IKONA_ONI_PROVIDER : 'ikona-oni';
+  const selectedLoginCodeProviderValue = typeof selectCodex2ApiLoginCodeProvider !== 'undefined'
+    ? selectCodex2ApiLoginCodeProvider?.value
+    : '';
+  const useIkonaOniLoginCodeProvider = useCodex2ApiLoginOnly
+    && normalizeLoginCodeProviderSafe(selectedLoginCodeProviderValue) === ikonaOniProviderValue;
+  if (rowIkonaOniBaseUrl) {
+    rowIkonaOniBaseUrl.style.display = useIkonaOniLoginCodeProvider ? '' : 'none';
+  }
+  if (rowIkonaOniApiKey) {
+    rowIkonaOniApiKey.style.display = useIkonaOniLoginCodeProvider ? '' : 'none';
   }
 
   const step9Btn = document.querySelector('.step-btn[data-step-key="platform-verify"]');
@@ -9739,7 +9840,7 @@ async function startAutoRunFromCurrentSettings() {
     throw new Error('请先在邮箱池里至少填写 1 个邮箱。');
   }
   if (codex2ApiLoginOnlyEnabled && lockedRunCount <= 0) {
-    throw new Error('请先在登录账号池里至少填写 1 组邮箱和密码。');
+    throw new Error('请先在登录账号池里至少填写 1 个登录邮箱。');
   }
   const totalRuns = lockedRunCount > 0 ? lockedRunCount : getRunCountValue();
   if (lockedRunCount > 0) {
@@ -10527,10 +10628,40 @@ inputCodex2ApiLoginOnlyMode?.addEventListener('change', () => {
 });
 
 inputCodex2ApiLoginAccounts?.addEventListener('input', () => {
-  syncRunCountFromConfiguredEmailPool();
+  if (typeof syncRunCountFromConfiguredEmailPool === 'function') {
+    syncRunCountFromConfiguredEmailPool();
+  }
   updateMailProviderUI();
   markSettingsDirty(true);
   scheduleSettingsAutoSave();
+});
+
+selectCodex2ApiLoginCodeProvider?.addEventListener('change', () => {
+  updatePanelModeUI();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputIkonaOniBaseUrl?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputIkonaOniBaseUrl?.addEventListener('blur', () => {
+  if (inputIkonaOniBaseUrl) {
+    const normalizeIkonaOniBaseUrlSafe = typeof normalizeIkonaOniBaseUrl === 'function'
+      ? normalizeIkonaOniBaseUrl
+      : ((value = '') => String(value || '').trim() || 'https://tempmail-worker.hasildia1.workers.dev');
+    inputIkonaOniBaseUrl.value = normalizeIkonaOniBaseUrlSafe(inputIkonaOniBaseUrl.value);
+  }
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputIkonaOniApiKey?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputIkonaOniApiKey?.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
 });
 
 inputCodex2ApiLoginAccounts?.addEventListener('blur', () => {
@@ -10930,9 +11061,15 @@ inputOAuthFlowTimeoutEnabled?.addEventListener('change', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
-inputPhoneVerificationEnabled?.addEventListener('change', () => {
+inputPhoneVerificationEnabled?.addEventListener('change', async () => {
   if (inputPhoneVerificationEnabled.checked) {
     setPhoneVerificationSectionExpanded(true);
+    if (selectPhoneSmsProvider?.value === PHONE_SMS_PROVIDER_NEXSMS) {
+      await loadNexSmsCountries({ silent: true }).catch(() => { });
+      applyNexSmsCountrySelection(
+        Array.isArray(latestState?.nexSmsCountryOrder) ? latestState.nexSmsCountryOrder : []
+      );
+    }
   } else {
     updatePhoneVerificationSettingsUI();
   }
@@ -11473,6 +11610,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message.payload.codex2apiLoginAccounts !== undefined && inputCodex2ApiLoginAccounts) {
           inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(message.payload.codex2apiLoginAccounts || []);
         }
+        const normalizeLoginCodeProviderSafe = typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+          ? normalizeCodex2ApiLoginCodeProvider
+          : ((value = '') => String(value || '').trim().toLowerCase() === 'ikona-oni' ? 'ikona-oni' : 'tempmail-public');
+        const normalizeIkonaOniBaseUrlSafe = typeof normalizeIkonaOniBaseUrl === 'function'
+          ? normalizeIkonaOniBaseUrl
+          : ((value = '') => String(value || '').trim() || 'https://tempmail-worker.hasildia1.workers.dev');
+        if (message.payload.codex2apiLoginCodeProvider !== undefined && selectCodex2ApiLoginCodeProvider) {
+          selectCodex2ApiLoginCodeProvider.value = normalizeLoginCodeProviderSafe(message.payload.codex2apiLoginCodeProvider);
+        }
+        if (message.payload.ikonaOniBaseUrl !== undefined && inputIkonaOniBaseUrl) {
+          inputIkonaOniBaseUrl.value = normalizeIkonaOniBaseUrlSafe(message.payload.ikonaOniBaseUrl);
+        }
+        if (message.payload.ikonaOniApiKey !== undefined && inputIkonaOniApiKey) {
+          inputIkonaOniApiKey.value = String(message.payload.ikonaOniApiKey || '');
+        }
         updatePanelModeUI();
       }
       if (
@@ -11668,6 +11820,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.codex2apiLoginAccounts !== undefined && inputCodex2ApiLoginAccounts) {
         inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(message.payload.codex2apiLoginAccounts || []);
         syncRunCountFromConfiguredEmailPool();
+      }
+      const normalizeLoginCodeProviderSafe = typeof normalizeCodex2ApiLoginCodeProvider === 'function'
+        ? normalizeCodex2ApiLoginCodeProvider
+        : ((value = '') => String(value || '').trim().toLowerCase() === 'ikona-oni' ? 'ikona-oni' : 'tempmail-public');
+      const normalizeIkonaOniBaseUrlSafe = typeof normalizeIkonaOniBaseUrl === 'function'
+        ? normalizeIkonaOniBaseUrl
+        : ((value = '') => String(value || '').trim() || 'https://tempmail-worker.hasildia1.workers.dev');
+      if (message.payload.codex2apiLoginCodeProvider !== undefined && selectCodex2ApiLoginCodeProvider) {
+        selectCodex2ApiLoginCodeProvider.value = normalizeLoginCodeProviderSafe(message.payload.codex2apiLoginCodeProvider);
+        updatePanelModeUI();
+      }
+      if (message.payload.ikonaOniBaseUrl !== undefined && inputIkonaOniBaseUrl) {
+        inputIkonaOniBaseUrl.value = normalizeIkonaOniBaseUrlSafe(message.payload.ikonaOniBaseUrl);
+      }
+      if (message.payload.ikonaOniApiKey !== undefined && inputIkonaOniApiKey) {
+        inputIkonaOniApiKey.value = String(message.payload.ikonaOniApiKey || '');
       }
       if (
         message.payload.plusModeEnabled !== undefined
@@ -12117,21 +12285,29 @@ initializeReleaseInfo().catch((err) => {
 Promise.allSettled([
   loadHeroSmsCountries(),
   loadFiveSimCountries(),
-  loadNexSmsCountries({ silent: true }),
 ]).then((results) => {
   const heroResult = results[0];
   const fiveSimResult = results[1];
-  const nexSmsResult = results[2];
   if (heroResult?.status === 'rejected') {
     console.error('Failed to load HeroSMS countries:', heroResult.reason);
   }
   if (fiveSimResult?.status === 'rejected') {
     console.error('Failed to load 5sim countries:', fiveSimResult.reason);
   }
-  if (nexSmsResult?.status === 'rejected') {
-    console.error('Failed to load NexSMS countries:', nexSmsResult.reason);
-  }
   return restoreState().then(() => {
+    const shouldLoadNexSmsCountries = Boolean(inputPhoneVerificationEnabled?.checked)
+      && selectPhoneSmsProvider?.value === PHONE_SMS_PROVIDER_NEXSMS;
+    const nexSmsLoadPromise = shouldLoadNexSmsCountries
+      ? loadNexSmsCountries({ silent: true })
+        .then(() => {
+          applyNexSmsCountrySelection(
+            Array.isArray(latestState?.nexSmsCountryOrder) ? latestState.nexSmsCountryOrder : []
+          );
+        })
+        .catch((error) => {
+          console.error('Failed to load NexSMS countries:', error);
+        })
+      : Promise.resolve();
     syncPasswordToggleLabel();
     syncVpsUrlToggleLabel();
     syncVpsPasswordToggleLabel();
@@ -12144,7 +12320,7 @@ Promise.allSettled([
     updatePanelModeUI();
     updateButtonStates();
     updateStatusDisplay(latestState);
-    return refreshContributionContentHint()
+    return nexSmsLoadPromise.then(() => refreshContributionContentHint())
       .catch((error) => {
         console.warn('Failed to refresh contribution content hint during initialization:', error);
         return null;

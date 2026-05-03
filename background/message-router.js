@@ -746,7 +746,6 @@
             const activeLoginRun = Math.max(0, Math.floor(Number(nextStateForSteps?.autoRunCurrentRun) || 0));
             const hasRuntimeLoginCredentials = Boolean(
               String(currentState?.email || '').trim()
-              && String(currentState?.password || '').trim()
             );
             const shouldSeedDefaultLoginAccount = !isCodex2ApiLoginOnlyMode(currentState)
               || !hasRuntimeLoginCredentials;

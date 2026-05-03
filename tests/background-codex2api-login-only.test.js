@@ -58,6 +58,7 @@ test('background normalizes Codex2API login-only accounts and resolves the publi
     extractFunction('normalizeCodex2ApiLoginAccounts'),
     extractFunction('getCodex2ApiLoginAccounts'),
     extractFunction('getCodex2ApiLoginAccountForRun'),
+    extractFunction('normalizeCodex2ApiLoginCodeProvider'),
     extractFunction('normalizeMailProvider'),
     extractFunction('shouldUseCustomRegistrationEmail'),
     extractFunction('getMailConfig'),
@@ -70,6 +71,7 @@ const GMAIL_PROVIDER = 'gmail';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const TEMPMAIL_PUBLIC_PROVIDER = 'tempmail-public';
+const IKONA_ONI_PROVIDER = 'ikona-oni';
 const PERSISTED_SETTING_DEFAULTS = {
   mailProvider: '163',
 };
@@ -120,10 +122,23 @@ return {
 `)();
 
   assert.deepStrictEqual(
-    api.normalizeCodex2ApiLoginAccounts(' Foo@Example.com | pass-1 \\ninvalid\\nbar@example.com| pass-2 '),
+    api.normalizeCodex2ApiLoginAccounts(' Foo@Example.com | pass-1 \\ninvalid\\nbar@example.com| pass-2 \\nbaz@example.com\\nqux@example.com | '),
     [
       { email: 'foo@example.com', password: 'pass-1' },
       { email: 'bar@example.com', password: 'pass-2' },
+      { email: 'baz@example.com', password: '' },
+      { email: 'qux@example.com', password: '' },
+    ]
+  );
+
+  assert.deepStrictEqual(
+    api.normalizeCodex2ApiLoginAccounts([
+      { email: 'ObjectUser@Example.com' },
+      { email: 'PasswordUser@Example.com', password: ' pass ' },
+    ]),
+    [
+      { email: 'objectuser@example.com', password: '' },
+      { email: 'passworduser@example.com', password: 'pass' },
     ]
   );
 
@@ -148,6 +163,13 @@ return {
   assert.deepStrictEqual(api.getMailConfig(state), {
     provider: 'tempmail-public',
     label: 'TempMail 公共收件箱',
+  });
+  assert.deepStrictEqual(api.getMailConfig({
+    ...state,
+    codex2apiLoginCodeProvider: 'ikona-oni',
+  }), {
+    provider: 'ikona-oni',
+    label: 'Ikona-Oni API',
   });
 });
 

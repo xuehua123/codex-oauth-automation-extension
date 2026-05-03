@@ -19,6 +19,7 @@
       getState,
       getTabId,
       HOTMAIL_PROVIDER,
+      IKONA_ONI_PROVIDER,
       isTabAlive,
       isVerificationMailPollingError,
       LUCKMAIL_PROVIDER,
@@ -30,6 +31,7 @@
       sleepWithStop,
       STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
       STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS,
+      TEMPMAIL_PUBLIC_PROVIDER,
       throwIfStopped,
     } = deps;
 
@@ -250,10 +252,13 @@
       }
 
       throwIfStopped();
-      if (
-        mail.provider === HOTMAIL_PROVIDER
+      const usesBackgroundMailPolling = mail.provider === HOTMAIL_PROVIDER
         || mail.provider === LUCKMAIL_PROVIDER
         || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER
+        || (TEMPMAIL_PUBLIC_PROVIDER && mail.provider === TEMPMAIL_PUBLIC_PROVIDER)
+        || (IKONA_ONI_PROVIDER && mail.provider === IKONA_ONI_PROVIDER);
+      if (
+        usesBackgroundMailPolling
       ) {
         await addLog(`步骤 ${visibleStep}：正在通过 ${mail.label} 轮询验证码...`);
       } else {

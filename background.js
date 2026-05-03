@@ -219,6 +219,8 @@ const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
 const TEMPMAIL_PUBLIC_PROVIDER = 'tempmail-public';
 const TEMPMAIL_PUBLIC_INBOX_BASE_URL = 'https://tempmail-worker.hasildia1.workers.dev';
+const IKONA_ONI_PROVIDER = 'ikona-oni';
+const DEFAULT_IKONA_ONI_BASE_URL = TEMPMAIL_PUBLIC_INBOX_BASE_URL;
 const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const HOTMAIL_MAILBOXES = ['INBOX', 'Junk'];
@@ -429,7 +431,7 @@ function resolveContributionModeRoutingState(state = {}) {
 }
 
 function getStepDefinitionsForState(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
   }
   if (!isPlusModeState(state)) {
@@ -441,7 +443,7 @@ function getStepDefinitionsForState(state = {}) {
 }
 
 function getStepIdsForState(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return CODEX2API_LOGIN_ONLY_STEP_IDS;
   }
   if (!isPlusModeState(state)) {
@@ -458,7 +460,7 @@ function getLastStepIdForState(state = {}) {
 }
 
 function getAuthChainStartStepId(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return FINAL_OAUTH_CHAIN_START_STEP;
   }
   return isPlusModeState(state) ? 10 : FINAL_OAUTH_CHAIN_START_STEP;
@@ -533,6 +535,9 @@ const PERSISTED_SETTING_DEFAULTS = {
   codex2apiAdminKey: '',
   codex2apiLoginOnlyMode: false,
   codex2apiLoginAccounts: [],
+  codex2apiLoginCodeProvider: TEMPMAIL_PUBLIC_PROVIDER,
+  ikonaOniBaseUrl: DEFAULT_IKONA_ONI_BASE_URL,
+  ikonaOniApiKey: '',
   customPassword: '',
   plusModeEnabled: false,
   plusPaymentMethod: 'paypal',
@@ -1502,8 +1507,8 @@ function normalizeCodex2ApiLoginAccounts(value = []) {
   for (const item of source) {
     if (item && typeof item === 'object' && !Array.isArray(item)) {
       const email = String(item.email || '').trim().toLowerCase();
-      const password = String(item.password || '').trim();
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+      const password = item.password == null ? '' : String(item.password).trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         normalizedEntries.push({ email, password });
       }
       continue;
@@ -1515,13 +1520,9 @@ function normalizeCodex2ApiLoginAccounts(value = []) {
     }
 
     const separatorIndex = line.indexOf('|');
-    if (separatorIndex <= 0) {
-      continue;
-    }
-
-    const email = line.slice(0, separatorIndex).trim().toLowerCase();
-    const password = line.slice(separatorIndex + 1).trim();
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+    const email = (separatorIndex >= 0 ? line.slice(0, separatorIndex) : line).trim().toLowerCase();
+    const password = separatorIndex >= 0 ? line.slice(separatorIndex + 1).trim() : '';
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       normalizedEntries.push({ email, password });
     }
   }
@@ -1537,6 +1538,30 @@ function getCodex2ApiLoginAccountForRun(state = {}, targetRun = 1) {
   const entries = getCodex2ApiLoginAccounts(state);
   const numericRun = Math.max(1, Math.floor(Number(targetRun) || 1));
   return entries[numericRun - 1] || null;
+}
+
+function normalizeCodex2ApiLoginCodeProvider(value = '') {
+  return String(value || '').trim().toLowerCase() === IKONA_ONI_PROVIDER
+    ? IKONA_ONI_PROVIDER
+    : TEMPMAIL_PUBLIC_PROVIDER;
+}
+
+function normalizeIkonaOniBaseUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return DEFAULT_IKONA_ONI_BASE_URL;
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return DEFAULT_IKONA_ONI_BASE_URL;
+    }
+    url.hash = '';
+    url.search = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch (_err) {
+    return DEFAULT_IKONA_ONI_BASE_URL;
+  }
 }
 
 function normalizePanelMode(value = '') {
@@ -1847,6 +1872,12 @@ function normalizePersistentSettingValue(key, value) {
       return Boolean(value);
     case 'codex2apiLoginAccounts':
       return normalizeCodex2ApiLoginAccounts(value);
+    case 'codex2apiLoginCodeProvider':
+      return normalizeCodex2ApiLoginCodeProvider(value);
+    case 'ikonaOniBaseUrl':
+      return normalizeIkonaOniBaseUrl(value);
+    case 'ikonaOniApiKey':
+      return String(value || '').trim();
     case 'customPassword':
       return String(value || '');
     case 'paypalEmail':
@@ -3548,7 +3579,7 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
 }
 
 function shouldUseCustomRegistrationEmail(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return false;
   }
   return isCustomMailProvider(state)
@@ -3720,7 +3751,7 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
 }
 
 function shouldUseCustomRegistrationEmail(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return false;
   }
   return isCustomMailProvider(state)
@@ -4695,6 +4726,141 @@ async function fetchTempmailPublicInboxEmails(targetEmail) {
 
   const payload = await response.json().catch(() => ({}));
   return normalizeTempmailPublicInboxEmails(payload);
+}
+
+async function fetchIkonaOniOtpPayload(targetEmail, state = {}) {
+  const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error('Ikona-Oni 缺少目标邮箱地址。');
+  }
+  const apiKey = String(state?.ikonaOniApiKey || '').trim();
+  if (!apiKey) {
+    return null;
+  }
+
+  const baseUrl = normalizeIkonaOniBaseUrl(state?.ikonaOniBaseUrl);
+  const response = await fetch(`${baseUrl}/api/otp/${encodeURIComponent(normalizedEmail)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'x-api-key': apiKey,
+    },
+  });
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    const details = bodyText ? `，${bodyText.slice(0, 180)}` : '';
+    throw new Error(`Ikona-Oni OTP 请求失败：status ${response.status}${details}`);
+  }
+  return response.json().catch(() => ({}));
+}
+
+function extractIkonaOniOtpFromPayload(payload = {}) {
+  const candidates = [
+    payload?.data?.otp,
+    payload?.data?.code,
+    payload?.data?.verificationCode,
+    payload?.otp,
+    payload?.code,
+    payload?.verificationCode,
+  ];
+  for (const candidate of candidates) {
+    const match = String(candidate || '').match(/\b(\d{6})\b/);
+    if (match) {
+      return match[1];
+    }
+  }
+  const syntheticMessage = {
+    subject: String(payload?.data?.subject || payload?.subject || ''),
+    bodyPreview: String(payload?.data?.preview || payload?.data?.body || payload?.preview || payload?.body || ''),
+    text: JSON.stringify(payload || {}),
+  };
+  return extractVerificationCodeFromMessage(syntheticMessage);
+}
+
+async function fetchIkonaOniPublicInboxEmails(targetEmail, state = {}) {
+  const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error('Ikona-Oni 公开收件箱缺少目标邮箱地址。');
+  }
+  const baseUrl = normalizeIkonaOniBaseUrl(state?.ikonaOniBaseUrl);
+  const response = await fetch(`${baseUrl}/inbox/${encodeURIComponent(normalizedEmail)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    const details = bodyText ? `，${bodyText.slice(0, 180)}` : '';
+    throw new Error(`Ikona-Oni 公开收件箱请求失败：status ${response.status}${details}`);
+  }
+  const payload = await response.json().catch(() => ({}));
+  return normalizeTempmailPublicInboxEmails(payload);
+}
+
+async function pollIkonaOniVerificationCode(step, state, pollPayload = {}) {
+  const targetEmail = String(
+    pollPayload.targetEmail
+    || state?.step8VerificationTargetEmail
+    || state?.email
+    || ''
+  ).trim().toLowerCase();
+  if (!targetEmail) {
+    throw new Error('Ikona-Oni 轮询前缺少目标邮箱地址。');
+  }
+
+  await addLog(`步骤 ${step}：正在通过 Ikona-Oni 获取验证码（${targetEmail}）...`, 'info');
+  const maxAttempts = Math.max(1, Number(pollPayload.maxAttempts) || 5);
+  const intervalMs = Math.max(1000, Number(pollPayload.intervalMs) || 3000);
+  const hasApiKey = Boolean(String(state?.ikonaOniApiKey || '').trim());
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    throwIfStopped();
+    try {
+      if (hasApiKey) {
+        const payload = await fetchIkonaOniOtpPayload(targetEmail, state);
+        const code = extractIkonaOniOtpFromPayload(payload);
+        if (code && !(pollPayload.excludeCodes || []).includes(code)) {
+          return {
+            ok: true,
+            code,
+            emailTimestamp: Date.now(),
+            mailId: String(payload?.data?.email?.id || payload?.data?.id || ''),
+          };
+        }
+        lastError = new Error(`步骤 ${step}：Ikona-Oni API 暂未找到匹配验证码（${attempt}/${maxAttempts}）。`);
+      } else {
+        const messages = await fetchIkonaOniPublicInboxEmails(targetEmail, state);
+        const matchResult = pickVerificationMessageWithTimeFallback(messages, {
+          afterTimestamp: pollPayload.filterAfterTimestamp || 0,
+          senderFilters: pollPayload.senderFilters || [],
+          subjectFilters: pollPayload.subjectFilters || [],
+          excludeCodes: pollPayload.excludeCodes || [],
+        });
+        const match = matchResult.match;
+        if (match?.code) {
+          return {
+            ok: true,
+            code: match.code,
+            emailTimestamp: match.receivedAt || Date.now(),
+            mailId: match.message?.id || '',
+          };
+        }
+        lastError = new Error(`步骤 ${step}：Ikona-Oni 公开收件箱暂未找到匹配验证码（${attempt}/${maxAttempts}）。`);
+      }
+      await addLog(lastError.message, attempt === maxAttempts ? 'warn' : 'info');
+    } catch (err) {
+      lastError = err;
+      await addLog(`步骤 ${step}：Ikona-Oni 轮询失败：${err.message}`, 'warn');
+    }
+
+    if (attempt < maxAttempts) {
+      await sleepWithStop(intervalMs);
+    }
+  }
+
+  throw lastError || new Error(`步骤 ${step}：未通过 Ikona-Oni 获取到新的匹配验证码。`);
 }
 
 function summarizeTempmailPublicMessagesForLog(messages = []) {
@@ -9057,19 +9223,19 @@ function shouldStopEmailAutoFetchRetries(generator, error) {
 
 async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   const currentState = await getState();
-  if (isCodex2ApiLoginOnlyMode(currentState)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(currentState)) {
     const account = getCodex2ApiLoginAccountForRun(currentState, targetRun);
     if (!account) {
       const poolSize = getCodex2ApiLoginAccounts(currentState).length;
       throw new Error(
         poolSize > 0
           ? `Codex2API 登录账号池第 ${targetRun} 个账号不存在，请检查账号数量是否与自动轮数一致。`
-          : 'Codex2API 登录账号池为空，请先至少填写 1 组邮箱和密码。'
+          : 'Codex2API 登录账号池为空，请先至少填写 1 个登录邮箱。'
       );
     }
     await setEmailState(account.email);
-    await setPasswordState(account.password);
-    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    await setPasswordState(account.password || '');
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}${account.password ? '' : '（无密码，走邮箱验证码登录）'}（第 ${attemptRuns} 次尝试）===`, 'ok');
     return account.email;
   }
   if (isHotmailProvider(currentState)) {
@@ -9203,19 +9369,19 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
 
 async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   const currentState = await getState();
-  if (isCodex2ApiLoginOnlyMode(currentState)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(currentState)) {
     const account = getCodex2ApiLoginAccountForRun(currentState, targetRun);
     if (!account) {
       const poolSize = getCodex2ApiLoginAccounts(currentState).length;
       throw new Error(
         poolSize > 0
           ? `Codex2API 登录账号池第 ${targetRun} 个账号不存在，请检查账号数量是否与自动轮数一致。`
-          : 'Codex2API 登录账号池为空，请先至少填写 1 组邮箱和密码。'
+          : 'Codex2API 登录账号池为空，请先至少填写 1 个登录邮箱。'
       );
     }
     await setEmailState(account.email);
-    await setPasswordState(account.password);
-    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    await setPasswordState(account.password || '');
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}${account.password ? '' : '（无密码，走邮箱验证码登录）'}（第 ${attemptRuns} 次尝试）===`, 'ok');
     return account.email;
   }
   if (isHotmailProvider(currentState)) {
@@ -9377,7 +9543,8 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
 
   while (true) {
   const flowState = await getState();
-  const loginOnlyMode = isCodex2ApiLoginOnlyMode(flowState);
+  const loginOnlyMode = typeof isCodex2ApiLoginOnlyMode === 'function'
+    && isCodex2ApiLoginOnlyMode(flowState);
   if (loginOnlyMode) {
     currentStartStep = Math.max(FINAL_OAUTH_CHAIN_START_STEP, Number(currentStartStep) || FINAL_OAUTH_CHAIN_START_STEP);
   }
@@ -9696,6 +9863,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
   pollCloudflareTempEmailVerificationCode,
   pollHotmailVerificationCode,
+  pollIkonaOniVerificationCode,
   pollLuckmailVerificationCode,
   pollTempmailPublicVerificationCode,
   sendToContentScript,
@@ -9705,6 +9873,7 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   setStepStatus,
   sleepWithStop,
   TEMPMAIL_PUBLIC_PROVIDER,
+  IKONA_ONI_PROVIDER,
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
 });
@@ -9847,6 +10016,7 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   getState,
   getTabId,
   HOTMAIL_PROVIDER,
+  IKONA_ONI_PROVIDER,
   isTabAlive,
   isVerificationMailPollingError,
   LUCKMAIL_PROVIDER,
@@ -9858,6 +10028,7 @@ const step8Executor = self.MultiPageBackgroundStep8?.createStep8Executor({
   sleepWithStop,
   STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
   STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS,
+  TEMPMAIL_PUBLIC_PROVIDER,
   throwIfStopped,
 });
 const plusCheckoutCreateExecutor = self.MultiPageBackgroundPlusCheckoutCreate?.createPlusCheckoutCreateExecutor({
@@ -10091,7 +10262,7 @@ const plusGoPayStepRegistry = buildStepRegistry(PLUS_GOPAY_STEP_DEFINITIONS);
 const codex2ApiLoginOnlyStepRegistry = buildStepRegistry(CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS);
 
 function getStepRegistryForState(state = {}) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return codex2ApiLoginOnlyStepRegistry;
   }
   if (!isPlusModeState(state)) {
@@ -10167,7 +10338,10 @@ async function executeStep3(state) {
 // ============================================================
 
 function getMailConfig(state) {
-  if (isCodex2ApiLoginOnlyMode(state)) {
+  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
+    if (normalizeCodex2ApiLoginCodeProvider(state?.codex2apiLoginCodeProvider) === IKONA_ONI_PROVIDER) {
+      return { provider: IKONA_ONI_PROVIDER, label: 'Ikona-Oni API' };
+    }
     return { provider: TEMPMAIL_PUBLIC_PROVIDER, label: 'TempMail 公共收件箱' };
   }
   const provider = state.mailProvider || 'qq';

@@ -74,6 +74,52 @@ test('message router SAVE_SETTING preserves the active login-only account during
   }
 });
 
+test('message router SAVE_SETTING preserves passwordless login-only runtime account during auto-run', async () => {
+  const restoreGlobals = installLoginOnlyGlobals();
+
+  try {
+    let state = {
+      panelMode: 'codex2api',
+      codex2apiLoginOnlyMode: true,
+      codex2apiLoginAccounts: [
+        { email: 'alpha@example.com', password: 'alpha-pass' },
+        { email: 'beta@example.com', password: '' },
+      ],
+      autoRunCurrentRun: 2,
+      email: 'beta@example.com',
+      password: '',
+      stepStatuses: { 7: 'running', 8: 'pending', 9: 'pending', 10: 'pending' },
+    };
+
+    const router = api.createMessageRouter({
+      addLog: async () => {},
+      buildPersistentSettingsPayload: (payload) => ({ codex2apiAdminKey: payload.codex2apiAdminKey || '' }),
+      buildLuckmailSessionSettingsPayload: () => ({}),
+      getState: async () => state,
+      getStepIdsForState: () => [7, 8, 9, 10],
+      setPersistentSettings: async () => {},
+      setState: async (updates) => {
+        state = { ...state, ...updates };
+      },
+    });
+
+    const response = await router.handleMessage({
+      type: 'SAVE_SETTING',
+      source: 'sidepanel',
+      payload: {
+        codex2apiAdminKey: 'rotated-admin-key',
+      },
+    }, {});
+
+    assert.equal(response?.ok, true);
+    assert.equal(state.codex2apiAdminKey, 'rotated-admin-key');
+    assert.equal(state.email, 'beta@example.com');
+    assert.equal(state.password, '');
+  } finally {
+    restoreGlobals();
+  }
+});
+
 test('message router SAVE_SETTING seeds the first login-only account when enabling the mode', async () => {
   const restoreGlobals = installLoginOnlyGlobals();
 

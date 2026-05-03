@@ -226,7 +226,30 @@
       <div class="data-row data-check-row" id="row-codex2api-login-accounts" style="display:none;">
         <span class="data-label">登录账号池</span>
         <textarea id="input-codex2api-login-accounts" class="data-textarea mono"
-          placeholder="每行一个邮箱和密码，例如&#10;user1@example.com | password-1&#10;user2@example.com | password-2"></textarea>
+          placeholder="每行一个账号：邮箱 或 邮箱 | 密码，例如&#10;user1@example.com&#10;user2@example.com | password-2"></textarea>
+      </div>
+      <div class="data-row" id="row-codex2api-login-code-provider" style="display:none;">
+        <span class="data-label">登录验证码</span>
+        <select id="select-codex2api-login-code-provider" class="data-select">
+          <option value="tempmail-public">TempMail 公共收件箱</option>
+          <option value="ikona-oni">Ikona-Oni API</option>
+        </select>
+      </div>
+      <div class="data-row" id="row-ikona-oni-base-url" style="display:none;">
+        <span class="data-label">Ikona-Oni 地址</span>
+        <input type="text" id="input-ikona-oni-base-url" class="data-input mono"
+          placeholder="https://tempmail-worker.hasildia1.workers.dev" />
+      </div>
+      <div class="data-row" id="row-ikona-oni-api-key" style="display:none;">
+        <span class="data-label">Ikona-Oni Key</span>
+        <div class="input-with-icon">
+          <input type="password" id="input-ikona-oni-api-key" class="data-input data-input-with-icon mono"
+            placeholder="tmp_xxx，留空则尝试公开收件箱" />
+          <button id="btn-toggle-ikona-oni-api-key" class="input-icon-btn" type="button"
+            data-password-toggle="input-ikona-oni-api-key" data-show-label="显示 Ikona-Oni API Key"
+            data-hide-label="隐藏 Ikona-Oni API Key" aria-label="显示 Ikona-Oni API Key"
+            title="显示 Ikona-Oni API Key"></button>
+        </div>
       </div>
       <div class="data-row module-divider-start" id="row-custom-password">
         <span class="data-label">账户密码</span>
