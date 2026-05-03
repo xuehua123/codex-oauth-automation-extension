@@ -9,3 +9,5 @@
 .npm-test.log
 .omx/
 /node_modules
+.playwright-cli
+/output

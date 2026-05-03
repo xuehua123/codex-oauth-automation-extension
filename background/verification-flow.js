@@ -23,11 +23,13 @@
       pollCloudflareTempEmailVerificationCode,
       pollHotmailVerificationCode,
       pollLuckmailVerificationCode,
+      pollTempmailPublicVerificationCode,
       sendToContentScript,
       sendToContentScriptResilient,
       sendToMailContentScriptResilient,
       setState,
       sleepWithStop,
+      TEMPMAIL_PUBLIC_PROVIDER,
       throwIfStopped,
       VERIFICATION_POLL_MAX_ROUNDS,
     } = deps;
@@ -793,6 +795,13 @@
           ...cleanPollOverrides,
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudflareTempEmailVerificationCode(step, state, timedPoll.payload);
+      }
+      if (mail.provider === TEMPMAIL_PUBLIC_PROVIDER) {
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollTempmailPublicVerificationCode(step, state, timedPoll.payload);
       }
 
       if (Number(pollOverrides.resendIntervalMs) > 0) {

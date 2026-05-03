@@ -57,11 +57,16 @@ const PLUS_GOPAY_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
   plusModeEnabled: true,
   plusPaymentMethod: 'gopay',
 }) || PLUS_PAYPAL_STEP_DEFINITIONS;
+const CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  panelMode: 'codex2api',
+  codex2apiLoginOnlyMode: true,
+}) || NORMAL_STEP_DEFINITIONS.filter((definition) => Number(definition?.id) >= 7);
 const PLUS_STEP_DEFINITIONS = PLUS_PAYPAL_STEP_DEFINITIONS;
 const ALL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getAllSteps?.() || [
   ...NORMAL_STEP_DEFINITIONS,
   ...PLUS_PAYPAL_STEP_DEFINITIONS,
   ...PLUS_GOPAY_STEP_DEFINITIONS,
+  ...CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS,
 ];
 const STEP_IDS = Array.from(new Set(ALL_STEP_DEFINITIONS
   .map((definition) => Number(definition?.id))
@@ -79,10 +84,15 @@ const PLUS_GOPAY_STEP_IDS = PLUS_GOPAY_STEP_DEFINITIONS
   .map((definition) => Number(definition?.id))
   .filter(Number.isFinite)
   .sort((left, right) => left - right);
+const CODEX2API_LOGIN_ONLY_STEP_IDS = CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS
+  .map((definition) => Number(definition?.id))
+  .filter(Number.isFinite)
+  .sort((left, right) => left - right);
 const LAST_STEP_ID = Math.max(
   NORMAL_STEP_IDS[NORMAL_STEP_IDS.length - 1] || 10,
   PLUS_PAYPAL_STEP_IDS[PLUS_PAYPAL_STEP_IDS.length - 1] || 10,
-  PLUS_GOPAY_STEP_IDS[PLUS_GOPAY_STEP_IDS.length - 1] || 10
+  PLUS_GOPAY_STEP_IDS[PLUS_GOPAY_STEP_IDS.length - 1] || 10,
+  CODEX2API_LOGIN_ONLY_STEP_IDS[CODEX2API_LOGIN_ONLY_STEP_IDS.length - 1] || 10
 );
 const FINAL_OAUTH_CHAIN_START_STEP = 7;
 
@@ -207,6 +217,8 @@ const GMAIL_ALIAS_GENERATOR = 'gmail-alias';
 const HOTMAIL_PROVIDER = 'hotmail-api';
 const LUCKMAIL_PROVIDER = 'luckmail-api';
 const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const TEMPMAIL_PUBLIC_PROVIDER = 'tempmail-public';
+const TEMPMAIL_PUBLIC_INBOX_BASE_URL = 'https://tempmail-worker.hasildia1.workers.dev';
 const CLOUDFLARE_TEMP_EMAIL_GENERATOR = 'cloudflare-temp-email';
 const CUSTOM_EMAIL_POOL_GENERATOR = 'custom-pool';
 const HOTMAIL_MAILBOXES = ['INBOX', 'Junk'];
@@ -352,6 +364,11 @@ function isPlusModeState(state = {}) {
   return Boolean(state?.plusModeEnabled);
 }
 
+function isCodex2ApiLoginOnlyMode(state = {}) {
+  return normalizePanelMode(state?.panelMode) === 'codex2api'
+    && Boolean(state?.codex2apiLoginOnlyMode);
+}
+
 function normalizePlusPaymentMethod(value = '') {
   return String(value || '').trim().toLowerCase() === 'gopay' ? 'gopay' : 'paypal';
 }
@@ -391,6 +408,9 @@ function resolveContributionModeRoutingState(state = {}) {
 }
 
 function getStepDefinitionsForState(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
+  }
   if (!isPlusModeState(state)) {
     return NORMAL_STEP_DEFINITIONS;
   }
@@ -400,6 +420,9 @@ function getStepDefinitionsForState(state = {}) {
 }
 
 function getStepIdsForState(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return CODEX2API_LOGIN_ONLY_STEP_IDS;
+  }
   if (!isPlusModeState(state)) {
     return NORMAL_STEP_IDS;
   }
@@ -414,6 +437,9 @@ function getLastStepIdForState(state = {}) {
 }
 
 function getAuthChainStartStepId(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return FINAL_OAUTH_CHAIN_START_STEP;
+  }
   return isPlusModeState(state) ? 10 : FINAL_OAUTH_CHAIN_START_STEP;
 }
 
@@ -482,6 +508,8 @@ const PERSISTED_SETTING_DEFAULTS = {
   ipProxyRegion: '',
   codex2apiUrl: DEFAULT_CODEX2API_URL,
   codex2apiAdminKey: '',
+  codex2apiLoginOnlyMode: false,
+  codex2apiLoginAccounts: [],
   customPassword: '',
   plusModeEnabled: false,
   plusPaymentMethod: 'paypal',
@@ -1159,6 +1187,55 @@ function getCustomMailProviderPoolEmailForRun(state = {}, targetRun = 1) {
   return entries[numericRun - 1] || '';
 }
 
+function normalizeCodex2ApiLoginAccounts(value = []) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .split(/\r?\n+/);
+
+  const normalizedEntries = [];
+  for (const item of source) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const email = String(item.email || '').trim().toLowerCase();
+      const password = String(item.password || '').trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+        normalizedEntries.push({ email, password });
+      }
+      continue;
+    }
+
+    const line = String(item || '').trim();
+    if (!line) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf('|');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const email = line.slice(0, separatorIndex).trim().toLowerCase();
+    const password = line.slice(separatorIndex + 1).trim();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+      normalizedEntries.push({ email, password });
+    }
+  }
+
+  return normalizedEntries;
+}
+
+function getCodex2ApiLoginAccounts(state = {}) {
+  return normalizeCodex2ApiLoginAccounts(state?.codex2apiLoginAccounts);
+}
+
+function getCodex2ApiLoginAccountForRun(state = {}, targetRun = 1) {
+  const entries = getCodex2ApiLoginAccounts(state);
+  const numericRun = Math.max(1, Math.floor(Number(targetRun) || 1));
+  return entries[numericRun - 1] || null;
+}
+
 function normalizePanelMode(value = '') {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'sub2api') {
@@ -1179,6 +1256,7 @@ function normalizeMailProvider(value = '') {
     case HOTMAIL_PROVIDER:
     case LUCKMAIL_PROVIDER:
     case CLOUDFLARE_TEMP_EMAIL_PROVIDER:
+    case TEMPMAIL_PUBLIC_PROVIDER:
     case '163':
     case '163-vip':
     case '126':
@@ -1455,6 +1533,10 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeCodex2ApiUrl(value);
     case 'codex2apiAdminKey':
       return String(value || '').trim();
+    case 'codex2apiLoginOnlyMode':
+      return Boolean(value);
+    case 'codex2apiLoginAccounts':
+      return normalizeCodex2ApiLoginAccounts(value);
     case 'customPassword':
       return String(value || '');
     case 'paypalEmail':
@@ -3122,6 +3204,9 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
 }
 
 function shouldUseCustomRegistrationEmail(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return false;
+  }
   return isCustomMailProvider(state)
     || (!isHotmailProvider(state)
       && !isGeneratedAliasProvider(state)
@@ -3291,6 +3376,9 @@ function isGeneratedAliasProvider(stateOrProvider, mail2925Mode = undefined) {
 }
 
 function shouldUseCustomRegistrationEmail(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return false;
+  }
   return isCustomMailProvider(state)
     || (!isHotmailProvider(state)
       && !isGeneratedAliasProvider(state)
@@ -4233,6 +4321,108 @@ async function pollCloudflareTempEmailVerificationCode(step, state, pollPayload 
   }
 
   throw lastError || new Error(`步骤 ${step}：未在 Cloudflare Temp Email 中找到新的匹配验证码。`);
+}
+
+function normalizeTempmailPublicInboxEmails(payload = {}) {
+  const emails = Array.isArray(payload?.data?.emails)
+    ? payload.data.emails
+    : (Array.isArray(payload?.emails) ? payload.emails : []);
+  return normalizeHotmailMailApiMessages(emails);
+}
+
+async function fetchTempmailPublicInboxEmails(targetEmail) {
+  const normalizedEmail = String(targetEmail || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error('TempMail 公共收件箱缺少目标邮箱地址。');
+  }
+
+  const response = await fetch(`${TEMPMAIL_PUBLIC_INBOX_BASE_URL}/inbox/${encodeURIComponent(normalizedEmail)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    const details = bodyText ? `，${bodyText.slice(0, 180)}` : '';
+    throw new Error(`TempMail 公共收件箱请求失败：status ${response.status}${details}`);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  return normalizeTempmailPublicInboxEmails(payload);
+}
+
+function summarizeTempmailPublicMessagesForLog(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .slice(0, 3)
+    .map((message) => {
+      const fromAddress = String(message?.from?.emailAddress?.address || '').trim();
+      const subject = String(message?.subject || '').trim();
+      return [fromAddress, subject].filter(Boolean).join(' | ');
+    })
+    .filter(Boolean)
+    .join(' ; ');
+}
+
+async function pollTempmailPublicVerificationCode(step, state, pollPayload = {}) {
+  const targetEmail = String(
+    pollPayload.targetEmail
+    || state?.step8VerificationTargetEmail
+    || state?.email
+    || ''
+  ).trim().toLowerCase();
+  if (!targetEmail) {
+    throw new Error('TempMail 公共收件箱轮询前缺少目标邮箱地址。');
+  }
+
+  await addLog(`步骤 ${step}：正在轮询 TempMail 公共收件箱（${targetEmail}）...`, 'info');
+  const maxAttempts = Math.max(1, Number(pollPayload.maxAttempts) || 5);
+  const intervalMs = Math.max(1000, Number(pollPayload.intervalMs) || 3000);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    throwIfStopped();
+    try {
+      const messages = await fetchTempmailPublicInboxEmails(targetEmail);
+      const matchResult = pickVerificationMessageWithTimeFallback(messages, {
+        afterTimestamp: pollPayload.filterAfterTimestamp || 0,
+        senderFilters: pollPayload.senderFilters || [],
+        subjectFilters: pollPayload.subjectFilters || [],
+        excludeCodes: pollPayload.excludeCodes || [],
+      });
+      const match = matchResult.match;
+
+      if (match?.code) {
+        if (matchResult.usedRelaxedFilters) {
+          const fallbackLabel = matchResult.usedTimeFallback ? '宽松匹配 + 时间回退' : '宽松匹配';
+          await addLog(`步骤 ${step}：严格规则未命中，已改用 ${fallbackLabel} 并命中 TempMail 公共收件箱验证码。`, 'warn');
+        }
+        return {
+          ok: true,
+          code: match.code,
+          emailTimestamp: match.receivedAt || Date.now(),
+          mailId: match.message?.id || '',
+        };
+      }
+
+      lastError = new Error(`步骤 ${step}：暂未在 TempMail 公共收件箱中找到匹配验证码（${attempt}/${maxAttempts}）。`);
+      await addLog(lastError.message, attempt === maxAttempts ? 'warn' : 'info');
+      const sample = summarizeTempmailPublicMessagesForLog(messages);
+      if (sample) {
+        await addLog(`步骤 ${step}：最近邮件样本：${sample}`, 'info');
+      }
+    } catch (err) {
+      lastError = err;
+      await addLog(`步骤 ${step}：TempMail 公共收件箱轮询失败：${err.message}`, 'warn');
+    }
+
+    if (attempt < maxAttempts) {
+      await sleepWithStop(intervalMs);
+    }
+  }
+
+  throw lastError || new Error(`步骤 ${step}：未在 TempMail 公共收件箱中找到新的匹配验证码。`);
 }
 
 async function getOpenIcloudHostPreference() {
@@ -8296,6 +8486,21 @@ function shouldStopEmailAutoFetchRetries(generator, error) {
 
 async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   const currentState = await getState();
+  if (isCodex2ApiLoginOnlyMode(currentState)) {
+    const account = getCodex2ApiLoginAccountForRun(currentState, targetRun);
+    if (!account) {
+      const poolSize = getCodex2ApiLoginAccounts(currentState).length;
+      throw new Error(
+        poolSize > 0
+          ? `Codex2API 登录账号池第 ${targetRun} 个账号不存在，请检查账号数量是否与自动轮数一致。`
+          : 'Codex2API 登录账号池为空，请先至少填写 1 组邮箱和密码。'
+      );
+    }
+    await setEmailState(account.email);
+    await setPasswordState(account.password);
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    return account.email;
+  }
   if (isHotmailProvider(currentState)) {
     const account = await ensureHotmailAccountForFlow({
       allowAllocate: true,
@@ -8427,6 +8632,21 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
 
 async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   const currentState = await getState();
+  if (isCodex2ApiLoginOnlyMode(currentState)) {
+    const account = getCodex2ApiLoginAccountForRun(currentState, targetRun);
+    if (!account) {
+      const poolSize = getCodex2ApiLoginAccounts(currentState).length;
+      throw new Error(
+        poolSize > 0
+          ? `Codex2API 登录账号池第 ${targetRun} 个账号不存在，请检查账号数量是否与自动轮数一致。`
+          : 'Codex2API 登录账号池为空，请先至少填写 1 组邮箱和密码。'
+      );
+    }
+    await setEmailState(account.email);
+    await setPasswordState(account.password);
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：Codex2API 登录账号已就绪：${account.email}（第 ${attemptRuns} 次尝试）===`, 'ok');
+    return account.email;
+  }
   if (isHotmailProvider(currentState)) {
     const account = await ensureHotmailAccountForFlow({
       allowAllocate: true,
@@ -8585,23 +8805,32 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
   let continueCurrentAttempt = continued;
 
   while (true) {
+  const flowState = await getState();
+  const loginOnlyMode = isCodex2ApiLoginOnlyMode(flowState);
+  if (loginOnlyMode) {
+    currentStartStep = Math.max(FINAL_OAUTH_CHAIN_START_STEP, Number(currentStartStep) || FINAL_OAUTH_CHAIN_START_STEP);
+  }
 
   if (continueCurrentAttempt) {
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：继续当前进度，从步骤 ${startStep} 开始（第 ${attemptRuns} 次尝试）===`, 'info');
+  } else if (loginOnlyMode) {
+    await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：第 ${attemptRuns} 次尝试，Codex2API 仅登录模式将从步骤 ${FINAL_OAUTH_CHAIN_START_STEP} 开始 ===`, 'info');
   } else {
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：第 ${attemptRuns} 次尝试，阶段 1，打开官网并进入密码页 ===`, 'info');
   }
 
-  if (currentStartStep <= 1) {
+  if (!loginOnlyMode && currentStartStep <= 1) {
     await executeStepAndWait(1, AUTO_STEP_DELAYS[1]);
   }
 
-  if (currentStartStep <= 2) {
+  if (loginOnlyMode) {
+    await ensureAutoEmailReady(targetRun, totalRuns, attemptRuns);
+  } else if (currentStartStep <= 2) {
     await ensureAutoEmailReady(targetRun, totalRuns, attemptRuns);
     await executeStepAndWait(2, AUTO_STEP_DELAYS[2]);
   }
 
-  if (currentStartStep <= 3) {
+  if (!loginOnlyMode && currentStartStep <= 3) {
     const latestState = await getState();
     const step3Status = latestState.stepStatuses?.[3] || 'pending';
     await addLog(`=== 目标 ${targetRun}/${totalRuns} 轮：阶段 2，填写密码、验证、登录并完成授权（第 ${attemptRuns} 次尝试）===`, 'info');
@@ -8625,7 +8854,7 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
   }
 
   let restartFromStep1WithCurrentEmail = false;
-  let step = Math.max(currentStartStep, 4);
+  let step = Math.max(currentStartStep, loginOnlyMode ? FINAL_OAUTH_CHAIN_START_STEP : 4);
   while (step <= (typeof getLastStepIdForState === 'function'
     ? getLastStepIdForState(await getState())
     : (typeof LAST_STEP_ID === 'number' ? LAST_STEP_ID : 10))) {
@@ -8897,12 +9126,14 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   pollCloudflareTempEmailVerificationCode,
   pollHotmailVerificationCode,
   pollLuckmailVerificationCode,
+  pollTempmailPublicVerificationCode,
   sendToContentScript,
   sendToContentScriptResilient,
   sendToMailContentScriptResilient,
   setState,
   setStepStatus,
   sleepWithStop,
+  TEMPMAIL_PUBLIC_PROVIDER,
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
 });
@@ -9269,8 +9500,12 @@ function buildStepRegistry(definitions = []) {
 const normalStepRegistry = buildStepRegistry(NORMAL_STEP_DEFINITIONS);
 const plusPayPalStepRegistry = buildStepRegistry(PLUS_PAYPAL_STEP_DEFINITIONS);
 const plusGoPayStepRegistry = buildStepRegistry(PLUS_GOPAY_STEP_DEFINITIONS);
+const codex2ApiLoginOnlyStepRegistry = buildStepRegistry(CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS);
 
 function getStepRegistryForState(state = {}) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return codex2ApiLoginOnlyStepRegistry;
+  }
   if (!isPlusModeState(state)) {
     return normalStepRegistry;
   }
@@ -9344,6 +9579,9 @@ async function executeStep3(state) {
 // ============================================================
 
 function getMailConfig(state) {
+  if (isCodex2ApiLoginOnlyMode(state)) {
+    return { provider: TEMPMAIL_PUBLIC_PROVIDER, label: 'TempMail 公共收件箱' };
+  }
   const provider = state.mailProvider || 'qq';
   if (provider === 'custom') {
     return { provider: 'custom', label: '自定义邮箱' };

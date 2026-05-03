@@ -51,6 +51,7 @@ function extractFunction(name) {
 test('background account history settings are normalized independently from hotmail service mode', () => {
   const bundle = [
     extractFunction('normalizeCodex2ApiUrl'),
+    extractFunction('normalizeCodex2ApiLoginAccounts'),
     extractFunction('normalizeHotmailLocalBaseUrl'),
     extractFunction('normalizeAccountRunHistoryHelperBaseUrl'),
     extractFunction('normalizeVerificationResendCount'),
@@ -171,5 +172,13 @@ return {
   assert.equal(
     api.normalizePersistentSettingValue('codex2apiAdminKey', ' secret-key '),
     'secret-key'
+  );
+  assert.equal(api.normalizePersistentSettingValue('codex2apiLoginOnlyMode', 1), true);
+  assert.deepStrictEqual(
+    api.normalizePersistentSettingValue('codex2apiLoginAccounts', ' Foo@Example.com | pass-1 \ninvalid\nbar@example.com| pass-2 '),
+    [
+      { email: 'foo@example.com', password: 'pass-1' },
+      { email: 'bar@example.com', password: 'pass-2' },
+    ]
   );
 });

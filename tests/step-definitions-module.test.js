@@ -10,6 +10,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   const steps = api.getSteps();
   const plusSteps = api.getSteps({ plusModeEnabled: true });
   const goPaySteps = api.getSteps({ plusModeEnabled: true, plusPaymentMethod: 'gopay' });
+  const loginOnlySteps = api.getSteps({ panelMode: 'codex2api', codex2apiLoginOnlyMode: true });
 
   assert.equal(Array.isArray(steps), true);
   assert.equal(steps.length, 10);
@@ -80,6 +81,22 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.equal(api.getLastStepId({ plusModeEnabled: true, plusPaymentMethod: 'gopay' }), 13);
   assert.equal(goPaySteps[5].title, '打开 GoPay 订阅页');
   assert.equal(goPaySteps[6].title, '等待 GoPay 订阅确认');
+
+  assert.deepStrictEqual(
+    loginOnlySteps.map((step) => step.key),
+    [
+      'oauth-login',
+      'fetch-login-code',
+      'confirm-oauth',
+      'platform-verify',
+    ]
+  );
+  assert.deepStrictEqual(api.getStepIds({ panelMode: 'codex2api', codex2apiLoginOnlyMode: true }), [7, 8, 9, 10]);
+  assert.equal(api.getLastStepId({ panelMode: 'codex2api', codex2apiLoginOnlyMode: true }), 10);
+  assert.deepStrictEqual(
+    api.getStepIds({ panelMode: 'codex2api', codex2apiLoginOnlyMode: true, plusModeEnabled: true, plusPaymentMethod: 'gopay' }),
+    [7, 8, 9, 10]
+  );
 });
 
 test('sidepanel html loads shared step definitions before sidepanel bootstrap', () => {

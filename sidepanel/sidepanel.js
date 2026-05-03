@@ -155,6 +155,10 @@ const rowCodex2ApiUrl = document.getElementById('row-codex2api-url');
 const inputCodex2ApiUrl = document.getElementById('input-codex2api-url');
 const rowCodex2ApiAdminKey = document.getElementById('row-codex2api-admin-key');
 const inputCodex2ApiAdminKey = document.getElementById('input-codex2api-admin-key');
+const rowCodex2ApiLoginOnlyMode = document.getElementById('row-codex2api-login-only-mode');
+const inputCodex2ApiLoginOnlyMode = document.getElementById('input-codex2api-login-only-mode');
+const rowCodex2ApiLoginAccounts = document.getElementById('row-codex2api-login-accounts');
+const inputCodex2ApiLoginAccounts = document.getElementById('input-codex2api-login-accounts');
 const rowCustomPassword = document.getElementById('row-custom-password');
 const rowPlusMode = document.getElementById('row-plus-mode');
 const inputPlusModeEnabled = document.getElementById('input-plus-mode-enabled');
@@ -357,10 +361,12 @@ const autoHintText = document.querySelector('.auto-hint');
 const stepsList = document.querySelector('.steps-list');
 let currentPlusModeEnabled = false;
 let currentPlusPaymentMethod = 'paypal';
+let currentPanelMode = 'cpa';
+let currentCodex2ApiLoginOnlyMode = false;
 let heroSmsCountrySelectionOrder = [];
 let heroSmsCountryMenuSearchKeyword = '';
 const heroSmsCountrySearchTextById = new Map();
-let stepDefinitions = getStepDefinitionsForMode(false, currentPlusPaymentMethod);
+let stepDefinitions = getStepDefinitionsForMode(currentPanelMode, currentCodex2ApiLoginOnlyMode, false, currentPlusPaymentMethod);
 let STEP_IDS = stepDefinitions.map((step) => Number(step.id)).filter(Number.isFinite);
 let STEP_DEFAULT_STATUSES = Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending']));
 let SKIPPABLE_STEPS = new Set(STEP_IDS);
@@ -465,8 +471,21 @@ function getSelectedPlusPaymentMethod() {
   return normalizePlusPaymentMethod(latestState?.plusPaymentMethod || currentPlusPaymentMethod);
 }
 
-function getStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethod = 'paypal') {
+function getSelectedPanelMode() {
+  const normalized = String(selectPanelMode?.value || latestState?.panelMode || currentPanelMode || 'cpa').trim().toLowerCase();
+  if (normalized === 'sub2api') {
+    return 'sub2api';
+  }
+  if (normalized === 'codex2api') {
+    return 'codex2api';
+  }
+  return 'cpa';
+}
+
+function getStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = 'paypal') {
   return (window.MultiPageStepDefinitions?.getSteps?.({
+    panelMode: String(panelMode || '').trim().toLowerCase(),
+    codex2apiLoginOnlyMode: Boolean(codex2apiLoginOnlyMode),
     plusModeEnabled,
     plusPaymentMethod: normalizePlusPaymentMethod(plusPaymentMethod),
   }) || [])
@@ -478,10 +497,17 @@ function getStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethod = 
     });
 }
 
-function rebuildStepDefinitionState(plusModeEnabled = false, plusPaymentMethod = 'paypal') {
+function rebuildStepDefinitionState(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = 'paypal') {
+  currentPanelMode = String(panelMode || '').trim().toLowerCase() || 'cpa';
+  currentCodex2ApiLoginOnlyMode = Boolean(codex2apiLoginOnlyMode);
   currentPlusModeEnabled = Boolean(plusModeEnabled);
   currentPlusPaymentMethod = normalizePlusPaymentMethod(plusPaymentMethod);
-  stepDefinitions = getStepDefinitionsForMode(currentPlusModeEnabled, currentPlusPaymentMethod);
+  stepDefinitions = getStepDefinitionsForMode(
+    currentPanelMode,
+    currentCodex2ApiLoginOnlyMode,
+    currentPlusModeEnabled,
+    currentPlusPaymentMethod
+  );
   STEP_IDS = stepDefinitions.map((step) => Number(step.id)).filter(Number.isFinite);
   STEP_DEFAULT_STATUSES = Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending']));
   SKIPPABLE_STEPS = new Set(STEP_IDS);
@@ -1922,7 +1948,64 @@ function getCustomEmailPoolSize() {
   return normalizeCustomEmailPoolEntries(inputCustomEmailPool?.value).length;
 }
 
+function normalizeCodex2ApiLoginAccountEntries(value = '') {
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .split(/\r?\n+/);
+
+  const entries = [];
+  for (const item of source) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const email = String(item.email || '').trim().toLowerCase();
+      const password = String(item.password || '').trim();
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+        entries.push({ email, password });
+      }
+      continue;
+    }
+
+    const line = String(item || '').trim();
+    if (!line) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf('|');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const email = line.slice(0, separatorIndex).trim().toLowerCase();
+    const password = line.slice(separatorIndex + 1).trim();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && password) {
+      entries.push({ email, password });
+    }
+  }
+
+  return entries;
+}
+
+function formatCodex2ApiLoginAccountEntries(entries = []) {
+  return normalizeCodex2ApiLoginAccountEntries(entries)
+    .map((entry) => `${entry.email} | ${entry.password}`)
+    .join('\n');
+}
+
+function isCodex2ApiLoginOnlyModeEnabled() {
+  return String(selectPanelMode?.value || '').trim().toLowerCase() === 'codex2api'
+    && Boolean(inputCodex2ApiLoginOnlyMode?.checked);
+}
+
+function getCodex2ApiLoginAccountPoolSize() {
+  return normalizeCodex2ApiLoginAccountEntries(inputCodex2ApiLoginAccounts?.value).length;
+}
+
 function getLockedRunCountFromEmailPool(provider = selectMailProvider.value) {
+  if (isCodex2ApiLoginOnlyModeEnabled()) {
+    return getCodex2ApiLoginAccountPoolSize();
+  }
   if (usesCustomMailProviderPool(provider)) {
     return getCustomMailProviderPoolSize();
   }
@@ -2593,6 +2676,8 @@ function collectSettingsPayload() {
     ipProxyRegion: currentIpProxyServiceProfile.region,
     codex2apiUrl: inputCodex2ApiUrl.value.trim(),
     codex2apiAdminKey: inputCodex2ApiAdminKey.value.trim(),
+    codex2apiLoginOnlyMode: Boolean(inputCodex2ApiLoginOnlyMode?.checked),
+    codex2apiLoginAccounts: normalizeCodex2ApiLoginAccountEntries(inputCodex2ApiLoginAccounts?.value),
     plusModeEnabled: typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
       ? Boolean(inputPlusModeEnabled.checked)
       : Boolean(latestState?.plusModeEnabled),
@@ -3962,17 +4047,26 @@ function renderStepsList() {
   updateButtonStates();
 }
 
-function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethod = 'paypal', options = {}) {
+function syncStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = 'paypal', options = {}) {
+  const nextPanelMode = String(panelMode || '').trim().toLowerCase() || 'cpa';
+  const nextCodex2ApiLoginOnlyMode = Boolean(codex2apiLoginOnlyMode);
   const nextPlusModeEnabled = Boolean(plusModeEnabled);
   const nextPlusPaymentMethod = normalizePlusPaymentMethod(plusPaymentMethod);
   const shouldRender = Boolean(options.render)
+    || nextPanelMode !== currentPanelMode
+    || nextCodex2ApiLoginOnlyMode !== currentCodex2ApiLoginOnlyMode
     || nextPlusModeEnabled !== currentPlusModeEnabled
     || nextPlusPaymentMethod !== currentPlusPaymentMethod;
   if (!shouldRender) {
     return;
   }
 
-  rebuildStepDefinitionState(nextPlusModeEnabled, nextPlusPaymentMethod);
+  rebuildStepDefinitionState(
+    nextPanelMode,
+    nextCodex2ApiLoginOnlyMode,
+    nextPlusModeEnabled,
+    nextPlusPaymentMethod
+  );
   renderStepsList();
 }
 
@@ -3982,7 +4076,12 @@ function syncStepDefinitionsForMode(plusModeEnabled = false, plusPaymentMethod =
 
 function applySettingsState(state) {
   if (typeof syncStepDefinitionsForMode === 'function') {
-    syncStepDefinitionsForMode(Boolean(state?.plusModeEnabled), state?.plusPaymentMethod);
+    syncStepDefinitionsForMode(
+      state?.panelMode,
+      Boolean(state?.codex2apiLoginOnlyMode),
+      Boolean(state?.plusModeEnabled),
+      state?.plusPaymentMethod
+    );
   }
   const fallbackIpProxyService = '711proxy';
   const fallbackIpProxyMode = 'account';
@@ -4122,6 +4221,12 @@ function applySettingsState(state) {
   }
   inputCodex2ApiUrl.value = state?.codex2apiUrl || '';
   inputCodex2ApiAdminKey.value = state?.codex2apiAdminKey || '';
+  if (inputCodex2ApiLoginOnlyMode) {
+    inputCodex2ApiLoginOnlyMode.checked = Boolean(state?.codex2apiLoginOnlyMode);
+  }
+  if (inputCodex2ApiLoginAccounts) {
+    inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(state?.codex2apiLoginAccounts || []);
+  }
   const restoredMailProvider = isCustomMailProvider(state?.mailProvider)
     || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email'].includes(String(state?.mailProvider || '').trim())
     ? String(state?.mailProvider || '163').trim()
@@ -4187,6 +4292,7 @@ function applySettingsState(state) {
   if (inputCustomEmailPool) {
     inputCustomEmailPool.value = normalizeCustomEmailPoolEntries(state?.customEmailPool).join('\n');
   }
+  syncRunCountFromConfiguredEmailPool();
   setHotmailServiceMode(state?.hotmailServiceMode);
   inputHotmailRemoteBaseUrl.value = state?.hotmailRemoteBaseUrl || '';
   inputHotmailLocalBaseUrl.value = state?.hotmailLocalBaseUrl || '';
@@ -5227,6 +5333,7 @@ function updateMailProviderUI() {
   const useCloudflare = selectedGenerator === 'cloudflare';
   const useIcloud = selectedGenerator === 'icloud';
   const useCloudflareTempEmailGenerator = selectedGenerator === 'cloudflare-temp-email';
+  const useCodex2ApiLoginOnly = isCodex2ApiLoginOnlyModeEnabled();
   const showCloudflareDomain = useEmailGenerator && useCloudflare;
   const showCloudflareTempEmailSettings = useCloudflareTempEmailProvider || (useEmailGenerator && useCloudflareTempEmailGenerator);
   const showCloudflareTempEmailReceiveMailbox = useCloudflareTempEmailProvider && !useCloudflareTempEmailGenerator;
@@ -5309,7 +5416,11 @@ function updateMailProviderUI() {
   }
   inputEmailPrefix.style.display = '';
   inputEmailPrefix.readOnly = false;
-  selectEmailGenerator.disabled = useHotmail || useLuckmail || useCustomEmail || (useGeneratedAlias && !useGmail);
+  selectEmailGenerator.disabled = useCodex2ApiLoginOnly
+    || useHotmail
+    || useLuckmail
+    || useCustomEmail
+    || (useGeneratedAlias && !useGmail);
   if (useGmail) {
     labelEmailPrefix.textContent = 'Gmail 原邮箱';
     inputEmailPrefix.placeholder = '例如 yourname@gmail.com';
@@ -5325,8 +5436,8 @@ function updateMailProviderUI() {
   if (rowHotmailLocalBaseUrl) {
     rowHotmailLocalBaseUrl.style.display = useHotmail && hotmailServiceMode === HOTMAIL_SERVICE_MODE_LOCAL ? '' : 'none';
   }
-  btnFetchEmail.hidden = useHotmail || useLuckmail || useCustomEmail || useCustomEmailPool;
-  inputEmail.readOnly = useHotmail || useLuckmail;
+  btnFetchEmail.hidden = useCodex2ApiLoginOnly || useHotmail || useLuckmail || useCustomEmail || useCustomEmailPool;
+  inputEmail.readOnly = useCodex2ApiLoginOnly || useHotmail || useLuckmail;
   inputEmail.placeholder = useHotmail
     ? '由 Hotmail 账号池自动分配'
     : (useLuckmail
@@ -5341,7 +5452,10 @@ function updateMailProviderUI() {
   if (useCustomEmail && useCustomMailProviderPool) {
     inputEmail.placeholder = '号池会按顺序自动回填当前轮邮箱，也可以手动覆盖';
   }
-  btnFetchEmail.disabled = useLuckmail || useCustomEmail || useCustomEmailPool || isAutoRunLockedPhase();
+  if (useCodex2ApiLoginOnly) {
+    inputEmail.placeholder = '仅登录模式会按轮次自动回填下方账号池中的邮箱';
+  }
+  btnFetchEmail.disabled = useCodex2ApiLoginOnly || useLuckmail || useCustomEmail || useCustomEmailPool || isAutoRunLockedPhase();
   if (!btnFetchEmail.disabled) {
     btnFetchEmail.textContent = uiCopy.buttonLabel;
   }
@@ -5361,6 +5475,11 @@ function updateMailProviderUI() {
   }
   if (autoHintText && useCustomEmail && useCustomMailProviderPool) {
     autoHintText.textContent = `当前自定义号池共 ${getCustomMailProviderPoolSize()} 个邮箱，自动轮数会跟随数量；第 4/8 步仍需手动输入验证码`;
+  }
+  if (autoHintText && useCodex2ApiLoginOnly) {
+    autoHintText.textContent = getCodex2ApiLoginAccountPoolSize() > 0
+      ? `仅登录模式已启用，共 ${getCodex2ApiLoginAccountPoolSize()} 组账号；验证码会通过 TempMail 公共收件箱自动获取`
+      : '请先在登录账号池中每行填写一个“邮箱 | 密码”';
   }
   if (autoHintText && useGmail && useGeneratedAlias) {
     autoHintText.textContent = '请先填写 Gmail 原邮箱，步骤 3 会自动生成 Gmail +tag 地址';
@@ -5479,6 +5598,7 @@ function updatePanelModeUI() {
   const useSub2Api = selectPanelMode.value === 'sub2api';
   const useCodex2Api = selectPanelMode.value === 'codex2api';
   const useCpa = !useSub2Api && !useCodex2Api;
+  const useCodex2ApiLoginOnly = useCodex2Api && Boolean(inputCodex2ApiLoginOnlyMode?.checked);
   rowVpsUrl.style.display = useCpa ? '' : 'none';
   rowVpsPassword.style.display = useCpa ? '' : 'none';
   rowLocalCpaStep9Mode.style.display = useCpa ? '' : 'none';
@@ -5489,6 +5609,12 @@ function updatePanelModeUI() {
   rowSub2ApiDefaultProxy.style.display = useSub2Api ? '' : 'none';
   rowCodex2ApiUrl.style.display = useCodex2Api ? '' : 'none';
   rowCodex2ApiAdminKey.style.display = useCodex2Api ? '' : 'none';
+  if (rowCodex2ApiLoginOnlyMode) {
+    rowCodex2ApiLoginOnlyMode.style.display = useCodex2Api ? '' : 'none';
+  }
+  if (rowCodex2ApiLoginAccounts) {
+    rowCodex2ApiLoginAccounts.style.display = useCodex2ApiLoginOnly ? '' : 'none';
+  }
 
   const step9Btn = document.querySelector('.step-btn[data-step-key="platform-verify"]');
   if (step9Btn) {
@@ -5496,6 +5622,7 @@ function updatePanelModeUI() {
       ? 'SUB2API 回调验证'
       : (useCodex2Api ? 'Codex2API 回调验证' : 'CPA 回调验证');
   }
+  syncRunCountFromConfiguredEmailPool();
 }
 
 // ============================================================
@@ -6644,11 +6771,16 @@ async function startAutoRunFromCurrentSettings() {
 
   const customEmailPoolEnabled = typeof usesCustomEmailPoolGenerator === 'function'
     && usesCustomEmailPoolGenerator();
+  const codex2ApiLoginOnlyEnabled = typeof isCodex2ApiLoginOnlyModeEnabled === 'function'
+    && isCodex2ApiLoginOnlyModeEnabled();
   const lockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
     ? getLockedRunCountFromEmailPool()
     : 0;
   if (customEmailPoolEnabled && lockedRunCount <= 0) {
     throw new Error('请先在邮箱池里至少填写 1 个邮箱。');
+  }
+  if (codex2ApiLoginOnlyEnabled && lockedRunCount <= 0) {
+    throw new Error('请先在登录账号池里至少填写 1 组邮箱和密码。');
   }
   const totalRuns = lockedRunCount > 0 ? lockedRunCount : getRunCountValue();
   if (lockedRunCount > 0) {
@@ -6921,7 +7053,13 @@ inputPassword.addEventListener('blur', () => {
 
 inputPlusModeEnabled?.addEventListener('change', () => {
   updatePlusModeUI();
-  syncStepDefinitionsForMode(Boolean(inputPlusModeEnabled.checked), getSelectedPlusPaymentMethod(), { render: true });
+  syncStepDefinitionsForMode(
+    getSelectedPanelMode(),
+    isCodex2ApiLoginOnlyModeEnabled(),
+    Boolean(inputPlusModeEnabled.checked),
+    getSelectedPlusPaymentMethod(),
+    { render: true }
+  );
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
@@ -6929,7 +7067,13 @@ inputPlusModeEnabled?.addEventListener('change', () => {
 selectPlusPaymentMethod?.addEventListener('change', () => {
   selectPlusPaymentMethod.value = normalizePlusPaymentMethod(selectPlusPaymentMethod.value);
   updatePlusModeUI();
-  syncStepDefinitionsForMode(Boolean(inputPlusModeEnabled?.checked), selectPlusPaymentMethod.value, { render: true });
+  syncStepDefinitionsForMode(
+    getSelectedPanelMode(),
+    isCodex2ApiLoginOnlyModeEnabled(),
+    Boolean(inputPlusModeEnabled?.checked),
+    selectPlusPaymentMethod.value,
+    { render: true }
+  );
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
@@ -7033,6 +7177,13 @@ checkboxAutoDeleteIcloud?.addEventListener('change', () => {
 
 selectPanelMode.addEventListener('change', () => {
   updatePanelModeUI();
+  syncStepDefinitionsForMode(
+    getSelectedPanelMode(),
+    isCodex2ApiLoginOnlyModeEnabled(),
+    Boolean(inputPlusModeEnabled?.checked),
+    getSelectedPlusPaymentMethod(),
+    { render: true }
+  );
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
@@ -7399,6 +7550,34 @@ inputCodex2ApiAdminKey.addEventListener('input', () => {
   scheduleSettingsAutoSave();
 });
 inputCodex2ApiAdminKey.addEventListener('blur', () => {
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputCodex2ApiLoginOnlyMode?.addEventListener('change', () => {
+  updatePanelModeUI();
+  updateMailProviderUI();
+  syncStepDefinitionsForMode(
+    getSelectedPanelMode(),
+    isCodex2ApiLoginOnlyModeEnabled(),
+    Boolean(inputPlusModeEnabled?.checked),
+    getSelectedPlusPaymentMethod(),
+    { render: true }
+  );
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputCodex2ApiLoginAccounts?.addEventListener('input', () => {
+  syncRunCountFromConfiguredEmailPool();
+  updateMailProviderUI();
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+
+inputCodex2ApiLoginAccounts?.addEventListener('blur', () => {
+  inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(inputCodex2ApiLoginAccounts.value);
+  syncRunCountFromConfiguredEmailPool();
+  updateMailProviderUI();
   saveSettings({ silent: true }).catch(() => { });
 });
 
@@ -8093,6 +8272,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.panelMode !== undefined) {
         selectPanelMode.value = message.payload.panelMode || 'cpa';
+        if (message.payload.codex2apiLoginOnlyMode !== undefined && inputCodex2ApiLoginOnlyMode) {
+          inputCodex2ApiLoginOnlyMode.checked = Boolean(message.payload.codex2apiLoginOnlyMode);
+        }
+        if (message.payload.codex2apiLoginAccounts !== undefined && inputCodex2ApiLoginAccounts) {
+          inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(message.payload.codex2apiLoginAccounts || []);
+        }
         updatePanelModeUI();
       }
       if (
@@ -8270,8 +8455,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.plusPaymentMethod !== undefined && selectPlusPaymentMethod) {
         selectPlusPaymentMethod.value = normalizePlusPaymentMethod(message.payload.plusPaymentMethod);
       }
-      if (message.payload.plusModeEnabled !== undefined || message.payload.plusPaymentMethod !== undefined) {
+      if (message.payload.codex2apiLoginOnlyMode !== undefined && inputCodex2ApiLoginOnlyMode) {
+        inputCodex2ApiLoginOnlyMode.checked = Boolean(message.payload.codex2apiLoginOnlyMode);
+        updatePanelModeUI();
+      }
+      if (message.payload.codex2apiLoginAccounts !== undefined && inputCodex2ApiLoginAccounts) {
+        inputCodex2ApiLoginAccounts.value = formatCodex2ApiLoginAccountEntries(message.payload.codex2apiLoginAccounts || []);
+        syncRunCountFromConfiguredEmailPool();
+      }
+      if (
+        message.payload.plusModeEnabled !== undefined
+        || message.payload.plusPaymentMethod !== undefined
+        || message.payload.codex2apiLoginOnlyMode !== undefined
+      ) {
         syncStepDefinitionsForMode(
+          getSelectedPanelMode(),
+          isCodex2ApiLoginOnlyModeEnabled(),
           Boolean(latestState?.plusModeEnabled),
           latestState?.plusPaymentMethod,
           { render: true }

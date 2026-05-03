@@ -704,18 +704,41 @@
           const nextPlusModeEnabled = Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
             ? Boolean(updates.plusModeEnabled)
             : Boolean(currentState?.plusModeEnabled);
-          const stepModeChanged = modeChanged || (nextPlusModeEnabled && plusPaymentChanged);
           await setPersistentSettings(updates);
           const stateUpdates = {
             ...updates,
             ...sessionUpdates,
           };
+          const nextStateForSteps = { ...currentState, ...stateUpdates };
+          const currentStepIds = typeof getStepIdsForState === 'function'
+            ? getStepIdsForState(currentState)
+            : [];
+          const nextStepIds = typeof getStepIdsForState === 'function'
+            ? getStepIdsForState(nextStateForSteps)
+            : currentStepIds;
+          const stepModeChanged = JSON.stringify(currentStepIds) !== JSON.stringify(nextStepIds);
           if (stepModeChanged && typeof getStepIdsForState === 'function') {
-            const nextStateForSteps = { ...currentState, ...stateUpdates };
             stateUpdates.stepStatuses = Object.fromEntries(
-              getStepIdsForState(nextStateForSteps).map((stepId) => [stepId, 'pending'])
+              nextStepIds.map((stepId) => [stepId, 'pending'])
             );
             stateUpdates.currentStep = 0;
+          }
+          if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(nextStateForSteps)) {
+            const activeLoginRun = Math.max(0, Math.floor(Number(nextStateForSteps?.autoRunCurrentRun) || 0));
+            const hasRuntimeLoginCredentials = Boolean(
+              String(currentState?.email || '').trim()
+              && String(currentState?.password || '').trim()
+            );
+            const shouldSeedDefaultLoginAccount = !isCodex2ApiLoginOnlyMode(currentState)
+              || !hasRuntimeLoginCredentials;
+            const targetLoginRun = activeLoginRun > 0 ? activeLoginRun : 1;
+            const loginAccount = typeof getCodex2ApiLoginAccountForRun === 'function'
+              ? getCodex2ApiLoginAccountForRun(nextStateForSteps, targetLoginRun)
+              : null;
+            if (loginAccount && (activeLoginRun > 0 || shouldSeedDefaultLoginAccount)) {
+              stateUpdates.email = loginAccount.email;
+              stateUpdates.password = loginAccount.password;
+            }
           }
           await setState(stateUpdates);
           const mergedState = await getState();
@@ -768,6 +791,16 @@
               ? 'GoPay'
               : 'PayPal';
             await addLog(`Plus 鏀粯鏂瑰紡宸插垏鎹负 ${selectedPlusPaymentMethod}锛屽凡鏇存柊瀵瑰簲鐨?Plus 姝ラ銆?`, 'info');
+          } else if (
+            typeof isCodex2ApiLoginOnlyMode === 'function'
+            && isCodex2ApiLoginOnlyMode(currentState) !== isCodex2ApiLoginOnlyMode(nextStateForSteps)
+          ) {
+            await addLog(
+              isCodex2ApiLoginOnlyMode(nextStateForSteps)
+                ? 'Codex2API 仅登录模式已开启，步骤已切换为 7-10，自动轮数将按登录账号池数量锁定。'
+                : 'Codex2API 仅登录模式已关闭，步骤已恢复完整流程。',
+              'info'
+            );
           }
           return { ok: true, state: await getState(), proxyRouting };
         }

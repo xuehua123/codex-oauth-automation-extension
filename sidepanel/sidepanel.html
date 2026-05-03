@@ -216,6 +216,18 @@
             title="显示 Codex2API 管理密钥"></button>
         </div>
       </div>
+      <div class="data-row" id="row-codex2api-login-only-mode" style="display:none;">
+        <span class="data-label">仅登录模式</span>
+        <label class="option-toggle" for="input-codex2api-login-only-mode">
+          <input type="checkbox" id="input-codex2api-login-only-mode" />
+          <span>只执行步骤 7-10，账号按下方列表逐个登录</span>
+        </label>
+      </div>
+      <div class="data-row data-check-row" id="row-codex2api-login-accounts" style="display:none;">
+        <span class="data-label">登录账号池</span>
+        <textarea id="input-codex2api-login-accounts" class="data-textarea mono"
+          placeholder="每行一个邮箱和密码，例如&#10;user1@example.com | password-1&#10;user2@example.com | password-2"></textarea>
+      </div>
       <div class="data-row module-divider-start" id="row-custom-password">
         <span class="data-label">账户密码</span>
         <div class="input-with-icon">

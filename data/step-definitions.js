@@ -44,8 +44,31 @@
     { id: 13, order: 130, key: 'platform-verify', title: '平台回调验证' },
   ];
 
+  const CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS = [
+    { id: 7, order: 70, key: 'oauth-login', title: '刷新 OAuth 并登录' },
+    { id: 8, order: 80, key: 'fetch-login-code', title: '获取登录验证码' },
+    { id: 9, order: 90, key: 'confirm-oauth', title: '自动确认 OAuth' },
+    { id: 10, order: 100, key: 'platform-verify', title: '平台回调验证' },
+  ];
+
+  function normalizePanelMode(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'sub2api') {
+      return 'sub2api';
+    }
+    if (normalized === 'codex2api') {
+      return 'codex2api';
+    }
+    return 'cpa';
+  }
+
   function isPlusModeEnabled(options = {}) {
     return Boolean(options?.plusModeEnabled || options?.plusMode);
+  }
+
+  function isCodex2ApiLoginOnlyModeEnabled(options = {}) {
+    return normalizePanelMode(options?.panelMode) === 'codex2api'
+      && Boolean(options?.codex2apiLoginOnlyMode);
   }
 
   function normalizePlusPaymentMethod(value = '') {
@@ -53,6 +76,9 @@
   }
 
   function getModeStepDefinitions(options = {}) {
+    if (isCodex2ApiLoginOnlyModeEnabled(options)) {
+      return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
+    }
     if (!isPlusModeEnabled(options)) {
       return NORMAL_STEP_DEFINITIONS;
     }
@@ -75,6 +101,7 @@
       ...NORMAL_STEP_DEFINITIONS,
       ...PLUS_PAYPAL_STEP_DEFINITIONS,
       ...PLUS_GOPAY_STEP_DEFINITIONS,
+      ...CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS,
     ]) {
       keyed.set(`${step.id}:${step.key}`, step);
     }
@@ -110,12 +137,15 @@
     PLUS_STEP_DEFINITIONS: PLUS_PAYPAL_STEP_DEFINITIONS,
     PLUS_PAYPAL_STEP_DEFINITIONS,
     PLUS_GOPAY_STEP_DEFINITIONS,
+    CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS,
     getAllSteps,
     getLastStepId,
     getStepById,
     getStepIds,
     getSteps,
+    isCodex2ApiLoginOnlyModeEnabled,
     isPlusModeEnabled,
+    normalizePanelMode,
     normalizePlusPaymentMethod,
   };
 });
