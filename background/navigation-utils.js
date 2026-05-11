@@ -19,6 +19,7 @@
 
     function normalizeSub2ApiUrl(rawUrl) {
       const input = (rawUrl || '').trim() || DEFAULT_SUB2API_URL;
+      if (!input) return '';
       const withProtocol = /^https?:\/\//i.test(input) ? input : `https://${input}`;
       const parsed = new URL(withProtocol);
       if (!parsed.pathname || parsed.pathname === '/') {
@@ -72,7 +73,7 @@
       const parsed = parseUrlSafely(rawUrl);
       if (!parsed) return false;
       return isSignupPageHost(parsed.hostname)
-        && /\/create-account\/password(?:[/?#]|$)/i.test(parsed.pathname || '');
+        && /\/(?:create-account|log-in)\/password(?:[/?#]|$)/i.test(parsed.pathname || '');
     }
 
     function isSignupEmailVerificationPageUrl(rawUrl) {

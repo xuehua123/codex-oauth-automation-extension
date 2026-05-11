@@ -16,6 +16,7 @@
       clearAccountRunHistory,
       deleteAccountRunHistoryRecords,
       clearAutoRunTimerAlarm,
+      clearFreeReusablePhoneActivation,
       clearLuckmailRuntimeState,
       clearStopRequest,
       closeLocalhostCallbackTabs,
@@ -33,6 +34,7 @@
       executeStepViaCompletionSignal,
       exportSettingsBundle,
       fetchGeneratedEmail,
+      refreshGpcCardBalance,
       finalizePhoneActivationAfterSuccessfulFlow,
       finalizeStep3Completion,
       finalizeIcloudAliasAfterSuccessfulFlow,
@@ -48,6 +50,14 @@
       getStepDefinitionForState,
       getStepIdsForState,
       getLastStepIdForState,
+      normalizeSignupMethod = (value = '') => String(value || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email',
+      canUsePhoneSignup = (state = {}) => Boolean(state?.phoneVerificationEnabled)
+        && !Boolean(state?.plusModeEnabled)
+        && !Boolean(state?.contributionMode),
+      resolveSignupMethod = (state = {}) => {
+        const method = normalizeSignupMethod(state?.signupMethod);
+        return method === 'phone' && canUsePhoneSignup(state) ? 'phone' : 'email';
+      },
       getTabId,
       getStopRequested,
       handleAutoRunLoopUnhandledError,
@@ -66,7 +76,8 @@
       runIpProxyAutoSync,
       listIcloudAliases,
       listLuckmailPurchasesForManagement,
-      refreshIpProxyPool,
+      markCurrentCustomEmailPoolEntryUsed,
+      markCurrentRegistrationAccountUsed,
       normalizeHotmailAccounts,
       normalizeMail2925Accounts,
       normalizePayPalAccounts,
@@ -93,6 +104,9 @@
       setContributionMode,
       setEmailState,
       setEmailStateSilently,
+      setFreeReusablePhoneActivation,
+      setSignupPhoneState,
+      setSignupPhoneStateSilently,
       setIcloudAliasPreservedState,
       setIcloudAliasUsedState,
       setLuckmailPurchaseDisabledState,
@@ -153,6 +167,93 @@
       return '';
     }
 
+    function isStaleAutoRunStepMessage(step, state = {}) {
+      if (typeof isAutoRunLockedState !== 'function' || !isAutoRunLockedState(state)) {
+        return false;
+      }
+      const normalizedStep = Number(step);
+      if (!Number.isInteger(normalizedStep) || normalizedStep <= 0) {
+        return false;
+      }
+      const currentStatus = String(state?.stepStatuses?.[normalizedStep] || '').trim();
+      if (currentStatus === 'running') {
+        return false;
+      }
+      const currentStep = Number(state?.currentStep) || 0;
+      if (currentStep > 0 && normalizedStep !== currentStep) {
+        return true;
+      }
+      return ['completed', 'manual_completed', 'skipped', 'failed', 'stopped'].includes(currentStatus);
+    }
+
+    function resolveSignupPhonePayload(payload = {}) {
+      const directPhone = String(
+        payload?.signupPhoneNumber
+        || payload?.phoneNumber
+        || ''
+      ).trim();
+      if (directPhone) {
+        return directPhone;
+      }
+      return String(payload?.accountIdentifierType || '').trim().toLowerCase() === 'phone'
+        ? String(payload?.accountIdentifier || '').trim()
+        : '';
+    }
+
+    function resolveEmailIdentityPayload(payload = {}) {
+      const directEmail = String(payload?.email || '').trim();
+      if (directEmail) {
+        return directEmail;
+      }
+      return String(payload?.accountIdentifierType || '').trim().toLowerCase() === 'email'
+        ? String(payload?.accountIdentifier || '').trim()
+        : '';
+    }
+
+    async function syncStepAccountIdentityFromPayload(payload = {}) {
+      const identifierType = String(payload?.accountIdentifierType || '').trim().toLowerCase();
+      const signupPhoneNumber = resolveSignupPhonePayload(payload);
+      if (identifierType === 'phone' || signupPhoneNumber) {
+        if (signupPhoneNumber) {
+          await setSignupPhoneStateSilently(signupPhoneNumber);
+        }
+        const updates = {};
+        if (Object.prototype.hasOwnProperty.call(payload, 'signupPhoneActivation')) {
+          updates.signupPhoneActivation = payload.signupPhoneActivation || null;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'signupPhoneCompletedActivation')) {
+          updates.signupPhoneCompletedActivation = payload.signupPhoneCompletedActivation || null;
+        }
+        if (Object.keys(updates).length) {
+          await setState(updates);
+          broadcastDataUpdate(updates);
+        }
+        return;
+      }
+
+      const email = resolveEmailIdentityPayload(payload);
+      if (identifierType === 'email' || email) {
+        if (email) {
+          await setEmailState(email);
+        }
+        const updates = {
+          phoneNumber: '',
+          signupPhoneNumber: '',
+          signupPhoneActivation: null,
+          signupPhoneCompletedActivation: null,
+          signupPhoneVerificationRequestedAt: null,
+          signupPhoneVerificationPurpose: '',
+          ...(email ? {
+            accountIdentifierType: 'email',
+            accountIdentifier: email,
+          } : {}),
+        };
+        await setSignupPhoneStateSilently(null);
+        await setState(updates);
+        broadcastDataUpdate(updates);
+      }
+    }
+
     function isStepProtectedFromAutoSkip(status) {
       return status === 'running'
         || status === 'completed'
@@ -178,26 +279,47 @@
       }) || null;
     }
 
+    function normalizePlusPaymentMethodForDisplay(value = '') {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (normalized === 'gpc-helper') {
+        return 'gpc-helper';
+      }
+      return normalized === 'gopay' ? 'gopay' : 'paypal';
+    }
+
+    function getPlusPaymentMethodLabel(value = '') {
+      const method = normalizePlusPaymentMethodForDisplay(value);
+      if (method === 'gpc-helper') {
+        return 'GPC';
+      }
+      return method === 'gopay' ? 'GoPay' : 'PayPal';
+    }
+
     async function handlePlatformVerifyStepData(payload) {
       if (payload.localhostUrl) {
         await closeLocalhostCallbackTabs(payload.localhostUrl);
       }
       const latestState = await getState();
-      if (latestState.currentHotmailAccountId && isHotmailProvider(latestState)) {
+      if (typeof markCurrentRegistrationAccountUsed === 'function') {
+        await markCurrentRegistrationAccountUsed(latestState, {
+          logPrefix: '流程完成',
+          level: 'ok',
+        });
+      } else if (latestState.currentHotmailAccountId && isHotmailProvider(latestState)) {
         await patchHotmailAccount(latestState.currentHotmailAccountId, {
           used: true,
           lastUsedAt: Date.now(),
         });
         await addLog('当前 Hotmail 账号已自动标记为已用。', 'ok');
       }
-      if (String(latestState.mailProvider || '').trim().toLowerCase() === '2925' && latestState.currentMail2925AccountId) {
+      if (typeof markCurrentRegistrationAccountUsed !== 'function' && String(latestState.mailProvider || '').trim().toLowerCase() === '2925' && latestState.currentMail2925AccountId) {
         await patchMail2925Account(latestState.currentMail2925AccountId, {
           lastUsedAt: Date.now(),
           lastError: '',
         });
         await addLog('当前 2925 账号已记录最近使用时间。', 'ok');
       }
-      if (isLuckmailProvider(latestState)) {
+      if (typeof markCurrentRegistrationAccountUsed !== 'function' && isLuckmailProvider(latestState)) {
         const currentPurchase = getCurrentLuckmailPurchase(latestState);
         if (currentPurchase?.id) {
           await setLuckmailPurchaseUsedState(currentPurchase.id, true);
@@ -213,7 +335,9 @@
           excludeLocalhostCallbacks: true,
         });
       }
-      await finalizeIcloudAliasAfterSuccessfulFlow(latestState);
+      if (typeof markCurrentRegistrationAccountUsed !== 'function') {
+        await finalizeIcloudAliasAfterSuccessfulFlow(latestState);
+      }
       if (typeof finalizePhoneActivationAfterSuccessfulFlow === 'function') {
         await finalizePhoneActivationAfterSuccessfulFlow(latestState);
       }
@@ -253,7 +377,10 @@
             const currentStatus = latestState.stepStatuses?.[loginCodeStep];
             if (!isStepProtectedFromAutoSkip(currentStatus)) {
               await setStepStatus(loginCodeStep, 'skipped');
-              await addLog(`步骤 ${step}：认证页已直接进入 OAuth 授权页，已自动跳过步骤 ${loginCodeStep} 的登录验证码。`, 'warn');
+              await addLog(`认证页已直接进入 OAuth 授权页，已自动跳过步骤 ${loginCodeStep} 的登录验证码。`, 'warn', {
+                step,
+                stepKey: 'oauth-login',
+              });
             }
           }
         } else if (payload.loginVerificationRequestedAt) {
@@ -264,7 +391,13 @@
 
       if (stepKey === 'fetch-login-code') {
         await setState({
-          lastEmailTimestamp: payload.emailTimestamp || null,
+          ...(payload.phoneVerification || payload.loginPhoneVerification ? {
+            currentPhoneVerificationCode: '',
+            signupPhoneVerificationRequestedAt: null,
+            signupPhoneVerificationPurpose: '',
+          } : {
+            lastEmailTimestamp: payload.emailTimestamp || null,
+          }),
           loginVerificationRequestedAt: null,
         });
         return;
@@ -287,10 +420,29 @@
       }
 
       switch (step) {
-        case 2:
-          if (payload.email) {
-            await setEmailState(payload.email);
+        case 1: {
+          const updates = {};
+          if (payload.oauthUrl) {
+            updates.oauthUrl = payload.oauthUrl;
+            broadcastDataUpdate({ oauthUrl: payload.oauthUrl });
           }
+          if (payload.sub2apiSessionId !== undefined) updates.sub2apiSessionId = payload.sub2apiSessionId || null;
+          if (payload.sub2apiOAuthState !== undefined) updates.sub2apiOAuthState = payload.sub2apiOAuthState || null;
+          if (payload.sub2apiGroupId !== undefined) updates.sub2apiGroupId = payload.sub2apiGroupId || null;
+          if (payload.sub2apiGroupIds !== undefined) updates.sub2apiGroupIds = Array.isArray(payload.sub2apiGroupIds)
+            ? payload.sub2apiGroupIds
+            : [];
+          if (payload.sub2apiDraftName !== undefined) updates.sub2apiDraftName = payload.sub2apiDraftName || null;
+          if (payload.sub2apiProxyId !== undefined) updates.sub2apiProxyId = payload.sub2apiProxyId || null;
+          if (payload.codex2apiSessionId !== undefined) updates.codex2apiSessionId = payload.codex2apiSessionId || null;
+          if (payload.codex2apiOAuthState !== undefined) updates.codex2apiOAuthState = payload.codex2apiOAuthState || null;
+          if (Object.keys(updates).length) {
+            await setState(updates);
+          }
+          break;
+        }
+        case 2:
+          await syncStepAccountIdentityFromPayload(payload);
           if (payload.skipRegistrationFlow) {
             const latestState = await getState();
             for (const skipStep of [3, 4, 5]) {
@@ -308,14 +460,23 @@
             const step3Status = latestState.stepStatuses?.[3];
             if (step3Status !== 'running' && step3Status !== 'completed' && step3Status !== 'manual_completed') {
               await setStepStatus(3, 'skipped');
-              await addLog('步骤 2：提交邮箱后页面直接进入邮箱验证码页，已自动跳过步骤 3。', 'warn');
+              const identityLabel = payload.accountIdentifierType === 'phone' ? '手机号' : '邮箱';
+              await addLog(`步骤 2：提交${identityLabel}后页面直接进入验证码页，已自动跳过步骤 3。`, 'warn');
             }
           }
           break;
         case 3:
-          if (payload.email) await setEmailState(payload.email);
+          await syncStepAccountIdentityFromPayload(payload);
           if (payload.signupVerificationRequestedAt) {
             await setState({ signupVerificationRequestedAt: payload.signupVerificationRequestedAt });
+          }
+          if (payload.skipProfileStep) {
+            const latestState = await getState();
+            const step5Status = latestState.stepStatuses?.[5];
+            if (step5Status !== 'running' && step5Status !== 'completed' && step5Status !== 'manual_completed') {
+              await setStepStatus(5, 'skipped');
+              await addLog('步骤 3：页面已直接进入已登录态，已自动跳过步骤 5。', 'warn');
+            }
           }
           if (payload.loginVerificationRequestedAt) {
             await setState({ loginVerificationRequestedAt: payload.loginVerificationRequestedAt });
@@ -323,7 +484,13 @@
           break;
         case 4:
           await setState({
-            lastEmailTimestamp: payload.emailTimestamp || null,
+            ...(payload.phoneVerification ? {
+              currentPhoneVerificationCode: '',
+              signupPhoneVerificationRequestedAt: null,
+              signupPhoneVerificationPurpose: '',
+            } : {
+              lastEmailTimestamp: payload.emailTimestamp || null,
+            }),
             signupVerificationRequestedAt: null,
           });
           if (payload.skipProfileStep) {
@@ -337,6 +504,27 @@
                 await addLog('步骤 4：检测到账号已直接进入已登录态，已自动跳过步骤 5。', 'warn');
               }
             }
+          }
+          break;
+        case 8:
+          await setState({
+            ...(payload.phoneVerification || payload.loginPhoneVerification ? {
+              currentPhoneVerificationCode: '',
+              signupPhoneVerificationRequestedAt: null,
+              signupPhoneVerificationPurpose: '',
+            } : {
+              lastEmailTimestamp: payload.emailTimestamp || null,
+            }),
+            loginVerificationRequestedAt: null,
+          });
+          break;
+        case 9:
+          if (payload.localhostUrl) {
+            if (!isLocalhostOAuthCallbackUrl(payload.localhostUrl)) {
+              throw new Error('步骤 9 返回了无效的 localhost OAuth 回调地址。');
+            }
+            await setState({ localhostUrl: payload.localhostUrl });
+            broadcastDataUpdate({ localhostUrl: payload.localhostUrl });
           }
           break;
         default:
@@ -357,12 +545,25 @@
         }
 
         case 'LOG': {
-          const { message: msg, level } = message.payload;
-          await addLog(`[${getSourceLabel(message.source)}] ${msg}`, level);
+          const { message: msg, level, step: payloadStep, stepKey } = message.payload;
+          const logStep = Math.floor(Number(message.step || payloadStep) || 0);
+          await addLog(
+            `[${getSourceLabel(message.source)}] ${msg}`,
+            level,
+            {
+              step: logStep > 0 ? logStep : null,
+              stepKey,
+            }
+          );
           return { ok: true };
         }
 
         case 'STEP_COMPLETE': {
+          const currentState = await getState();
+          if (isStaleAutoRunStepMessage(message.step, currentState)) {
+            await addLog(`自动运行：忽略过期的步骤 ${message.step} 完成消息，当前流程已在步骤 ${currentState.currentStep || '未知'}。`, 'warn', { step: message.step });
+            return { ok: true, ignored: true };
+          }
           if (getStopRequested()) {
             await setStepStatus(message.step, 'stopped');
             await appendManualAccountRunRecordIfNeeded(`step${message.step}_stopped`, null, '流程已被用户停止。');
@@ -383,7 +584,7 @@
             }
             const errorMessage = error?.message || String(error || '步骤 3 提交后确认失败');
             await setStepStatus(message.step, 'failed');
-            await addLog(`步骤 ${message.step} 失败：${errorMessage}`, 'error');
+            await addLog(`失败：${errorMessage}`, 'error', { step: message.step });
             await appendManualAccountRunRecordIfNeeded(`step${message.step}_failed`, null, errorMessage);
             notifyStepError(message.step, errorMessage);
             return { ok: true, error: errorMessage };
@@ -395,7 +596,7 @@
             : 10;
           const completionState = message.step === lastStepId ? completionStateCandidate : null;
           await setStepStatus(message.step, 'completed');
-          await addLog(`步骤 ${message.step} 已完成`, 'ok');
+          await addLog('已完成', 'ok', { step: message.step });
           await handleStepData(message.step, message.payload);
           if (message.step === lastStepId && typeof appendAccountRunRecord === 'function') {
             await appendAccountRunRecord('success', completionState);
@@ -405,6 +606,11 @@
         }
 
         case 'STEP_ERROR': {
+          const staleCheckState = await getState();
+          if (isStaleAutoRunStepMessage(message.step, staleCheckState)) {
+            await addLog(`自动运行：忽略过期的步骤 ${message.step} 失败消息，当前流程已在步骤 ${staleCheckState.currentStep || '未知'}。原始错误：${message.error || '未知错误'}`, 'warn', { step: message.step });
+            return { ok: true, ignored: true };
+          }
           if (typeof isCloudflareSecurityBlockedError === 'function' && isCloudflareSecurityBlockedError(message.error)) {
             const userMessage = typeof handleCloudflareSecurityBlocked === 'function'
               ? await handleCloudflareSecurityBlocked(message.error)
@@ -412,15 +618,20 @@
             notifyStepError(message.step, '流程已被用户停止。');
             return { ok: true, error: userMessage };
           }
+          const currentState = await getState();
+          const currentStepStatus = currentState?.stepStatuses?.[message.step] || '';
+          const isSignupPhonePasswordMismatch = /SIGNUP_PHONE_PASSWORD_MISMATCH::/i.test(String(message.error || ''));
           if (isStopError(message.error)) {
             await setStepStatus(message.step, 'stopped');
-            await addLog(`步骤 ${message.step} 已被用户停止`, 'warn');
+            await addLog('已被用户停止', 'warn', { step: message.step });
             await appendManualAccountRunRecordIfNeeded(`step${message.step}_stopped`, null, message.error);
             notifyStepError(message.step, message.error);
           } else {
-            await setStepStatus(message.step, 'failed');
-            await addLog(`步骤 ${message.step} 失败：${message.error}`, 'error');
-            await appendManualAccountRunRecordIfNeeded(`step${message.step}_failed`, null, message.error);
+            if (!(isSignupPhonePasswordMismatch && currentStepStatus === 'failed')) {
+              await setStepStatus(message.step, 'failed');
+              await addLog(`失败：${message.error}`, 'error', { step: message.step });
+              await appendManualAccountRunRecordIfNeeded(`step${message.step}_failed`, null, message.error);
+            }
             notifyStepError(message.step, message.error);
           }
           return { ok: true };
@@ -432,6 +643,8 @@
           const confirmed = Boolean(message.payload?.confirmed);
           const requestId = String(message.payload?.requestId || '').trim();
           const currentRequestId = String(currentState?.plusManualConfirmationRequestId || '').trim();
+          const method = String(currentState?.plusManualConfirmationMethod || '').trim().toLowerCase();
+          const isGpcOtp = method === 'gopay-otp';
           if (!currentState?.plusManualConfirmationPending) {
             return { ok: true, ignored: true };
           }
@@ -447,15 +660,31 @@
             plusManualConfirmationTitle: '',
             plusManualConfirmationMessage: '',
           };
+
+          if (isGpcOtp && confirmed) {
+            const otp = String(message.payload?.otp || message.payload?.code || '').trim().replace(/[^\d]/g, '');
+            if (!otp) {
+              throw new Error('请输入 GPC OTP 验证码。');
+            }
+            const otpUpdates = {
+              ...clearManualConfirmationState,
+              gopayHelperResolvedOtp: otp,
+            };
+            await setState(otpUpdates);
+            if (typeof broadcastDataUpdate === 'function') {
+              broadcastDataUpdate(otpUpdates);
+            }
+            await addLog(`步骤 ${step}：已收到 GPC OTP，准备提交验证。`, 'ok');
+            return { ok: true };
+          }
+
           await setState(clearManualConfirmationState);
           if (typeof broadcastDataUpdate === 'function') {
             broadcastDataUpdate(clearManualConfirmationState);
           }
 
           if (confirmed) {
-            const methodLabel = String(currentState?.plusManualConfirmationMethod || '').trim().toLowerCase() === 'gopay'
-              ? 'GoPay'
-              : '手动';
+            const methodLabel = method === 'gopay' ? 'GoPay' : '手动';
             await addLog(`步骤 ${step}：已确认${methodLabel}订阅完成，准备继续下一步。`, 'ok');
             await completeStepFromBackground(step, {
               plusManualConfirmationMethod: currentState?.plusManualConfirmationMethod || '',
@@ -464,9 +693,9 @@
             return { ok: true };
           }
 
-          const cancelMessage = String(currentState?.plusManualConfirmationMethod || '').trim().toLowerCase() === 'gopay'
+          const cancelMessage = method === 'gopay'
             ? '已取消 GoPay 订阅确认'
-            : '已取消当前手动确认';
+            : (isGpcOtp ? '已取消 GPC OTP 输入' : '已取消当前手动确认');
           await setStepStatus(step, 'failed');
           await addLog(`步骤 ${step}：${cancelMessage}。`, 'warn');
           await appendManualAccountRunRecordIfNeeded(`step${step}_failed`, null, cancelMessage);
@@ -484,6 +713,20 @@
           await resetState();
           await addLog('流程已重置', 'info');
           return { ok: true };
+        }
+
+        case 'CLEAR_FREE_REUSABLE_PHONE': {
+          if (typeof clearFreeReusablePhoneActivation !== 'function') {
+            throw new Error('白嫖复用手机号清除能力未接入。');
+          }
+          return await clearFreeReusablePhoneActivation();
+        }
+
+        case 'SET_FREE_REUSABLE_PHONE': {
+          if (typeof setFreeReusablePhoneActivation !== 'function') {
+            throw new Error('白嫖复用手机号记录能力未接入。');
+          }
+          return await setFreeReusablePhoneActivation(message.payload || {});
         }
 
         case 'SET_CONTRIBUTION_MODE': {
@@ -703,11 +946,23 @@
           const currentState = await getState();
           const updates = buildPersistentSettingsPayload(message.payload || {});
           const sessionUpdates = buildLuckmailSessionSettingsPayload(message.payload || {});
+          const nextSignupState = {
+            ...currentState,
+            ...updates,
+            resolvedSignupMethod: null,
+          };
+          if (
+            Object.prototype.hasOwnProperty.call(updates, 'phoneVerificationEnabled')
+            || Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
+            || Object.prototype.hasOwnProperty.call(updates, 'signupMethod')
+          ) {
+            updates.signupMethod = resolveSignupMethod(nextSignupState);
+          }
           const modeChanged = Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
             && Boolean(currentState?.plusModeEnabled) !== Boolean(updates.plusModeEnabled);
           const plusPaymentChanged = Object.prototype.hasOwnProperty.call(updates, 'plusPaymentMethod')
-            && String(currentState?.plusPaymentMethod || 'paypal').trim().toLowerCase()
-              !== String(updates.plusPaymentMethod || 'paypal').trim().toLowerCase();
+            && normalizePlusPaymentMethodForDisplay(currentState?.plusPaymentMethod || 'paypal')
+              !== normalizePlusPaymentMethodForDisplay(updates.plusPaymentMethod || 'paypal');
           const nextPlusModeEnabled = Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
             ? Boolean(updates.plusModeEnabled)
             : Boolean(currentState?.plusModeEnabled);
@@ -803,12 +1058,13 @@
           if (Boolean(currentState?.contributionMode) && typeof setContributionMode === 'function') {
             await setContributionMode(true);
           }
+          if (Object.keys(stateUpdates).length > 0 && typeof broadcastDataUpdate === 'function') {
+            broadcastDataUpdate(stateUpdates);
+          }
           if (modeChanged) {
-            const selectedPlusPaymentMethod = String(
-              (stateUpdates.plusPaymentMethod ?? currentState?.plusPaymentMethod ?? 'paypal')
-            ).trim().toLowerCase() === 'gopay'
-              ? 'GoPay'
-              : 'PayPal';
+            const selectedPlusPaymentMethod = getPlusPaymentMethodLabel(
+              stateUpdates.plusPaymentMethod ?? currentState?.plusPaymentMethod ?? 'paypal'
+            );
             await addLog(
               Boolean(updates.plusModeEnabled)
                 ? `Plus 模式已开启，已切换为 Plus Checkout 步骤，当前支付方式：${selectedPlusPaymentMethod}。`
@@ -816,11 +1072,9 @@
               'info'
             );
           } else if (plusPaymentChanged && nextPlusModeEnabled) {
-            const selectedPlusPaymentMethod = String(
+            const selectedPlusPaymentMethod = getPlusPaymentMethodLabel(
               stateUpdates.plusPaymentMethod ?? currentState?.plusPaymentMethod ?? 'paypal'
-            ).trim().toLowerCase() === 'gopay'
-              ? 'GoPay'
-              : 'PayPal';
+            );
             await addLog(`Plus 支付方式已切换为 ${selectedPlusPaymentMethod}，已更新对应的 Plus 步骤。`, 'info');
           } else if (
             typeof isCodex2ApiLoginOnlyMode === 'function'
@@ -834,6 +1088,20 @@
             );
           }
           return { ok: true, state: await getState(), proxyRouting };
+        }
+
+        case 'REFRESH_GPC_CARD_BALANCE': {
+          if (typeof refreshGpcCardBalance !== 'function') {
+            throw new Error('GPC API Key 余额查询能力尚未接入。');
+          }
+          const state = await getState();
+          const result = await refreshGpcCardBalance({
+            ...(state || {}),
+            ...(message.payload || {}),
+          }, {
+            reason: message.payload?.reason,
+          });
+          return { ok: true, ...result };
         }
 
         case 'RUN_IP_PROXY_AUTO_SYNC_NOW': {
@@ -1096,6 +1364,26 @@
           await setEmailState(message.payload.email);
           await resumeAutoRun();
           return { ok: true, email: message.payload.email };
+        }
+
+        case 'SET_SIGNUP_PHONE_STATE': {
+          const state = await getState();
+          if (isAutoRunLockedState(state)) {
+            throw new Error('自动流程运行中，当前不能手动修改注册手机号。');
+          }
+          const phoneNumber = resolveSignupPhonePayload(message.payload) || null;
+          await setSignupPhoneStateSilently(phoneNumber);
+          return { ok: true, phoneNumber };
+        }
+
+        case 'SAVE_SIGNUP_PHONE': {
+          const state = await getState();
+          if (isAutoRunLockedState(state)) {
+            throw new Error('自动流程运行中，当前不能手动修改注册手机号。');
+          }
+          const phoneNumber = resolveSignupPhonePayload(message.payload) || null;
+          await setSignupPhoneState(phoneNumber);
+          return { ok: true, phoneNumber };
         }
 
         case 'FETCH_GENERATED_EMAIL': {

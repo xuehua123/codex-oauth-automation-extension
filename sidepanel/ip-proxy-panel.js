@@ -1164,9 +1164,13 @@ function formatIpProxyRuntimeStatus(state = latestState) {
   }
   if (reason === 'connectivity_failed') {
     const prefix = endpointSummary ? `当前代理：${endpointSummary}${accountSourceTag}` : '当前代理：未知';
+    const targetUnreachable = /真实目标|chatgpt\.com 不可达|target:page_context/i.test(errorText || details);
+    const exitPart = exitIp ? `；当前出口：${exitSummary}` : '';
     return {
       stateClass: 'state-error',
-      text: `${prefix}；连通性失败，请切换节点或重试。`,
+      text: targetUnreachable && exitIp
+        ? `${prefix}${exitPart}；ChatGPT 目标不可达，请切换支持 ChatGPT 的节点。`
+        : `${prefix}${exitPart}；连通性失败，请切换节点或重试。`,
       details: errorText || details,
       hideCurrentDisplay: true,
     };
@@ -1248,6 +1252,35 @@ function setIpProxyEnabledInlineStatus(state = {}, enabled = getSelectedIpProxyE
   }
 }
 
+function updateIpProxyPromoOverflow() {
+  if (
+    typeof ipProxyPromo === 'undefined'
+    || typeof ipProxyPromoText === 'undefined'
+    || !ipProxyPromo
+    || !ipProxyPromoText
+  ) {
+    return;
+  }
+  if (!ipProxyPromo.getClientRects().length) {
+    ipProxyPromo.classList.remove('is-overflowing');
+    return;
+  }
+  const overflowing = ipProxyPromoText.scrollWidth > Math.max(0, ipProxyPromo.clientWidth - 2);
+  ipProxyPromo.classList.toggle('is-overflowing', overflowing);
+}
+
+function scheduleIpProxyPromoOverflowCheck() {
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    globalThis.requestAnimationFrame(updateIpProxyPromoOverflow);
+    return;
+  }
+  globalThis.setTimeout(updateIpProxyPromoOverflow, 0);
+}
+
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('resize', scheduleIpProxyPromoOverflowCheck);
+}
+
 function updateIpProxyUI(state = latestState) {
   const enabled = getSelectedIpProxyEnabled();
   const showSettings = enabled && ipProxySectionExpanded;
@@ -1279,6 +1312,9 @@ function updateIpProxyUI(state = latestState) {
   if (rowIpProxyFold) {
     rowIpProxyFold.style.display = showSettings ? '' : 'none';
   }
+  if (rowIpProxyPromo) {
+    rowIpProxyPromo.style.display = showSettings ? '' : 'none';
+  }
   if (rowIpProxyService) {
     rowIpProxyService.style.display = showSettings ? '' : 'none';
   }
@@ -1303,11 +1339,13 @@ function updateIpProxyUI(state = latestState) {
   if (rowIpProxyPoolTargetCount) {
     rowIpProxyPoolTargetCount.style.display = showSettings ? '' : 'none';
   }
-  if (rowIpProxyAutoSyncEnabled) {
-    rowIpProxyAutoSyncEnabled.style.display = showSettings ? '' : 'none';
+  const autoSyncEnabledRow = typeof rowIpProxyAutoSyncEnabled !== 'undefined' ? rowIpProxyAutoSyncEnabled : null;
+  const autoSyncIntervalRow = typeof rowIpProxyAutoSyncInterval !== 'undefined' ? rowIpProxyAutoSyncInterval : null;
+  if (autoSyncEnabledRow) {
+    autoSyncEnabledRow.style.display = showSettings ? '' : 'none';
   }
-  if (rowIpProxyAutoSyncInterval) {
-    rowIpProxyAutoSyncInterval.style.display = showSettings ? '' : 'none';
+  if (autoSyncIntervalRow) {
+    autoSyncIntervalRow.style.display = showSettings ? '' : 'none';
   }
   if (rowIpProxyHost) {
     rowIpProxyHost.style.display = showSettings && isAccountMode ? '' : 'none';
@@ -1339,6 +1377,7 @@ function updateIpProxyUI(state = latestState) {
   if (ipProxyLayout) {
     ipProxyLayout.classList.toggle('is-account-only', !apiModeAvailable);
   }
+  scheduleIpProxyPromoOverflowCheck();
   if (selectIpProxyService) {
     selectIpProxyService.value = service;
     selectIpProxyService.disabled = true;
@@ -1402,15 +1441,17 @@ function updateIpProxyUI(state = latestState) {
   if (inputIpProxyAccountList) {
     inputIpProxyAccountList.disabled = !enabled || !isAccountMode || !accountListAvailable;
   }
-  if (inputIpProxyAutoSyncEnabled) {
-    inputIpProxyAutoSyncEnabled.disabled = !enabled;
+  const autoSyncEnabledInput = typeof inputIpProxyAutoSyncEnabled !== 'undefined' ? inputIpProxyAutoSyncEnabled : null;
+  const autoSyncIntervalInput = typeof inputIpProxyAutoSyncIntervalMinutes !== 'undefined' ? inputIpProxyAutoSyncIntervalMinutes : null;
+  if (autoSyncEnabledInput) {
+    autoSyncEnabledInput.disabled = !enabled;
   }
-  if (inputIpProxyAutoSyncIntervalMinutes) {
-    const autoSyncEnabled = Boolean(inputIpProxyAutoSyncEnabled?.checked);
-    if (!Number.isFinite(Number.parseInt(String(inputIpProxyAutoSyncIntervalMinutes.value || '').trim(), 10))) {
-      inputIpProxyAutoSyncIntervalMinutes.value = '15';
+  if (autoSyncIntervalInput) {
+    const autoSyncEnabled = Boolean(autoSyncEnabledInput?.checked);
+    if (!Number.isFinite(Number.parseInt(String(autoSyncIntervalInput.value || '').trim(), 10))) {
+      autoSyncIntervalInput.value = '15';
     }
-    inputIpProxyAutoSyncIntervalMinutes.disabled = !enabled || !autoSyncEnabled;
+    autoSyncIntervalInput.disabled = !enabled || !autoSyncEnabled;
   }
 
   const runtimeStatus = formatIpProxyRuntimeStatus(runtimeState);

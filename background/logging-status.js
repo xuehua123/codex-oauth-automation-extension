@@ -27,14 +27,33 @@
         'hotmail-api': 'Hotmail（API对接/本地助手）',
         'luckmail-api': 'LuckMail（API 购邮）',
         'cloudflare-temp-email': 'Cloudflare Temp Email',
+        'cloudmail': 'Cloud Mail',
       };
       return labels[source] || source || '未知来源';
     }
 
-    async function addLog(message, level = 'info') {
+    function normalizeLogStep(value) {
+      const step = Math.floor(Number(value) || 0);
+      return step > 0 ? step : null;
+    }
+
+    function buildLogEntry(message, level = 'info', options = {}) {
+      const normalizedOptions = options && typeof options === 'object' ? options : {};
+      const step = normalizeLogStep(normalizedOptions.step);
+      const stepKey = String(normalizedOptions.stepKey || '').trim();
+      return {
+        message: String(message || ''),
+        level,
+        timestamp: Date.now(),
+        step,
+        stepKey,
+      };
+    }
+
+    async function addLog(message, level = 'info', options = {}) {
       const state = await getState();
       const logs = state.logs || [];
-      const entry = { message, level, timestamp: Date.now() };
+      const entry = buildLogEntry(message, level, options);
       logs.push(entry);
       if (logs.length > 500) logs.splice(0, logs.length - 500);
       await setState({ logs });
@@ -53,7 +72,9 @@
     }
 
     function getErrorMessage(error) {
-      return String(typeof error === 'string' ? error : error?.message || '');
+      return String(typeof error === 'string' ? error : error?.message || '')
+        .replace(/^GPC_TASK_ENDED::/i, '')
+        .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '');
     }
 
     function isVerificationMailPollingError(error) {
@@ -83,6 +104,8 @@
           return 'OAuth 授权页';
         case 'add_phone_page':
           return '手机号页';
+        case 'add_email_page':
+          return '添加邮箱页';
         case 'phone_verification_page':
           return '手机验证码页';
         default:
@@ -92,7 +115,7 @@
 
     function isRestartCurrentAttemptError(error) {
       const message = String(typeof error === 'string' ? error : error?.message || '');
-      return /当前邮箱已存在，需要重新开始新一轮/.test(message);
+      return /当前邮箱已存在，需要重新开始新一轮|SIGNUP_PHONE_PASSWORD_MISMATCH::/i.test(message);
     }
 
     function isSignupUserAlreadyExistsFailure(error) {

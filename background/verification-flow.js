@@ -1,15 +1,16 @@
 ﻿(function attachBackgroundVerificationFlow(root, factory) {
   root.MultiPageBackgroundVerificationFlow = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundVerificationFlowModule() {
-  const ICLOUD_MAIL_POLL_RESPONSE_TIMEOUT_CAP_MS = 18000;
-  const ICLOUD_MAIL_POLL_TOTAL_TIMEOUT_CAP_MS = 22000;
+  const ICLOUD_MAIL_POLL_MIN_ATTEMPTS = 5;
+  const ICLOUD_MAIL_POLL_TIMEOUT_MARGIN_MS = 25000;
 
   function createVerificationFlowHelpers(deps = {}) {
     const {
-      addLog,
+      addLog: rawAddLog = async () => {},
       chrome,
       closeConflictingTabsForSource,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
+      CLOUD_MAIL_PROVIDER = 'cloudmail',
       completeStepFromBackground,
       confirmCustomVerificationStepBypassRequest,
       getHotmailVerificationPollConfig,
@@ -25,6 +26,7 @@
       MAIL_2925_VERIFICATION_INTERVAL_MS,
       MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
       pollCloudflareTempEmailVerificationCode,
+      pollCloudMailVerificationCode,
       pollHotmailVerificationCode,
       pollIkonaOniVerificationCode,
       pollLuckmailVerificationCode,
@@ -38,6 +40,33 @@
       throwIfStopped,
       VERIFICATION_POLL_MAX_ROUNDS,
     } = deps;
+    let activeVerificationLogStep = null;
+
+    function normalizeLogStep(value) {
+      const step = Math.floor(Number(value) || 0);
+      return step > 0 ? step : null;
+    }
+
+    function normalizeVerificationLogMessage(message) {
+      return String(message || '')
+        .replace(/^步骤\s*\d+\s*[:：]\s*/, '')
+        .replace(/^Step\s+\d+\s*[:：]\s*/i, '')
+        .trim();
+    }
+
+    function addLog(message, level = 'info', options = {}) {
+      const normalizedOptions = options && typeof options === 'object' ? { ...options } : {};
+      const step = normalizeLogStep(normalizedOptions.step || normalizedOptions.visibleStep)
+        || normalizeLogStep(activeVerificationLogStep);
+      if (step) {
+        normalizedOptions.step = step;
+        if (!normalizedOptions.stepKey) {
+          normalizedOptions.stepKey = step === 4 ? 'fetch-signup-code' : 'fetch-login-code';
+        }
+      }
+      delete normalizedOptions.visibleStep;
+      return rawAddLog(normalizeVerificationLogMessage(message), level, normalizedOptions);
+    }
 
     const isRetryableVerificationTransportError = typeof deps.isRetryableContentScriptTransportError === 'function'
       ? deps.isRetryableContentScriptTransportError
@@ -53,30 +82,54 @@
       return step === 4 ? '注册' : '登录';
     }
 
-    function capIcloudMailPollingTimeouts(mail, timedPoll) {
+    function isIcloudMail(mail) {
+      return mail?.source === 'icloud-mail' || mail?.provider === 'icloud';
+    }
+
+    function normalizeIcloudMailPollPayload(mail, payload = {}) {
+      if (!isIcloudMail(mail)) {
+        return payload;
+      }
+
+      const currentAttempts = Math.max(1, Math.floor(Number(payload?.maxAttempts) || 1));
+      if (currentAttempts >= ICLOUD_MAIL_POLL_MIN_ATTEMPTS) {
+        return payload;
+      }
+
+      return {
+        ...payload,
+        maxAttempts: ICLOUD_MAIL_POLL_MIN_ATTEMPTS,
+      };
+    }
+
+    function getMailPollingResponseTimeoutMs(payload = {}) {
+      const maxAttempts = Math.max(1, Math.floor(Number(payload?.maxAttempts) || 1));
+      const intervalMs = Math.max(1, Number(payload?.intervalMs) || 3000);
+      return Math.max(45000, maxAttempts * intervalMs + ICLOUD_MAIL_POLL_TIMEOUT_MARGIN_MS);
+    }
+
+    function resolveMailPollingTimeouts(mail, timedPoll) {
+      const payload = normalizeIcloudMailPollPayload(mail, timedPoll?.payload || {});
       const defaultResponseTimeoutMs = Math.max(1000, Number(timedPoll?.responseTimeoutMs) || 30000);
       const defaultTimeoutMs = Math.max(defaultResponseTimeoutMs, Number(timedPoll?.timeoutMs) || defaultResponseTimeoutMs);
-      if (mail?.source !== 'icloud-mail') {
+      if (!isIcloudMail(mail)) {
         return {
+          payload,
           responseTimeoutMs: defaultResponseTimeoutMs,
           timeoutMs: defaultTimeoutMs,
-          capped: false,
         };
       }
 
-      const cappedResponseTimeoutMs = Math.max(
-        5000,
-        Math.min(defaultResponseTimeoutMs, ICLOUD_MAIL_POLL_RESPONSE_TIMEOUT_CAP_MS)
+      const derivedResponseTimeoutMs = Math.max(
+        defaultResponseTimeoutMs,
+        getMailPollingResponseTimeoutMs(payload)
       );
-      const cappedTimeoutMs = Math.max(
-        cappedResponseTimeoutMs,
-        Math.min(defaultTimeoutMs, ICLOUD_MAIL_POLL_TOTAL_TIMEOUT_CAP_MS)
-      );
+      const derivedTimeoutMs = Math.max(defaultTimeoutMs, derivedResponseTimeoutMs);
 
       return {
-        responseTimeoutMs: cappedResponseTimeoutMs,
-        timeoutMs: cappedTimeoutMs,
-        capped: cappedResponseTimeoutMs < defaultResponseTimeoutMs || cappedTimeoutMs < defaultTimeoutMs,
+        payload,
+        responseTimeoutMs: derivedResponseTimeoutMs,
+        timeoutMs: derivedTimeoutMs,
       };
     }
 
@@ -110,7 +163,7 @@
         if (!['auth.openai.com', 'auth0.openai.com', 'accounts.openai.com'].includes(host)) {
           return false;
         }
-        return /\/create-account\/profile(?:[/?#]|$)/i.test(String(parsed.pathname || ''));
+        return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile)(?:[/?#]|$)/i.test(String(parsed.pathname || ''));
       } catch {
         return false;
       }
@@ -200,11 +253,21 @@
 
           const authState = String(result?.state || '').trim();
           const authUrl = String(result?.url || '').trim();
+          const verificationErrorText = String(result?.verificationErrorText || '').trim();
           lastSnapshot = {
             state: authState || 'unknown',
             url: authUrl,
           };
 
+          if (authState === 'verification_page' && verificationErrorText) {
+            return {
+              success: false,
+              reason: 'invalid_code',
+              invalidCode: true,
+              errorText: verificationErrorText,
+              url: authUrl,
+            };
+          }
           if (authState === 'oauth_consent_page') {
             return {
               success: true,
@@ -522,6 +585,8 @@
             timeoutMs: responseTimeoutMs,
             responseTimeoutMs,
             maxRecoveryAttempts: 2,
+            logStep: activeVerificationLogStep,
+            logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
           }
         );
 
@@ -587,6 +652,8 @@
               timeoutMs: 10000,
               responseTimeoutMs: 5000,
               maxRecoveryAttempts: 1,
+              logStep: activeVerificationLogStep,
+              logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
             }
           );
         } catch (_) {
@@ -678,25 +745,21 @@
               pollOverrides,
               `轮询${getVerificationCodeLabel(step)}验证码邮箱`
             );
-            const timeoutWindow = capIcloudMailPollingTimeouts(mail, timedPoll);
-            if (timeoutWindow.capped) {
-              await addLog(
-                `步骤 ${step}：iCloud 邮箱轮询已启用快速超时保护（${Math.ceil(timeoutWindow.timeoutMs / 1000)} 秒），避免页面无响应导致长时间卡住。`,
-                'info'
-              );
-            }
+            const timeoutWindow = resolveMailPollingTimeouts(mail, timedPoll);
             const result = await sendToMailContentScriptResilient(
               mail,
               {
                 type: 'POLL_EMAIL',
                 step,
                 source: 'background',
-                payload: timedPoll.payload,
+                payload: timeoutWindow.payload,
               },
               {
                 timeoutMs: timeoutWindow.timeoutMs,
                 maxRecoveryAttempts: 2,
                 responseTimeoutMs: timeoutWindow.responseTimeoutMs,
+                logStep: activeVerificationLogStep,
+                logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
               }
             );
 
@@ -898,6 +961,13 @@
         }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
         return pollCloudflareTempEmailVerificationCode(step, state, timedPoll.payload);
       }
+      if (mail.provider === CLOUD_MAIL_PROVIDER) {
+        const timedPoll = await applyMailPollingTimeBudget(step, {
+          ...getVerificationPollPayload(step, state),
+          ...cleanPollOverrides,
+        }, cleanPollOverrides, `轮询${getVerificationCodeLabel(step)}验证码邮箱`);
+        return pollCloudMailVerificationCode(step, state, timedPoll.payload);
+      }
       if (TEMPMAIL_PUBLIC_PROVIDER && mail.provider === TEMPMAIL_PUBLIC_PROVIDER) {
         const timedPoll = await applyMailPollingTimeBudget(step, {
           ...getVerificationPollPayload(step, state),
@@ -958,25 +1028,21 @@
             pollOverrides,
             `轮询${getVerificationCodeLabel(step)}验证码邮箱`
           );
-          const timeoutWindow = capIcloudMailPollingTimeouts(mail, timedPoll);
-          if (timeoutWindow.capped) {
-            await addLog(
-              `步骤 ${step}：iCloud 邮箱轮询已启用快速超时保护（${Math.ceil(timeoutWindow.timeoutMs / 1000)} 秒），避免页面无响应导致长时间卡住。`,
-              'info'
-            );
-          }
+          const timeoutWindow = resolveMailPollingTimeouts(mail, timedPoll);
           const result = await sendToMailContentScriptResilient(
             mail,
             {
               type: 'POLL_EMAIL',
               step,
               source: 'background',
-              payload: timedPoll.payload,
+              payload: timeoutWindow.payload,
             },
             {
               timeoutMs: timeoutWindow.timeoutMs,
               maxRecoveryAttempts: 2,
               responseTimeoutMs: timeoutWindow.responseTimeoutMs,
+              logStep: activeVerificationLogStep,
+              logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
             }
           );
 
@@ -1018,6 +1084,8 @@
     }
 
     async function submitVerificationCode(step, code, options = {}) {
+      const completionStep = getCompletionStep(step, options);
+      const authLoginStep = completionStep >= 11 ? 10 : 7;
       const signupTabId = await getTabId('signup-page');
       if (!signupTabId) {
         throw new Error('认证页面标签页已关闭，无法填写验证码。');
@@ -1040,13 +1108,16 @@
         },
       };
       let result;
-      if (typeof sendToContentScriptResilient === 'function') {
+      const shouldAvoidReplaySubmit = step === 8;
+      if (typeof sendToContentScriptResilient === 'function' && !shouldAvoidReplaySubmit) {
         try {
           result = await sendToContentScriptResilient('signup-page', message, {
             timeoutMs: Math.max(baseResponseTimeoutMs + 15000, 30000),
             retryDelayMs: 700,
             responseTimeoutMs: baseResponseTimeoutMs,
-            logMessage: `步骤 ${step}：认证页正在切换，等待页面重新就绪后继续确认验证码提交结果...`,
+            logMessage: '认证页正在切换，等待页面重新就绪后继续确认验证码提交结果...',
+            logStep: completionStep,
+            logStepKey: step === 4 ? 'fetch-signup-code' : 'fetch-login-code',
           });
         } catch (err) {
           if (step === 4 && isRetryableVerificationTransportError(err)) {
@@ -1076,9 +1147,15 @@
             });
             if (fallback.success) {
               if (fallback.addPhonePage) {
-                await addLog('步骤 8：验证码提交后通信中断，但页面已进入手机号验证页，按提交成功继续。', 'warn');
+                await addLog('验证码提交后通信中断，但页面已进入手机号验证页，按提交成功继续。', 'warn', {
+                  step: completionStep,
+                  stepKey: 'fetch-login-code',
+                });
               } else {
-                await addLog('步骤 8：验证码提交后通信中断，但页面已进入 OAuth 授权页，按提交成功继续。', 'warn');
+                await addLog('验证码提交后通信中断，但页面已进入 OAuth 授权页，按提交成功继续。', 'warn', {
+                  step: completionStep,
+                  stepKey: 'fetch-login-code',
+                });
               }
               return {
                 success: true,
@@ -1090,7 +1167,57 @@
             }
             if (fallback.restartStep7) {
               const urlPart = fallback.url ? ` URL: ${fallback.url}` : '';
-              throw new Error(`STEP8_RESTART_STEP7::步骤 8：验证码提交后认证页进入登录超时报错页，请回到步骤 7 重新开始。${urlPart}`.trim());
+              throw new Error(`STEP8_RESTART_STEP7::步骤 ${completionStep}：验证码提交后认证页进入登录超时报错页，请回到步骤 ${authLoginStep} 重新开始。${urlPart}`.trim());
+            }
+          }
+          throw err;
+        }
+      } else if (shouldAvoidReplaySubmit) {
+        try {
+          result = await sendToContentScript('signup-page', message, {
+            responseTimeoutMs: baseResponseTimeoutMs,
+          });
+        } catch (err) {
+          if (isRetryableVerificationTransportError(err)) {
+            await addLog('认证页正在切换，等待页面重新就绪后继续确认验证码提交结果...', 'warn', {
+              step: completionStep,
+              stepKey: 'fetch-login-code',
+            });
+            const fallback = await detectStep8PostSubmitFallback({
+              step,
+              timeoutMs: 9000,
+              pollIntervalMs: 300,
+            });
+            if (fallback.invalidCode) {
+              return {
+                invalidCode: true,
+                errorText: fallback.errorText || '验证码被拒绝。',
+                url: fallback.url || '',
+              };
+            }
+            if (fallback.success) {
+              if (fallback.addPhonePage) {
+                await addLog('验证码提交后通信中断，但页面已进入手机号验证页，按提交成功继续。', 'warn', {
+                  step: completionStep,
+                  stepKey: 'fetch-login-code',
+                });
+              } else {
+                await addLog('验证码提交后通信中断，但页面已进入 OAuth 授权页，按提交成功继续。', 'warn', {
+                  step: completionStep,
+                  stepKey: 'fetch-login-code',
+                });
+              }
+              return {
+                success: true,
+                assumed: true,
+                transportRecovered: true,
+                addPhonePage: Boolean(fallback.addPhonePage),
+                url: fallback.url || '',
+              };
+            }
+            if (fallback.restartStep7) {
+              const urlPart = fallback.url ? ` URL: ${fallback.url}` : '';
+              throw new Error(`STEP8_RESTART_STEP7::步骤 ${completionStep}：验证码提交后认证页进入登录超时报错页，请回到步骤 ${authLoginStep} 重新开始。${urlPart}`.trim());
             }
           }
           throw err;
@@ -1110,6 +1237,7 @@
 
     async function resolveVerificationStep(step, state, mail, options = {}) {
       const completionStep = getCompletionStep(step, options);
+      activeVerificationLogStep = completionStep;
       const stateKey = getVerificationCodeStateKey(step);
       const rejectedCodes = new Set();
       const hotmailPollConfig = mail.provider === HOTMAIL_PROVIDER
@@ -1238,20 +1366,8 @@
               continue;
             }
 
-            const remainingBeforeResendMs = resendIntervalMs > 0 && lastResendAt > 0
-              ? Math.max(0, resendIntervalMs - (Date.now() - lastResendAt))
-              : 0;
-            if (remainingBeforeResendMs > 0) {
-              await addLog(
-                `步骤 ${step}：提交失败后距离下次重新发送验证码还差 ${Math.ceil(remainingBeforeResendMs / 1000)} 秒，先继续刷新邮箱（${attempt + 1}/${maxSubmitAttempts}）...`,
-                'warn'
-              );
-              await sleepWithStop(Math.min(remainingBeforeResendMs, 2000));
-              continue;
-            }
-
             if (remainingAutomaticResendCount <= 0) {
-              await addLog(`步骤 ${step}：已达到自动重新发送验证码次数上限，将直接使用当前时间窗口继续重试。`, 'warn');
+              await addLog(`步骤 ${step}：已达到自动重新发送验证码次数上限，将排除已拒绝验证码并继续轮询新邮件。`, 'warn');
               continue;
             }
 

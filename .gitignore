@@ -12,3 +12,9 @@
 .playwright-cli
 /output
 /.runtime
+/docs/新步骤顺序
+__pycache__/
+*.pyc
+.worktrees/
+# Local exported runtime settings
+/config.json

@@ -16,6 +16,21 @@ test('navigation utils module exposes a factory', () => {
   assert.equal(typeof api?.createNavigationUtils, 'function');
 });
 
+test('navigation utils recognize signup password pages for email and phone signup', () => {
+  const source = fs.readFileSync('background/navigation-utils.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundNavigationUtils;`)(globalScope);
+  const utils = api.createNavigationUtils({
+    DEFAULT_CODEX2API_URL: 'http://localhost:8080/admin/accounts',
+    DEFAULT_SUB2API_URL: 'https://sub.example.com/admin/accounts',
+    normalizeLocalCpaStep9Mode: (value) => value,
+  });
+
+  assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/create-account/password'), true);
+  assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/log-in/password'), true);
+  assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/log-in'), false);
+});
+
 test('navigation utils treat 126 mail hosts as part of the shared NetEase mail family', () => {
   const source = fs.readFileSync('background/navigation-utils.js', 'utf8');
   const globalScope = {};
@@ -54,6 +69,20 @@ test('navigation utils support codex2api mode and url normalization', () => {
   );
   assert.equal(utils.getPanelMode({ panelMode: 'codex2api' }), 'codex2api');
   assert.equal(utils.getPanelModeLabel('codex2api'), 'Codex2API');
+});
+
+test('navigation utils leaves SUB2API url empty when no default is configured', () => {
+  const source = fs.readFileSync('background/navigation-utils.js', 'utf8');
+  const globalScope = {};
+
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundNavigationUtils;`)(globalScope);
+  const utils = api.createNavigationUtils({
+    DEFAULT_CODEX2API_URL: 'http://localhost:8080/admin/accounts',
+    DEFAULT_SUB2API_URL: '',
+    normalizeLocalCpaStep9Mode: (value) => value,
+  });
+
+  assert.equal(utils.normalizeSub2ApiUrl(''), '');
 });
 
 test('navigation utils recognize the iCloud mail tab family on both supported hosts', () => {

@@ -115,6 +115,37 @@ return {
   );
 });
 
+test('ensureStep8VerificationPageReady allows add-email handoff only when requested', async () => {
+  const api = new Function(`
+function getLoginAuthStateLabel(state) {
+  return state === 'add_email_page' ? '添加邮箱页' : 'unknown page';
+}
+
+async function getLoginAuthStateFromContent() {
+  return {
+    state: 'add_email_page',
+    url: 'https://auth.openai.com/add-email',
+  };
+}
+
+${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
+
+return {
+  run(options) {
+    return ensureStep8VerificationPageReady(options || {});
+  },
+};
+`)();
+
+  await assert.rejects(
+    () => api.run({}),
+    /当前未进入登录验证码页面/
+  );
+
+  const result = await api.run({ allowAddEmailPage: true });
+  assert.equal(result.state, 'add_email_page');
+});
+
 test('step 8 reruns step 7 when auth page enters login timeout retry state', async () => {
   const calls = {
     rerunStep7: 0,
@@ -185,7 +216,9 @@ test('step 8 reruns step 7 when auth page enters login timeout retry state', asy
   assert.equal(calls.logs.some(({ message }) => /重新开始|重新发起/.test(message)), true);
   assert.deepStrictEqual(calls.rerunOptions, [
     {
-      logMessage: '步骤 8：认证页进入重试/超时报错状态，正在回到步骤 7 重新发起登录流程...',
+      logMessage: '认证页进入重试/超时报错状态，正在回到步骤 7 重新发起登录流程...',
+      logStep: 8,
+      logStepKey: 'fetch-login-code',
     },
   ]);
 });

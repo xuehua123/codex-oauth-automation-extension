@@ -3,13 +3,18 @@
 })(typeof self !== 'undefined' ? self : globalThis, function createBackgroundPhoneVerificationModule() {
   function createPhoneVerificationHelpers(deps = {}) {
     const {
-      addLog,
+      addLog: rawAddLog = async () => {},
       ensureStep8SignupPageReady,
       fetchImpl = (...args) => fetch(...args),
+      generateRandomBirthday,
+      generateRandomName,
       getOAuthFlowStepTimeoutMs,
       getState,
+      requestStop = null,
+      readAuthTabSnapshot = null,
       sendToContentScript,
       sendToContentScriptResilient,
+      navigateAuthTabToAddPhone = null,
       setState,
       broadcastDataUpdate = null,
       sleepWithStop,
@@ -23,6 +28,7 @@
       DEFAULT_NEX_SMS_COUNTRY_ORDER = [1],
       DEFAULT_NEX_SMS_SERVICE_CODE = 'ot',
       DEFAULT_HERO_SMS_REUSE_ENABLED = true,
+      createFiveSimProvider = null,
       HERO_SMS_COUNTRY_ID = 52,
       HERO_SMS_COUNTRY_LABEL = 'Thailand',
       HERO_SMS_SERVICE_CODE = 'dr',
@@ -37,6 +43,7 @@
     const PHONE_VERIFICATION_CODE_STATE_KEY = 'currentPhoneVerificationCode';
     const REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'reusablePhoneActivation';
     const REUSABLE_PHONE_ACTIVATION_POOL_STATE_KEY = 'phoneReusableActivationPool';
+    const FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY = 'freeReusablePhoneActivation';
     const PREFERRED_PHONE_ACTIVATION_STATE_KEY = 'phonePreferredActivation';
     const PHONE_RUNTIME_COUNTDOWN_ENDS_AT_KEY = 'currentPhoneVerificationCountdownEndsAt';
     const PHONE_RUNTIME_COUNTDOWN_WINDOW_INDEX_KEY = 'currentPhoneVerificationCountdownWindowIndex';
@@ -47,6 +54,7 @@
     const HERO_SMS_LAST_PRICE_COUNTRY_LABEL_KEY = 'heroSmsLastPriceCountryLabel';
     const HERO_SMS_LAST_PRICE_USER_LIMIT_KEY = 'heroSmsLastPriceUserLimit';
     const HERO_SMS_LAST_PRICE_AT_KEY = 'heroSmsLastPriceAt';
+    const FIVE_SIM_RATE_LIMIT_ERROR_PREFIX = 'FIVE_SIM_RATE_LIMIT::';
     const PHONE_CODE_WAIT_SECONDS_MIN = 15;
     const PHONE_CODE_WAIT_SECONDS_MAX = 300;
     const PHONE_CODE_TIMEOUT_WINDOWS_MIN = 1;
@@ -72,21 +80,88 @@
     const HERO_SMS_ACQUIRE_PRIORITY_PRICE_HIGH = 'price_high';
     const PHONE_SMS_PROVIDER_HERO = 'hero-sms';
     const PHONE_SMS_PROVIDER_5SIM = '5sim';
+    const PHONE_SMS_PROVIDER_HERO_SMS = PHONE_SMS_PROVIDER_HERO;
+    const PHONE_SMS_PROVIDER_FIVE_SIM = PHONE_SMS_PROVIDER_5SIM;
     const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
     const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO;
-    const DEFAULT_PHONE_SMS_PROVIDER_ORDER = [
+    const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
       PHONE_SMS_PROVIDER_HERO,
       PHONE_SMS_PROVIDER_5SIM,
       PHONE_SMS_PROVIDER_NEXSMS,
-    ];
+    ]);
     const MAX_PHONE_REUSABLE_POOL = 12;
     const PHONE_CODE_TIMEOUT_ERROR_PREFIX = 'PHONE_CODE_TIMEOUT::';
+    const PHONE_STALE_SIGNUP_EMAIL_VERIFICATION_ERROR_CODE = 'PHONE_SIGNUP_STALE_EMAIL_VERIFICATION';
     const PHONE_RESTART_STEP7_ERROR_PREFIX = 'PHONE_RESTART_STEP7::';
     const PHONE_RESEND_THROTTLED_ERROR_PREFIX = 'PHONE_RESEND_THROTTLED::';
+    const PHONE_RESEND_BANNED_NUMBER_ERROR_PREFIX = 'PHONE_RESEND_BANNED_NUMBER::';
+    const PHONE_RESEND_SERVER_ERROR_PREFIX = 'PHONE_RESEND_SERVER_ERROR::';
     const PHONE_ROUTE_405_RECOVERY_FAILED_ERROR_PREFIX = 'PHONE_ROUTE_405_RECOVERY_FAILED::';
+    const PHONE_MANUAL_FREE_REUSE_ERROR_PREFIX = 'PHONE_MANUAL_FREE_REUSE::';
+    const PHONE_AUTO_FREE_REUSE_PREPARE_ERROR_PREFIX = 'PHONE_AUTO_FREE_REUSE_PREPARE::';
+    const FREE_PHONE_REUSE_PREPARE_TIMEOUT_MS = 20000;
+    const FREE_PHONE_REUSE_PREPARE_INTERVAL_MS = 2000;
+    const FREE_PHONE_REUSE_PREPARE_MAX_ROUNDS = 10;
     const PHONE_SMS_FAILURE_SKIP_THRESHOLD = 2;
     const MAX_ACTIVATION_PRICE_HINTS = 256;
+    const HERO_SMS_COUNTRY_BY_PHONE_PREFIX = Object.freeze([
+      { prefix: '84', id: 10, label: 'Vietnam' },
+      { prefix: '66', id: 52, label: 'Thailand' },
+      { prefix: '62', id: 6, label: 'Indonesia' },
+      { prefix: '44', id: 16, label: 'United Kingdom' },
+      { prefix: '81', id: 151, label: 'Japan' },
+      { prefix: '49', id: 43, label: 'Germany' },
+      { prefix: '33', id: 73, label: 'France' },
+      { prefix: '1', id: 187, label: 'USA' },
+    ]);
     const activationPriceHintsByKey = new Map();
+    let activePhoneVerificationLogStep = null;
+    let activePhoneVerificationLogStepKey = null;
+
+    function normalizeLogStep(value) {
+      const step = Math.floor(Number(value) || 0);
+      return step > 0 ? step : null;
+    }
+
+    function getActivePhoneVerificationVisibleStep(fallback = 9) {
+      return normalizeLogStep(activePhoneVerificationLogStep) || fallback;
+    }
+
+    function normalizePhoneVerificationLogMessage(message) {
+      return String(message || '')
+        .replace(/^Step\s+9\s+diagnostics\s*:\s*/i, 'diagnostics: ')
+        .replace(/^Step\s+9\s*[:：]\s*/i, '')
+        .replace(/^步骤\s*9\s*[:：]\s*/, '')
+        .replace(/\bstep\s+9\b/gi, 'current step')
+        .trim();
+    }
+
+    async function addLog(message, level = 'info', options = {}) {
+      const normalizedOptions = options && typeof options === 'object' ? { ...options } : {};
+      const step = normalizeLogStep(normalizedOptions.step || normalizedOptions.visibleStep)
+        || normalizeLogStep(activePhoneVerificationLogStep);
+      if (step) {
+        normalizedOptions.step = step;
+        if (!normalizedOptions.stepKey) {
+          normalizedOptions.stepKey = activePhoneVerificationLogStepKey || 'phone-verification';
+        }
+      }
+      delete normalizedOptions.visibleStep;
+      return rawAddLog(normalizePhoneVerificationLogMessage(message), level, normalizedOptions);
+    }
+
+    async function withPhoneVerificationLogContext(options = {}, action) {
+      const previousStep = activePhoneVerificationLogStep;
+      const previousStepKey = activePhoneVerificationLogStepKey;
+      activePhoneVerificationLogStep = normalizeLogStep(options.step || options.visibleStep) || previousStep;
+      activePhoneVerificationLogStepKey = String(options.stepKey || '').trim() || previousStepKey;
+      try {
+        return await action();
+      } finally {
+        activePhoneVerificationLogStep = previousStep;
+        activePhoneVerificationLogStepKey = previousStepKey;
+      }
+    }
 
     function normalizeUrl(value, fallback = DEFAULT_HERO_SMS_BASE_URL) {
       const trimmed = String(value || '').trim();
@@ -215,16 +290,46 @@
     }
 
     function resolveFiveSimCountryCandidates(state = {}) {
-      const codes = normalizeFiveSimCountryOrder(state?.fiveSimCountryOrder);
+      let codes = normalizeFiveSimCountryOrder(state?.fiveSimCountryOrder);
+      if (!codes.length) {
+        const legacyPrimary = normalizeFiveSimCountryCode(state?.fiveSimCountryId, '');
+        const legacyFallback = normalizeFiveSimCountryOrder(state?.fiveSimCountryFallback);
+        codes = normalizeFiveSimCountryOrder([
+          ...(legacyPrimary ? [legacyPrimary] : []),
+          ...legacyFallback,
+        ]);
+      }
       return codes.map((code) => ({
         code,
         id: code,
-        label: code,
+        label: (
+          code === normalizeFiveSimCountryCode(state?.fiveSimCountryId, '')
+            ? normalizeCountryLabel(state?.fiveSimCountryLabel, code)
+            : code
+        ),
       }));
     }
 
     function normalizeUseCount(value) {
       return Math.max(0, Math.floor(Number(value) || 0));
+    }
+
+    function normalizePhoneDigits(value) {
+      return String(value || '').replace(/\D+/g, '');
+    }
+
+    function phoneNumbersMatch(left, right) {
+      const leftDigits = normalizePhoneDigits(left);
+      const rightDigits = normalizePhoneDigits(right);
+      return Boolean(
+        leftDigits
+        && rightDigits
+        && (
+          leftDigits === rightDigits
+          || leftDigits.endsWith(rightDigits)
+          || rightDigits.endsWith(leftDigits)
+        )
+      );
     }
 
     function normalizeTimestampMs(value) {
@@ -270,6 +375,13 @@
       return Math.max(500, Math.min(30000, parsed));
     }
 
+    function assertFiveSimMaxPriceCompatibleWithOperator(operator, maxPriceLimit) {
+      const normalizedOperator = normalizeFiveSimCountryCode(operator, DEFAULT_FIVE_SIM_OPERATOR);
+      if (maxPriceLimit !== null && maxPriceLimit !== undefined && normalizedOperator !== DEFAULT_FIVE_SIM_OPERATOR) {
+        throw new Error('5sim maxPrice only works when operator is "any"; clear the price limit or switch operator to any before buying a number.');
+      }
+    }
+
     function normalizeHeroSmsPriceLimit(value) {
       if (value === undefined || value === null || String(value).trim() === '') {
         return null;
@@ -297,6 +409,31 @@
       return /phone\s+number\s+is\s+not\s+valid|invalid\s+phone\s+number|invalid\s+phone|not\s+a\s+valid\s+phone|号码.*无效|手机号.*无效|电话号码.*无效/i.test(text);
     }
 
+    function isPhoneNumberDeliveryRefusedError(value) {
+      const text = String(value || '').trim();
+      if (!text) {
+        return false;
+      }
+      return /无法向此电话号码发送验证码|无法向.*(?:电话号码|手机号|号码).*发送(?:验证码|短信)|(?:不能|无法).*发送.*(?:验证码|短信).*(?:电话号码|手机号|号码)|(?:cannot|can't|could\s*not|couldn't|unable\s+to)\s+(?:send|deliver).{0,80}(?:verification\s+code|code|sms|text(?:\s+message)?).{0,80}(?:phone|number)|(?:verification\s+code|sms|text(?:\s+message)?).{0,80}(?:cannot|can't|could\s*not|couldn't|unable\s+to).{0,80}(?:send|deliver)/i.test(text);
+    }
+
+    function isWhatsAppPhoneResendResult(value) {
+      if (!value) {
+        return false;
+      }
+      const text = typeof value === 'string'
+        ? value
+        : [
+          value.channel,
+          value.channelText,
+          value.text,
+          value.buttonText,
+          value.label,
+          value.message,
+        ].filter(Boolean).join(' ');
+      return /whats\s*app/i.test(String(text || ''));
+    }
+
     function isRecoverableAddPhoneSubmitError(value) {
       const text = String(value || '').trim();
       if (!text) {
@@ -322,6 +459,21 @@
 
     function normalizeCountryLabel(value = '', fallback = HERO_SMS_COUNTRY_LABEL) {
       return String(value || '').trim() || fallback;
+    }
+
+    function inferHeroSmsCountryFromPhoneNumber(phoneNumber = '') {
+      const digits = String(phoneNumber || '').replace(/\D+/g, '');
+      if (!digits) {
+        return null;
+      }
+      const match = HERO_SMS_COUNTRY_BY_PHONE_PREFIX.find((entry) => digits.startsWith(entry.prefix));
+      if (!match) {
+        return null;
+      }
+      return {
+        id: normalizeCountryId(match.id, 0),
+        label: normalizeCountryLabel(match.label, `Country #${match.id}`),
+      };
     }
 
     function normalizePhoneCodeWaitSeconds(value) {
@@ -361,6 +513,15 @@
         return Boolean(DEFAULT_HERO_SMS_REUSE_ENABLED);
       }
       return Boolean(value);
+    }
+
+    function normalizeFreePhoneReuseEnabled(value) {
+      return Boolean(value);
+    }
+
+    function normalizeFreePhoneReuseAutoEnabled(state = {}) {
+      return normalizeFreePhoneReuseEnabled(state?.freePhoneReuseEnabled)
+        && Boolean(state?.freePhoneReuseAutoEnabled);
     }
 
     function normalizeHeroSmsAcquirePriority(value = '') {
@@ -579,10 +740,12 @@
         (Array.isArray(payloads) ? payloads : [])
           .flatMap((payload) => collectHeroSmsPriceCandidatesIncludingZeroStock(payload, []))
       );
-      const mergedCandidates = buildSortedUniquePriceCandidates([
-        ...inStockCandidates,
-        ...allCatalogCandidates,
-      ]);
+      const mergedCandidates = inStockCandidates.length
+        ? buildSortedUniquePriceCandidates([
+          ...inStockCandidates,
+          ...allCatalogCandidates,
+        ])
+        : [];
       const minCatalogPrice = allCatalogCandidates.length
         ? allCatalogCandidates[0]
         : (mergedCandidates.length ? mergedCandidates[0] : null);
@@ -650,6 +813,120 @@
         normalizedMap.set(countryKey, Math.round(normalizedPrice * 10000) / 10000);
       });
       return normalizedMap;
+    }
+
+    function getActivationProviderId(activation = {}, state = {}) {
+      return normalizePhoneSmsProvider(activation?.provider || state?.phoneSmsProvider);
+    }
+
+    function getPhoneSmsProviderLabel(providerId) {
+      const provider = normalizePhoneSmsProvider(providerId);
+      if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        return '5sim';
+      }
+      if (provider === PHONE_SMS_PROVIDER_NEXSMS) {
+        return 'NexSMS';
+      }
+      return 'HeroSMS';
+    }
+
+    function formatStep9Reason(reason = '') {
+      const text = String(reason || '').trim();
+      if (!text) {
+        return '未知';
+      }
+      const normalized = text.toLowerCase();
+      const reasonMap = {
+        returned_to_add_phone_loop: '反复返回添加手机号页',
+        phone_number_used: '手机号已被使用',
+        sms_not_received: '未收到短信',
+        sms_timeout: '短信超时',
+        resend_throttled: '重发短信被限流',
+        code_rejected: '验证码被拒绝',
+        unknown: '未知',
+      };
+      if (reasonMap[normalized]) {
+        return reasonMap[normalized];
+      }
+      const timeoutWindowMatch = text.match(/^sms_timeout_after_(\d+)_windows$/i);
+      if (timeoutWindowMatch) {
+        return `连续 ${timeoutWindowMatch[1]} 轮等待后仍未收到短信`;
+      }
+      return text;
+    }
+
+    function isPhoneSmsReuseEnabled(state = {}) {
+      if (normalizePhoneSmsProvider(state?.phoneSmsProvider) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        return state?.fiveSimReuseEnabled !== false;
+      }
+      return normalizeHeroSmsReuseEnabled(state?.heroSmsReuseEnabled);
+    }
+
+    function createResolvedFiveSimProvider() {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      const factory = createFiveSimProvider || rootScope.PhoneSmsFiveSimProvider?.createProvider;
+      if (typeof factory !== 'function') {
+        return null;
+      }
+      return factory({
+        addLog,
+        fetchImpl,
+        requestTimeoutMs: DEFAULT_PHONE_REQUEST_TIMEOUT_MS,
+        sleepWithStop,
+        throwIfStopped,
+      });
+    }
+
+    function getFiveSimProviderForState(_state = {}) {
+      return createResolvedFiveSimProvider();
+    }
+
+    function normalizeFiveSimCountryId(value, fallback = 'england') {
+      const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '');
+      return normalized || fallback;
+    }
+
+    function normalizeFiveSimCountryLabel(value = '', fallback = '英国 (England)') {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      if (rootScope.PhoneSmsFiveSimProvider?.normalizeFiveSimCountryLabel) {
+        return rootScope.PhoneSmsFiveSimProvider.normalizeFiveSimCountryLabel(value, fallback);
+      }
+      if (rootScope.PhoneSmsFiveSimProvider?.formatFiveSimCountryLabel) {
+        return rootScope.PhoneSmsFiveSimProvider.formatFiveSimCountryLabel('', value, fallback);
+      }
+      return String(value || '').trim() || fallback;
+    }
+
+    function normalizeFiveSimCountryFallbackList(value = []) {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      if (rootScope.PhoneSmsFiveSimProvider?.normalizeFiveSimCountryFallback) {
+        return rootScope.PhoneSmsFiveSimProvider.normalizeFiveSimCountryFallback(value);
+      }
+      const source = Array.isArray(value)
+        ? value
+        : String(value || '')
+          .split(/[\r\n,，;；]+/)
+          .map((entry) => String(entry || '').trim())
+          .filter(Boolean);
+      const seen = new Set();
+      const normalized = [];
+      for (const entry of source) {
+        let id = '';
+        let label = '';
+        if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+          id = normalizeFiveSimCountryId(entry.id ?? entry.countryId ?? entry.slug, '');
+          label = String((entry.label ?? entry.countryLabel ?? entry.name ?? entry.text_en) || '').trim();
+        } else {
+          const text = String(entry || '').trim();
+          const structured = text.match(/^([a-z0-9_-]+)\s*(?:[:|/-]\s*(.+))?$/i);
+          id = normalizeFiveSimCountryId(structured?.[1] || text, '');
+          label = String(structured?.[2] || '').trim();
+        }
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        normalized.push({ id, label: label || normalizeFiveSimCountryLabel('', id) });
+      }
+      return normalized;
     }
 
     function normalizeCountryFallbackList(value = []) {
@@ -752,7 +1029,6 @@
       if (!record || typeof record !== 'object' || Array.isArray(record)) {
         return null;
       }
-      const provider = normalizePhoneSmsProvider(record.provider || '');
       const activationId = String(
         record.activationId ?? record.id ?? record.activation ?? ''
       ).trim();
@@ -764,38 +1040,103 @@
       }
       const statusAction = String(record.statusAction || '').trim();
       const countryLabel = String(record.countryLabel || '').trim();
-      const countryCode = normalizeFiveSimCountryCode(
-        record.countryCode ?? record.countryId ?? '',
-        provider === PHONE_SMS_PROVIDER_5SIM ? 'thailand' : ''
-      );
-      const expiresAt = normalizeTimestampMs(
-        record.expiresAt
-        ?? record.expireAt
-        ?? record.expires
-        ?? record.expiredAt
-        ?? record.expired_at
-      );
-      const defaultServiceCode = provider === PHONE_SMS_PROVIDER_5SIM
-        ? DEFAULT_FIVE_SIM_PRODUCT
-        : (provider === PHONE_SMS_PROVIDER_NEXSMS ? DEFAULT_NEX_SMS_SERVICE_CODE : HERO_SMS_SERVICE_CODE);
+      const rawProvider = String(record.provider || '').trim();
+      const provider = normalizePhoneSmsProvider(rawProvider);
+      const rawCountryId = record.countryId ?? record.country;
+      const fallbackCountryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM ? 'england' : HERO_SMS_COUNTRY_ID;
+      const expiresAt = normalizeTimestampMs(record.expiresAt);
+      const serviceCode = String(
+        record.serviceCode
+        || (
+          provider === PHONE_SMS_PROVIDER_FIVE_SIM
+            ? DEFAULT_FIVE_SIM_PRODUCT
+            : (provider === PHONE_SMS_PROVIDER_NEXSMS ? DEFAULT_NEX_SMS_SERVICE_CODE : HERO_SMS_SERVICE_CODE)
+        )
+      ).trim();
+      const countryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+        ? normalizeFiveSimCountryId(record.countryCode ?? rawCountryId, fallbackCountryId)
+        : (
+          provider === PHONE_SMS_PROVIDER_NEXSMS
+            ? normalizeNexSmsCountryId(rawCountryId, 0)
+            : normalizeCountryId(rawCountryId, fallbackCountryId)
+        );
       return {
         activationId,
         phoneNumber,
         provider,
-        serviceCode: String(record.serviceCode || defaultServiceCode).trim() || defaultServiceCode,
-        countryId: provider === PHONE_SMS_PROVIDER_5SIM
-          ? countryCode
-          : (
-            provider === PHONE_SMS_PROVIDER_NEXSMS
-              ? normalizeNexSmsCountryId(record.countryId, 0)
-              : normalizeCountryId(record.countryId, HERO_SMS_COUNTRY_ID)
-          ),
-        ...(provider === PHONE_SMS_PROVIDER_5SIM ? { countryCode } : {}),
+        serviceCode,
+        countryId,
+        ...(provider === PHONE_SMS_PROVIDER_FIVE_SIM ? { countryCode: countryId } : {}),
         ...(countryLabel ? { countryLabel } : {}),
         successfulUses: normalizeUseCount(record.successfulUses),
         maxUses: Math.max(1, Math.floor(Number(record.maxUses) || DEFAULT_PHONE_NUMBER_MAX_USES)),
         ...(expiresAt > 0 ? { expiresAt } : {}),
         ...(statusAction ? { statusAction } : {}),
+        ...(record.source ? { source: String(record.source || '').trim() } : {}),
+        ...(record.phoneCodeReceived ? { phoneCodeReceived: true } : {}),
+        ...(record.phoneCodeReceivedAt ? { phoneCodeReceivedAt: Math.max(0, Number(record.phoneCodeReceivedAt) || 0) } : {}),
+      };
+    }
+
+    function normalizeManualFreeReusablePhoneActivation(record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        return null;
+      }
+      const phoneNumber = String(
+        record.phoneNumber ?? record.number ?? record.phone ?? ''
+      ).trim();
+      if (!phoneNumber) {
+        return null;
+      }
+      const activationId = String(
+        record.activationId ?? record.id ?? record.activation ?? ''
+      ).trim();
+      const inferredCountry = inferHeroSmsCountryFromPhoneNumber(phoneNumber);
+      const countryId = normalizeCountryId(record.countryId, inferredCountry?.id || HERO_SMS_COUNTRY_ID);
+      const countryLabel = String(
+        record.countryLabel
+        || (inferredCountry && inferredCountry.id === countryId ? inferredCountry.label : '')
+      ).trim();
+      const statusAction = String(record.statusAction || '').trim();
+      return {
+        ...(activationId ? { activationId } : {}),
+        phoneNumber,
+        provider: PHONE_SMS_PROVIDER_HERO,
+        serviceCode: String(record.serviceCode || HERO_SMS_SERVICE_CODE).trim() || HERO_SMS_SERVICE_CODE,
+        countryId,
+        ...(countryLabel ? { countryLabel } : {}),
+        successfulUses: normalizeUseCount(record.successfulUses),
+        maxUses: Math.max(1, Math.floor(Number(record.maxUses) || DEFAULT_PHONE_NUMBER_MAX_USES)),
+        ...(statusAction ? { statusAction } : {}),
+        source: 'free-manual-reuse',
+        recordedAt: Math.max(0, Number(record.recordedAt) || Date.now()),
+        manualOnly: !activationId,
+      };
+    }
+
+    function normalizeFreeReusablePhoneActivation(record) {
+      const normalized = normalizeActivation(record) || normalizeManualFreeReusablePhoneActivation(record);
+      if (!normalized) {
+        return null;
+      }
+      const recordedAt = Math.max(0, Number(record?.recordedAt) || 0);
+      return {
+        ...normalized,
+        provider: PHONE_SMS_PROVIDER_HERO,
+        source: 'free-manual-reuse',
+        ...(recordedAt ? { recordedAt } : {}),
+      };
+    }
+
+    function markActivationPhoneCodeReceived(activation) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation) {
+        return null;
+      }
+      return {
+        ...normalizedActivation,
+        phoneCodeReceived: true,
+        phoneCodeReceivedAt: normalizedActivation.phoneCodeReceivedAt || Date.now(),
       };
     }
 
@@ -880,21 +1221,31 @@
       }
     }
 
+    async function persistFreeReusableActivation(activation) {
+      await setPhoneRuntimeState({
+        [FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]: normalizeFreeReusablePhoneActivation(activation),
+      });
+    }
+
+    async function clearFreeReusableActivation() {
+      await setPhoneRuntimeState({
+        [FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]: null,
+      });
+    }
+
     function normalizeActivationFallback(record) {
       if (!record || typeof record !== 'object' || Array.isArray(record)) {
         return null;
       }
 
       const fallback = {};
-      const provider = normalizePhoneSmsProvider(record.provider || '');
+      const rawProvider = String(record.provider || '').trim();
+      const provider = rawProvider ? normalizePhoneSmsProvider(rawProvider) : '';
       const serviceCode = String(record.serviceCode || '').trim();
-      const countryId = provider === PHONE_SMS_PROVIDER_5SIM
-        ? normalizeFiveSimCountryCode(record.countryId || record.countryCode || '', '')
-        : (
-          provider === PHONE_SMS_PROVIDER_NEXSMS
-            ? normalizeNexSmsCountryId(record.countryId, -1)
-            : Math.floor(Number(record.countryId))
-        );
+      const rawCountryId = record.countryId ?? record.country;
+      const countryId = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+        ? normalizeFiveSimCountryId(rawCountryId, '')
+        : Math.floor(Number(rawCountryId));
       const countryLabel = String(record.countryLabel || '').trim();
       const statusAction = String(record.statusAction || '').trim();
 
@@ -904,16 +1255,11 @@
       if (serviceCode) {
         fallback.serviceCode = serviceCode;
       }
-      if (
-        (provider === PHONE_SMS_PROVIDER_5SIM && countryId)
-        || (provider === PHONE_SMS_PROVIDER_NEXSMS && Number.isFinite(countryId) && countryId >= 0)
-        || (
-          provider !== PHONE_SMS_PROVIDER_5SIM
-          && provider !== PHONE_SMS_PROVIDER_NEXSMS
-          && Number.isFinite(countryId)
-          && countryId > 0
-        )
-      ) {
+      if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        if (countryId) {
+          fallback.countryId = countryId;
+        }
+      } else if (Number.isFinite(countryId) && countryId > 0) {
         fallback.countryId = countryId;
         if (provider === PHONE_SMS_PROVIDER_5SIM) {
           fallback.countryCode = countryId;
@@ -984,12 +1330,41 @@
     }
 
     function buildPhoneCodeTimeoutError(lastResponse = '') {
-      const suffix = lastResponse ? ` Last provider status: ${lastResponse}` : '';
-      return new Error(`${PHONE_CODE_TIMEOUT_ERROR_PREFIX}Timed out waiting for the phone verification code.${suffix}`);
+      const suffix = lastResponse ? ` HeroSMS 最后状态：${lastResponse}` : '';
+      return new Error(`${PHONE_CODE_TIMEOUT_ERROR_PREFIX}等待手机验证码超时。${suffix}`);
+    }
+
+    function isSignupEmailVerificationPageState(pageState = {}) {
+      const url = String(pageState?.url || pageState?.href || '').trim();
+      return Boolean(
+        pageState?.emailVerificationPage
+        || pageState?.emailVerificationRequired
+        || /\/email-verification(?:[/?#]|$)/i.test(url)
+      );
+    }
+
+    function buildSignupPhoneStaleEmailVerificationError(pageState = {}) {
+      const url = String(pageState?.url || pageState?.href || '').trim();
+      const message = `步骤 4：OpenAI 在手机短信验证码提交前已切到邮箱验证${url ? `（URL: ${url}）` : ''}。这通常表示当前手机号已关联现有账号或登录路径，请更换手机号后重新开始注册。`;
+      const error = new Error(message);
+      error.code = PHONE_STALE_SIGNUP_EMAIL_VERIFICATION_ERROR_CODE;
+      error.stalePhoneSignupEmailVerification = true;
+      if (url) {
+        error.url = url;
+      }
+      error.pageState = pageState;
+      return error;
     }
 
     function isPhoneCodeTimeoutError(error) {
       return String(error?.message || '').startsWith(PHONE_CODE_TIMEOUT_ERROR_PREFIX);
+    }
+
+    function isStaleSignupPhoneEmailVerificationError(error) {
+      return Boolean(
+        error?.stalePhoneSignupEmailVerification
+        || error?.code === PHONE_STALE_SIGNUP_EMAIL_VERIFICATION_ERROR_CODE
+      );
     }
 
     function isPhoneResendThrottledError(error) {
@@ -1001,6 +1376,102 @@
         return true;
       }
       return /tried\s+to\s+resend\s+too\s+many\s+times|please\s+try\s+again\s+later|too\s+many\s+resend|resend\s+too\s+many|发送.*过于频繁|稍后再试/i.test(message);
+    }
+
+    function isPhoneResendBannedNumberError(error) {
+      const message = String(error?.message || error || '').trim();
+      if (!message) {
+        return false;
+      }
+      if (message.startsWith(PHONE_RESEND_BANNED_NUMBER_ERROR_PREFIX)) {
+        return true;
+      }
+      return /无法向此电话号码发送短信|无法向此手机号发送短信|无法发送短信到此电话号码|无法发送短信到此手机号|can(?:not|'t)\s+send\s+(?:an?\s+)?(?:sms|text(?:\s+message)?)\s+to\s+(?:this|that)\s+(?:phone\s+)?number|unable\s+to\s+send\s+(?:an?\s+)?(?:sms|text(?:\s+message)?)\s+to\s+(?:this|that)\s+(?:phone\s+)?number/i.test(message);
+    }
+
+    function isPhoneResendServerError(error) {
+      const message = String(error?.message || error || '').trim();
+      if (!message) {
+        return false;
+      }
+      if (message.startsWith(PHONE_RESEND_SERVER_ERROR_PREFIX)) {
+        return true;
+      }
+      return /this\s+page\s+isn['’]?t\s+working|currently\s+unable\s+to\s+handle\s+this\s+request|http\s+error\s+500|500\s+internal\s+server\s+error/i.test(message);
+    }
+
+    function buildPhoneResendServerError(error) {
+      const message = String(error?.message || error || '').trim();
+      if (message.startsWith(PHONE_RESEND_SERVER_ERROR_PREFIX)) {
+        return new Error(message);
+      }
+      return new Error(`${PHONE_RESEND_SERVER_ERROR_PREFIX}${message || 'OpenAI contact-verification page returned HTTP ERROR 500 after resend.'}`);
+    }
+
+    function getPhoneResendServerErrorFromSnapshot(snapshot = {}) {
+      const rawUrl = String(snapshot?.url || snapshot?.href || '').trim();
+      if (!/\/contact-verification(?:[/?#]|$)/i.test(rawUrl)) {
+        return '';
+      }
+      const bodyText = [
+        snapshot?.text,
+        snapshot?.bodyText,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const titleText = String(snapshot?.title || '').replace(/\s+/g, ' ').trim();
+      if (!bodyText) {
+        return isPhoneResendServerError(titleText) ? (titleText || 'OpenAI contact-verification page returned HTTP ERROR 500 after resend.') : '';
+      }
+      const combined = [
+        bodyText,
+        titleText,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!isPhoneResendServerError(combined)) {
+        return '';
+      }
+      return combined || 'OpenAI contact-verification page returned HTTP ERROR 500 after resend.';
+    }
+
+    async function readPhoneResendServerErrorFromAuthTab(tabId) {
+      if (typeof readAuthTabSnapshot !== 'function') {
+        return '';
+      }
+      try {
+        return getPhoneResendServerErrorFromSnapshot(await readAuthTabSnapshot(tabId));
+      } catch (_) {
+        return '';
+      }
+    }
+
+    async function throwPhoneResendServerErrorIfAuthTabShowsIt(tabId) {
+      const serverErrorText = await readPhoneResendServerErrorFromAuthTab(tabId);
+      if (serverErrorText) {
+        throw buildPhoneResendServerError(serverErrorText);
+      }
+    }
+
+    function shouldTreatResendThrottledAsBanned(state = {}) {
+      return Boolean(state?.phoneResendThrottledAsBannedEnabled);
+    }
+
+    function buildHighRiskResendThrottledError(message = '') {
+      return new Error(`${PHONE_RESEND_THROTTLED_ERROR_PREFIX}${message || 'OpenAI resend is throttled and configured as high-probability banned phone.'}`);
+    }
+
+    function buildPhoneMaxUsageExceededError(message = '') {
+      return new Error(`PHONE_MAX_USAGE_EXCEEDED::${message || 'OpenAI reported phone_max_usage_exceeded for this phone number.'}`);
+    }
+
+    function isPhoneMaxUsageExceededFlowError(error) {
+      const message = String(error?.message || error || '').trim();
+      return message.startsWith('PHONE_MAX_USAGE_EXCEEDED::') || isPhoneNumberUsedError(message);
     }
 
     function isPhoneRoute405RecoveryError(error) {
@@ -1036,10 +1507,24 @@
         || /flow\s+was\s+stopped|stopped\s+by\s+user/i.test(message);
     }
 
+    function isAuthContentScriptUnreachableError(error) {
+      const message = String(error?.message || error || '').trim();
+      return /Receiving end does not exist|Could not establish connection|Frame with ID \d+ is showing error page|等待认证页状态检查超时/i.test(message);
+    }
+
     function buildPhoneRestartStep7Error(phoneNumber = '') {
-      const suffix = phoneNumber ? ` Current number: ${phoneNumber}.` : '';
+      const suffix = phoneNumber ? ` 当前号码：${phoneNumber}。` : '';
       return new Error(
-        `${PHONE_RESTART_STEP7_ERROR_PREFIX}Phone verification could not receive an SMS after resend. Restart step 7 with a new number.${suffix}`
+        `${PHONE_RESTART_STEP7_ERROR_PREFIX}手机验证重发后仍未收到短信，请从步骤 7 重新获取新号码。${suffix}`
+      );
+    }
+
+    function buildPhoneReplacementLimitError(maxNumberReplacementAttempts, reason = '') {
+      const safeMax = Math.max(0, Math.floor(Number(maxNumberReplacementAttempts) || 0));
+      const safeReason = String(reason || 'unknown').trim() || 'unknown';
+      return new Error(
+        `步骤 9：更换 ${safeMax} 次号码后手机号验证仍未成功。最后原因：${safeReason}. `
+        + `Step 9: phone verification did not succeed after ${safeMax} number replacements. Last reason: ${safeReason}.`
       );
     }
 
@@ -1048,7 +1533,7 @@
       if (!message.startsWith(PHONE_CODE_TIMEOUT_ERROR_PREFIX)) {
         return error;
       }
-      return new Error(message.slice(PHONE_CODE_TIMEOUT_ERROR_PREFIX.length).trim() || 'Timed out waiting for the phone verification code.');
+      return new Error(message.slice(PHONE_CODE_TIMEOUT_ERROR_PREFIX.length).trim() || '等待手机验证码超时。');
     }
 
     function sanitizePhoneRestartStep7Error(error) {
@@ -1058,7 +1543,7 @@
       }
       return new Error(
         message.slice(PHONE_RESTART_STEP7_ERROR_PREFIX.length).trim()
-        || 'Phone verification could not receive an SMS after resend. Restart step 7 with a new number.'
+        || '手机验证重发后仍未收到短信，请从步骤 7 重新获取新号码。'
       );
     }
 
@@ -1273,12 +1758,19 @@
         if (!apiKey) {
           throw new Error('5sim API key is missing. Save it in the side panel before running the phone flow.');
         }
+        const configuredMaxPrice = normalizeHeroSmsPriceLimit(state.fiveSimMaxPrice);
+        const operator = normalizeFiveSimCountryCode(state.fiveSimOperator, DEFAULT_FIVE_SIM_OPERATOR);
+        const maxPriceLimit = configuredMaxPrice !== null
+          ? configuredMaxPrice
+          : normalizeHeroSmsPriceLimit(state.heroSmsMaxPrice);
+        assertFiveSimMaxPriceCompatibleWithOperator(operator, maxPriceLimit);
         return {
           provider,
           apiKey,
           baseUrl: normalizeUrl(state.fiveSimBaseUrl, DEFAULT_FIVE_SIM_BASE_URL).replace(/\/+$/, ''),
-          operator: normalizeFiveSimCountryCode(state.fiveSimOperator, DEFAULT_FIVE_SIM_OPERATOR),
+          operator,
           product: normalizeFiveSimCountryCode(state.fiveSimProduct, DEFAULT_FIVE_SIM_PRODUCT),
+          maxPriceLimit,
           countryCandidates: resolveFiveSimCountryCandidates(state),
         };
       }
@@ -1303,6 +1795,19 @@
       }
       return {
         provider,
+        apiKey,
+        baseUrl: normalizeUrl(state.heroSmsBaseUrl, DEFAULT_HERO_SMS_BASE_URL),
+        countryCandidates: resolveCountryCandidates(state),
+      };
+    }
+
+    function resolveHeroSmsPhoneConfig(state = {}) {
+      const apiKey = normalizeApiKey(state.heroSmsApiKey);
+      if (!apiKey) {
+        throw new Error('HeroSMS API key is missing. Save it in the side panel before running the phone flow.');
+      }
+      return {
+        provider: PHONE_SMS_PROVIDER_HERO,
         apiKey,
         baseUrl: normalizeUrl(state.heroSmsBaseUrl, DEFAULT_HERO_SMS_BASE_URL),
         countryCandidates: resolveCountryCandidates(state),
@@ -1384,9 +1889,15 @@
     }
 
     function resolveHeroSmsStockState(payload = {}) {
+      const physicalCount = Number(payload.physicalCount);
+      if (Number.isFinite(physicalCount)) {
+        return {
+          hasStockField: true,
+          stockCount: physicalCount,
+        };
+      }
       const stockCandidates = [
         payload.count,
-        payload.physicalCount,
         payload.stock,
         payload.available,
         payload.quantity,
@@ -1785,6 +2296,26 @@
       return candidates;
     }
 
+    function collectFiveSimProductPriceCandidates(payload, product = DEFAULT_FIVE_SIM_PRODUCT, candidates = []) {
+      if (Array.isArray(payload)) {
+        payload.forEach((entry) => collectFiveSimProductPriceCandidates(entry, product, candidates));
+        return candidates;
+      }
+      if (!payload || typeof payload !== 'object') {
+        return candidates;
+      }
+      const productPayload = payload[product] || payload[String(product || '').toLowerCase()];
+      if (productPayload && typeof productPayload === 'object') {
+        const price = Number(productPayload.Price ?? productPayload.price ?? productPayload.cost);
+        const qty = Number(productPayload.Qty ?? productPayload.qty ?? productPayload.count);
+        if (Number.isFinite(price) && price > 0 && (!Number.isFinite(qty) || qty > 0)) {
+          candidates.push(Math.round(price * 10000) / 10000);
+        }
+      }
+      Object.values(payload).forEach((entry) => collectFiveSimProductPriceCandidates(entry, product, candidates));
+      return candidates;
+    }
+
     function findLowestFiveSimPrice(payload, product = DEFAULT_FIVE_SIM_PRODUCT, countryCode = '') {
       const normalizedProduct = normalizeFiveSimCountryCode(product, DEFAULT_FIVE_SIM_PRODUCT);
       const normalizedCountryCode = normalizeFiveSimCountryCode(countryCode, '');
@@ -1806,6 +2337,21 @@
     function isFiveSimNoNumbersError(payloadOrMessage) {
       const text = describeFiveSimPayload(payloadOrMessage);
       return /no\s+free\s+phones|no\s+phones\s+available|no\s+numbers\s+available/i.test(text);
+    }
+
+    function isFiveSimRateLimitError(payloadOrMessage, status = 0) {
+      if (Number(status) === 429) {
+        return true;
+      }
+      const text = describeFiveSimPayload(payloadOrMessage);
+      return /rate\s*limit|too\s*many\s*requests|request\s*limit|429/i.test(text);
+    }
+
+    function buildFiveSimRateLimitError(details = []) {
+      const suffix = Array.isArray(details) && details.length
+        ? `：${details.join(' | ')}。`
+        : '。';
+      return new Error(`${FIVE_SIM_RATE_LIMIT_ERROR_PREFIX}5sim 购买接口触发限流，请稍后再试${suffix}`);
     }
 
     function isFiveSimTerminalError(payloadOrMessage, status = 0) {
@@ -1891,7 +2437,7 @@
         ? config.countryCandidates
         : [];
       if (!allCountryCandidates.length) {
-        throw new Error('Step 9: 5sim countries are empty. Please select at least one country in 接码设置。');
+        throw new Error(`Step ${getActivePhoneVerificationVisibleStep()}: 5sim countries are empty. Please select at least one country in 接码设置。`);
       }
       const blockedCountryIds = new Set(
         (Array.isArray(options?.blockedCountryIds) ? options.blockedCountryIds : [])
@@ -1911,7 +2457,9 @@
         }
       }
 
-      const maxPriceLimit = normalizeHeroSmsPriceLimit(state.heroSmsMaxPrice);
+      const maxPriceLimit = config.maxPriceLimit === undefined
+        ? normalizeHeroSmsPriceLimit(state.heroSmsMaxPrice)
+        : config.maxPriceLimit;
       const acquirePriority = normalizeHeroSmsAcquirePriority(state?.heroSmsAcquirePriority);
       const preferredPriceTier = normalizeHeroSmsPriceLimit(state?.heroSmsPreferredPrice);
       const countryPriceFloorByCountryCode = normalizeCountryPriceFloorMap(
@@ -1923,6 +2471,7 @@
       const retryDelayMs = normalizePhoneActivationRetryDelayMs(state?.heroSmsActivationRetryDelayMs);
 
       let finalNoNumbersByCountry = [];
+      let finalRateLimitByCountry = [];
       let finalLastError = null;
 
       for (let round = 1; round <= maxAcquireRounds; round += 1) {
@@ -1933,6 +2482,7 @@
           );
         }
         const noNumbersByCountry = [];
+        const rateLimitByCountry = [];
         const retryableNoNumberCountries = [];
         let lastError = null;
 
@@ -1984,7 +2534,20 @@
           const countryLabel = String(countryConfig.label || countryCode).trim() || countryCode;
           const countryPriceFloor = countryPriceFloorByCountryCode.get(countryCode) ?? null;
           try {
+            const explicitFiveSimMaxPriceLimit = normalizeHeroSmsPriceLimit(state.fiveSimMaxPrice);
             let guestPricesPayload = null;
+            let productPricesPayload = null;
+            if (explicitFiveSimMaxPriceLimit !== null) {
+              try {
+                productPricesPayload = await fetchFiveSimPayload(
+                  config,
+                  `/guest/products/${countryCode}/${config.operator}`,
+                  '5sim guest products'
+                );
+              } catch (_) {
+                productPricesPayload = null;
+              }
+            }
             try {
               guestPricesPayload = await fetchFiveSimPayload(
                 config,
@@ -2002,16 +2565,23 @@
             }
 
             const rawPriceCandidates = buildSortedUniquePriceCandidates(
-              collectFiveSimPriceCandidates(
-                (
-                  guestPricesPayload
-                  && typeof guestPricesPayload === 'object'
-                  && !Array.isArray(guestPricesPayload)
-                  ? (guestPricesPayload?.[config.product]?.[countryCode] || guestPricesPayload?.[countryCode] || guestPricesPayload)
-                  : guestPricesPayload
+              [
+                ...(
+                  normalizeHeroSmsPriceLimit(state.fiveSimMaxPrice) !== null
+                    ? collectFiveSimProductPriceCandidates(productPricesPayload, config.product, [])
+                    : []
                 ),
-                []
-              )
+                ...collectFiveSimPriceCandidates(
+                  (
+                    guestPricesPayload
+                    && typeof guestPricesPayload === 'object'
+                    && !Array.isArray(guestPricesPayload)
+                    ? (guestPricesPayload?.[config.product]?.[countryCode] || guestPricesPayload?.[countryCode] || guestPricesPayload)
+                    : guestPricesPayload
+                  ),
+                  []
+                ),
+              ]
             );
             const boundedPriceCandidates = maxPriceLimit === null
               ? rawPriceCandidates
@@ -2022,7 +2592,14 @@
               preferredPriceTier
             );
             const orderedPrices = orderedPricesFromCatalog.length
-              ? orderedPricesFromCatalog
+              ? (
+                explicitFiveSimMaxPriceLimit !== null
+                  ? [
+                    explicitFiveSimMaxPriceLimit,
+                    ...orderedPricesFromCatalog.filter((price) => Number(price) !== Number(explicitFiveSimMaxPriceLimit)),
+                  ]
+                  : orderedPricesFromCatalog
+              )
               : (maxPriceLimit !== null ? [maxPriceLimit] : [null]);
             const floorFilteredPrices = filterPriceCandidatesAboveFloor(orderedPrices, countryPriceFloor);
             const hasCountryPriceFloor = (
@@ -2097,6 +2674,10 @@
                   break;
                 }
                 const payloadText = describeFiveSimPayload(payload);
+                if (isFiveSimRateLimitError(payload)) {
+                  countryNoNumbersText = payloadText || countryNoNumbersText || 'rate limit';
+                  continue;
+                }
                 if (isFiveSimNoNumbersError(payload)) {
                   countryNoNumbersText = payloadText || countryNoNumbersText || 'no free phones';
                   continue;
@@ -2106,6 +2687,10 @@
                 }
                 lastError = new Error(`5sim buy activation failed: ${payloadText || 'empty response'}`);
               } catch (error) {
+                if (isFiveSimRateLimitError(error?.payload || error?.message, error?.status)) {
+                  countryNoNumbersText = describeFiveSimPayload(error?.payload || error?.message) || countryNoNumbersText || 'rate limit';
+                  continue;
+                }
                 if (isFiveSimTerminalError(error?.payload || error?.message, error?.status)) {
                   throw new Error(`5sim buy activation failed: ${describeFiveSimPayload(error?.payload || error?.message) || 'unknown terminal error'}`);
                 }
@@ -2126,12 +2711,18 @@
               noNumbersByCountry.push(
                 `${countryLabel}: no numbers within maxPrice=${maxPriceLimit}; lowest listed=${lowestPrice}`
               );
+            } else if (isFiveSimRateLimitError(countryNoNumbersText)) {
+              rateLimitByCountry.push(`${countryLabel}: ${countryNoNumbersText || 'rate limit'}`);
             } else {
               noNumbersByCountry.push(`${countryLabel}: ${countryNoNumbersText || 'no free phones'}`);
               retryableNoNumberCountries.push(countryLabel);
             }
             continue;
           } catch (error) {
+            if (isFiveSimRateLimitError(error?.payload || error?.message, error?.status)) {
+              rateLimitByCountry.push(`${countryLabel}: ${describeFiveSimPayload(error?.payload || error?.message) || 'rate limit'}`);
+              continue;
+            }
             if (isFiveSimTerminalError(error?.payload || error?.message, error?.status)) {
               throw new Error(`5sim buy activation failed: ${describeFiveSimPayload(error?.payload || error?.message) || 'unknown terminal error'}`);
             }
@@ -2152,7 +2743,12 @@
         }
 
         finalNoNumbersByCountry = noNumbersByCountry;
+        finalRateLimitByCountry = rateLimitByCountry;
         finalLastError = lastError;
+
+        if (rateLimitByCountry.length) {
+          throw buildFiveSimRateLimitError(rateLimitByCountry);
+        }
 
         if (
           noNumbersByCountry.length
@@ -2174,6 +2770,9 @@
         throw new Error(
           `5sim no numbers available across ${countryCandidates.length} country candidate(s): ${finalNoNumbersByCountry.join(' | ')}.`
         );
+      }
+      if (finalRateLimitByCountry.length) {
+        throw buildFiveSimRateLimitError(finalRateLimitByCountry);
       }
       if (finalLastError) {
         throw finalLastError;
@@ -2326,7 +2925,7 @@
         ? config.countryCandidates
         : resolveNexSmsCountryCandidates(state);
       if (!allCountryCandidates.length) {
-        throw new Error('Step 9: NexSMS countries are empty. Please select at least one country in 接码设置。');
+        throw new Error(`Step ${getActivePhoneVerificationVisibleStep()}: NexSMS countries are empty. Please select at least one country in 接码设置。`);
       }
       const blockedCountryIds = new Set(
         (Array.isArray(options?.blockedCountryIds) ? options.blockedCountryIds : [])
@@ -2571,6 +3170,12 @@
     }
 
     async function requestPhoneActivation(state = {}, options = {}) {
+      if (normalizePhoneSmsProvider(state?.phoneSmsProvider) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        const provider = getFiveSimProviderForState(state);
+        if (provider) {
+          return provider.requestActivation(state, options);
+        }
+      }
       const config = resolvePhoneConfig(state);
       if (config.provider === PHONE_SMS_PROVIDER_5SIM) {
         return requestFiveSimActivation(state, options);
@@ -2582,7 +3187,7 @@
         ? config.countryCandidates
         : resolveCountryCandidates(state);
       if (!allCountryCandidates.length) {
-        throw new Error('Step 9: HeroSMS countries are empty. Please select at least one country in 接码设置。');
+        throw new Error(`Step ${getActivePhoneVerificationVisibleStep()}: HeroSMS countries are empty. Please select at least one country in 接码设置。`);
       }
       const blockedCountryIds = new Set(
         (Array.isArray(options?.blockedCountryIds) ? options.blockedCountryIds : [])
@@ -2596,7 +3201,7 @@
         countryCandidates = allCountryCandidates;
         if (blockedCountryIds.size) {
           await addLog(
-            'Step 9: all selected countries reached the temporary SMS-failure skip threshold, lifting skip for this acquire round.',
+            '步骤 9：已选国家均达到临时收码失败跳过阈值，本轮解除跳过并重新尝试。',
             'warn'
           );
         }
@@ -2623,7 +3228,7 @@
       for (let round = 1; round <= maxAcquireRounds; round += 1) {
         if (maxAcquireRounds > 1) {
           await addLog(
-            `Step 9: HeroSMS acquiring phone number (round ${round}/${maxAcquireRounds})...`,
+            `步骤 9：HeroSMS 正在获取手机号（第 ${round}/${maxAcquireRounds} 轮）...`,
             'info'
           );
         }
@@ -2844,7 +3449,11 @@
           && retryableNoNumberCountries.length > 0
         ) {
           await addLog(
-            `Step 9: HeroSMS has no available numbers (round ${round}/${maxAcquireRounds}); retrying in ${Math.ceil(retryDelayMs / 1000)}s. Countries: ${retryableNoNumberCountries.join(', ')}.`,
+            `步骤 9：HeroSMS 暂无可用号码（第 ${round}/${maxAcquireRounds} 轮）；${Math.ceil(retryDelayMs / 1000)} 秒后重试。国家：${retryableNoNumberCountries.join(', ')}。`,
+            'warn'
+          );
+          await addLog(
+            `步骤 9：HeroSMS 暂无可用号码（第 ${round}/${maxAcquireRounds} 轮），${Math.ceil(retryDelayMs / 1000)} 秒后重试。国家：${retryableNoNumberCountries.join(', ')}。`,
             'warn'
           );
           await sleepWithStop(retryDelayMs);
@@ -2856,19 +3465,26 @@
 
       if (finalNoNumbersByCountry.length) {
         throw new Error(
-          `HeroSMS no numbers available across ${countryCandidates.length} country candidate(s): ${finalNoNumbersByCountry.join(' | ')}.`
+          `HeroSMS 已尝试 ${countryCandidates.length} 个候选国家，均无可用号码：${finalNoNumbersByCountry.join(' | ')}。`
+          + ` HeroSMS no numbers available across ${countryCandidates.length} country candidate(s): ${finalNoNumbersByCountry.join(' | ')}.`
         );
       }
       if (finalLastError) {
         throw finalLastError;
       }
-      throw new Error(`HeroSMS failed to acquire a phone number. Last status: ${finalLastFailureText || 'unknown'}.`);
+      throw new Error(`HeroSMS 获取手机号失败，最后状态：${finalLastFailureText || '未知'}。`);
     }
 
     async function reactivatePhoneActivation(state = {}, activation) {
       const normalizedActivation = normalizeActivation(activation);
       if (!normalizedActivation) {
-        throw new Error('Reusable phone activation is missing.');
+        throw new Error('缺少可复用的手机号接码订单。');
+      }
+      if (getActivationProviderId(normalizedActivation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        const provider = getFiveSimProviderForState(state);
+        if (provider) {
+          return provider.reuseActivation(state, normalizedActivation);
+        }
       }
 
       const config = resolvePhoneConfig(state);
@@ -2903,7 +3519,7 @@
       const nextActivation = parseActivationPayload(payload, normalizedActivation);
       if (!nextActivation) {
         const text = describeHeroSmsPayload(payload);
-        throw new Error(`HeroSMS reactivate failed: ${text || 'empty response'}`);
+        throw new Error(`HeroSMS 复用手机号失败：${text || '空响应'}`);
       }
       return nextActivation;
     }
@@ -2913,16 +3529,28 @@
       if (!normalizedActivation) {
         return '';
       }
+      const normalizedStatus = Math.floor(Number(status) || 0);
+      if (
+        (normalizedStatus === 6 || normalizedStatus === 8)
+        && shouldSkipTerminalStatusForFreeReuse(state, normalizedActivation)
+      ) {
+        const identifier = normalizedActivation.phoneNumber || normalizedActivation.activationId || 'current activation';
+        await addLog(
+          `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的 setStatus(${normalizedStatus})。`,
+          'info'
+        );
+        return `free reuse setStatus(${normalizedStatus}) skipped`;
+      }
       const config = resolvePhoneConfig(state);
       if (config.provider === PHONE_SMS_PROVIDER_5SIM) {
-        const endpoint = status === 6
+        const endpoint = normalizedStatus === 6
           ? `/user/finish/${normalizedActivation.activationId}`
           : `/user/cancel/${normalizedActivation.activationId}`;
         const payload = await fetchFiveSimPayload(config, endpoint, actionLabel || '5sim set status');
         return describeFiveSimPayload(payload);
       }
       if (config.provider === PHONE_SMS_PROVIDER_NEXSMS) {
-        if (status === 6) {
+        if (normalizedStatus === 6) {
           return 'NexSMS complete skipped';
         }
         const payload = await fetchNexSmsPayload(
@@ -2944,19 +3572,118 @@
       const payload = await fetchHeroSmsPayload(config, {
         action: 'setStatus',
         id: normalizedActivation.activationId,
-        status,
+        status: normalizedStatus,
       }, actionLabel);
       return describeHeroSmsPayload(payload);
     }
 
     async function completePhoneActivation(state = {}, activation) {
-      forgetActivationAcquiredPriceHint(activation);
+      if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
+        const normalizedActivation = normalizeActivation(activation);
+        const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
+        await addLog(
+          `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的接码完成状态。`,
+          'info'
+        );
+        return;
+      }
+      if (getActivationProviderId(activation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        const provider = getFiveSimProviderForState(state);
+        if (provider) {
+          await provider.finishActivation(state, activation);
+          return;
+        }
+      }
       await setPhoneActivationStatus(state, activation, 6, 'HeroSMS setStatus(6)');
     }
 
     async function cancelPhoneActivation(state = {}, activation) {
       try {
-        forgetActivationAcquiredPriceHint(activation);
+        const normalizedActivation = normalizeActivation(activation);
+        if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
+          const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
+          await addLog(
+            `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的接码取消状态。`,
+            'info'
+          );
+          return;
+        }
+        if (getActivationProviderId(activation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+          const provider = getFiveSimProviderForState(state);
+          if (provider) {
+            await provider.cancelActivation(state, activation);
+            return;
+          }
+        }
+        await setPhoneActivationStatus(state, activation, 8, 'HeroSMS setStatus(8)');
+      } catch (_) {
+        // Best-effort cleanup.
+      }
+    }
+
+    async function retireFreeReusableActivation(reason = '') {
+      const suffix = reason ? ` ${reason}` : '';
+      await addLog(`步骤 9：已清除白嫖复用手机号记录。${suffix}`, 'warn');
+      await clearFreeReusableActivation();
+    }
+
+    async function discardPhoneActivationFromReuse(reason = '', activation = null, state = {}) {
+      const rejectedPhoneNumber = String(activation?.phoneNumber || '').trim();
+      if (!rejectedPhoneNumber) {
+        return;
+      }
+      const updates = {};
+      const currentActivation = normalizeActivation(state[PHONE_ACTIVATION_STATE_KEY]);
+      if (phoneNumbersMatch(currentActivation?.phoneNumber, rejectedPhoneNumber)) {
+        updates[PHONE_ACTIVATION_STATE_KEY] = null;
+        updates[PHONE_VERIFICATION_CODE_STATE_KEY] = '';
+      }
+      const reusableActivation = normalizeActivation(state[REUSABLE_PHONE_ACTIVATION_STATE_KEY]);
+      if (phoneNumbersMatch(reusableActivation?.phoneNumber, rejectedPhoneNumber)) {
+        updates[REUSABLE_PHONE_ACTIVATION_STATE_KEY] = null;
+      }
+      const reusablePool = readReusableActivationPoolFromState(state);
+      const nextReusablePool = reusablePool.filter((entry) => (
+        !phoneNumbersMatch(entry?.phoneNumber, rejectedPhoneNumber)
+      ));
+      if (nextReusablePool.length !== reusablePool.length) {
+        updates[REUSABLE_PHONE_ACTIVATION_POOL_STATE_KEY] = nextReusablePool;
+      }
+      const freeReusableActivation = normalizeFreeReusablePhoneActivation(state[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]);
+      if (phoneNumbersMatch(freeReusableActivation?.phoneNumber, rejectedPhoneNumber)) {
+        updates[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY] = null;
+      }
+      if (Object.keys(updates).length) {
+        await setPhoneRuntimeState(updates);
+        await addLog(
+          `步骤 9：已从复用记录中移除手机号 ${rejectedPhoneNumber}。${reason || '目标站拒绝该号码。'}`,
+          'warn'
+        );
+      }
+    }
+
+    function isFreeAutoReuseActivation(activation) {
+      return normalizeActivation(activation)?.source === 'free-auto-reuse';
+    }
+
+    async function banPhoneActivation(state = {}, activation) {
+      try {
+        if (shouldSkipTerminalStatusForFreeReuse(state, activation)) {
+          const normalizedActivation = normalizeActivation(activation);
+          const identifier = normalizedActivation?.phoneNumber || normalizedActivation?.activationId || 'current activation';
+          await addLog(
+            `步骤 9：白嫖复用模式仅请求短信，跳过 ${identifier} 的接码封禁状态。`,
+            'info'
+          );
+          return;
+        }
+        if (getActivationProviderId(activation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+          const provider = getFiveSimProviderForState(state);
+          if (provider) {
+            await provider.banActivation(state, activation);
+            return;
+          }
+        }
         await setPhoneActivationStatus(state, activation, 8, 'HeroSMS setStatus(8)');
       } catch (_) {
         // Best-effort cleanup.
@@ -2969,16 +3696,154 @@
         return;
       }
       try {
+        if (getActivationProviderId(activation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+          // 5sim does not expose a HeroSMS-style setStatus(3) resend primitive.
+          return;
+        }
         await setPhoneActivationStatus(state, activation, 3, 'HeroSMS setStatus(3)');
       } catch (_) {
         // Best-effort request only.
       }
     }
 
+    function isHeroSmsWaitingStatusText(text) {
+      return /^STATUS_(WAIT_CODE|WAIT_RETRY|WAIT_RESEND)(?::.+)?$/i.test(String(text || '').trim());
+    }
+
+    function isHeroSmsReadyForFreshSmsText(text) {
+      return /^STATUS_WAIT_CODE(?::.+)?$/i.test(String(text || '').trim());
+    }
+
+    function isHeroSmsCancelledStatusText(text) {
+      return /^STATUS_CANCEL$/i.test(String(text || '').trim());
+    }
+
+    async function prepareFreeReusablePhoneActivation(state = {}, activation) {
+      const normalizedActivation = normalizeFreeReusablePhoneActivation(activation);
+      if (!normalizedActivation) {
+        return {
+          ok: false,
+          reason: 'missing_free_reusable_activation',
+          message: 'Free reusable phone activation is missing.',
+        };
+      }
+      if (!String(normalizedActivation.activationId || '').trim()) {
+        return {
+          ok: false,
+          reason: 'missing_activation_id',
+          message: 'Saved free reusable phone has no HeroSMS activation ID; automatic free reuse cannot reactivate it.',
+        };
+      }
+
+      const statusAction = resolveActivationStatusAction(normalizedActivation);
+      const config = resolveHeroSmsPhoneConfig(state);
+      const start = Date.now();
+      let lastStatus = '';
+      let prepareRound = 0;
+
+      while (
+        Date.now() - start < FREE_PHONE_REUSE_PREPARE_TIMEOUT_MS
+        && prepareRound < FREE_PHONE_REUSE_PREPARE_MAX_ROUNDS
+      ) {
+        throwIfStopped();
+        prepareRound += 1;
+
+        try {
+          await setPhoneActivationStatus(
+            { ...state, phoneSmsProvider: PHONE_SMS_PROVIDER_HERO },
+            normalizedActivation,
+            3,
+            'HeroSMS setStatus(3) for automatic free reuse'
+          );
+        } catch (error) {
+          return {
+            ok: false,
+            reason: 'set_status_failed',
+            message: error.message || 'HeroSMS setStatus(3) failed.',
+            lastStatus,
+            prepareRound,
+          };
+        }
+
+        await addLog(
+          `步骤 9：自动白嫖复用已刷新 ${normalizedActivation.phoneNumber}，${Math.ceil(FREE_PHONE_REUSE_PREPARE_INTERVAL_MS / 1000)} 秒后检查等待状态（${prepareRound}/${FREE_PHONE_REUSE_PREPARE_MAX_ROUNDS}）。`,
+          'info'
+        );
+        await sleepWithStop(FREE_PHONE_REUSE_PREPARE_INTERVAL_MS);
+
+        try {
+          const payload = await fetchHeroSmsPayload(config, {
+            action: statusAction,
+            id: normalizedActivation.activationId,
+          }, `HeroSMS ${statusAction} for automatic free reuse`);
+          const statusText = describeHeroSmsPayload(payload);
+          lastStatus = statusText;
+          await addLog(
+            `步骤 9：自动白嫖复用号码 ${normalizedActivation.phoneNumber} 状态：${statusText || 'empty response'}（${prepareRound}/${FREE_PHONE_REUSE_PREPARE_MAX_ROUNDS}）。`,
+            'info'
+          );
+
+          const v2Waiting = statusAction === 'getStatusV2'
+            && payload
+            && typeof payload === 'object'
+            && !Array.isArray(payload)
+            && !payload.sms?.code
+            && !payload.call?.code;
+          if (isHeroSmsReadyForFreshSmsText(statusText) || isHeroSmsWaitingStatusText(statusText) || v2Waiting) {
+            return {
+              ok: true,
+              activation: {
+                ...normalizedActivation,
+                source: 'free-auto-reuse',
+              },
+            };
+          }
+          if (/^STATUS_OK:/i.test(statusText)) {
+            await addLog(
+              `步骤 9：自动白嫖复用仍看到旧验证码，将再次刷新等待短信状态。`,
+              'warn'
+            );
+            continue;
+          }
+          if (isHeroSmsCancelledStatusText(statusText)) {
+            return {
+              ok: false,
+              reason: 'activation_cancelled',
+              message: 'HeroSMS activation was cancelled before automatic free reuse.',
+              lastStatus,
+              prepareRound,
+            };
+          }
+        } catch (error) {
+          return {
+            ok: false,
+            reason: 'get_status_failed',
+            message: error.message || 'HeroSMS getStatus failed.',
+            lastStatus,
+            prepareRound,
+          };
+        }
+      }
+
+      return {
+        ok: false,
+        reason: 'prepare_timeout',
+        message: `Timed out waiting for saved phone to enter SMS waiting state. Last status: ${lastStatus || 'unknown'}.`,
+        lastStatus,
+        prepareRound,
+      };
+    }
+
     async function pollPhoneActivationCode(state = {}, activation, options = {}) {
       const normalizedActivation = normalizeActivation(activation);
       if (!normalizedActivation) {
-        throw new Error('Phone activation is missing.');
+        throw new Error('缺少手机号接码订单。');
+      }
+      if (getActivationProviderId(normalizedActivation, state) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        const provider = getFiveSimProviderForState(state);
+        if (provider) {
+          return provider.pollActivationCode(state, normalizedActivation, options);
+        }
       }
       const statusAction = resolveActivationStatusAction(normalizedActivation);
 
@@ -3005,6 +3870,17 @@
         }
         const digitMatch = trimmed.match(/\b(\d{4,8})\b/);
         return digitMatch?.[1] || '';
+      };
+      const emitWaitingForCode = async (statusText) => {
+        if (typeof options.onWaitingForCode === 'function') {
+          await options.onWaitingForCode({
+            activation: normalizedActivation,
+            elapsedMs: Date.now() - start,
+            pollCount,
+            statusText,
+            timeoutMs,
+          });
+        }
       };
 
       if (config.provider === PHONE_SMS_PROVIDER_5SIM) {
@@ -3033,15 +3909,17 @@
 
           const statusText = String(payload?.status || '').trim().toUpperCase();
           if (/^(RECEIVED|PENDING|RETRY|PREPARE|WAITING)$/i.test(statusText) || !statusText) {
+            const waitingStatusText = statusText || text || 'PENDING';
             if (typeof options.onStatus === 'function') {
               await options.onStatus({
                 activation: normalizedActivation,
                 elapsedMs: Date.now() - start,
                 pollCount,
-                statusText: statusText || text || 'PENDING',
+                statusText: waitingStatusText,
                 timeoutMs,
               });
             }
+            await emitWaitingForCode(waitingStatusText);
             await sleepWithStop(intervalMs);
             continue;
           }
@@ -3092,17 +3970,20 @@
             if (directCode) {
               return directCode;
             }
+            await emitWaitingForCode(text || 'PENDING');
             await sleepWithStop(intervalMs);
             continue;
           }
 
           if (isNexSmsPendingMessage(payload)) {
+            await emitWaitingForCode(text || 'PENDING');
             await sleepWithStop(intervalMs);
             continue;
           }
           if (isNexSmsTerminalError(payload)) {
             throw new Error(`NexSMS get sms messages failed: ${text || 'unknown terminal error'}`);
           }
+          await emitWaitingForCode(text || 'PENDING');
           await sleepWithStop(intervalMs);
         }
 
@@ -3151,16 +4032,19 @@
           if (extractedCode) {
             return extractedCode;
           }
+          await emitWaitingForCode(text || 'STATUS_OK');
           await sleepWithStop(intervalMs);
           continue;
         }
 
         if (/^STATUS_(WAIT_CODE|WAIT_RETRY|WAIT_RESEND)(?::.+)?$/i.test(text)) {
+          await emitWaitingForCode(text);
           await sleepWithStop(intervalMs);
           continue;
         }
 
         if (statusAction === 'getStatusV2' && payload && typeof payload === 'object' && !Array.isArray(payload)) {
+          await emitWaitingForCode(text || 'PENDING');
           await sleepWithStop(intervalMs);
           continue;
         }
@@ -3176,69 +4060,88 @@
     }
 
     async function readPhonePageState(tabId, timeoutMs = 10000) {
-      await ensureStep8SignupPageReady(tabId, {
-        timeoutMs,
-        logMessage: 'Step 9: waiting for auth page content script to recover before phone verification.',
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+      const deadlineMs = Math.max(1, Math.floor(Number(timeoutMs) || 0));
+      let timeoutId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`步骤 ${visibleStep}：等待认证页状态检查超时。`));
+        }, deadlineMs);
       });
-      const result = await sendToContentScriptResilient('signup-page', {
-        type: 'STEP8_GET_STATE',
-        source: 'background',
-        payload: {},
-      }, {
-        timeoutMs,
-        responseTimeoutMs: timeoutMs,
-        retryDelayMs: 600,
-        logMessage: 'Step 9: auth page is switching, waiting to inspect phone verification state again...',
-      });
+      const readPromise = (async () => {
+        await ensureStep8SignupPageReady(tabId, {
+          timeoutMs: deadlineMs,
+          logMessage: '步骤 9：等待认证页脚本恢复后继续手机号验证。',
+          visibleStep,
+          logStepKey: 'phone-verification',
+        });
+        const result = await sendToContentScriptResilient('signup-page', {
+          type: 'STEP8_GET_STATE',
+          source: 'background',
+          payload: { visibleStep },
+        }, {
+          timeoutMs: deadlineMs,
+          responseTimeoutMs: deadlineMs,
+          retryDelayMs: 600,
+          logMessage: '步骤 9：认证页正在切换，等待后重新检查手机号验证状态...',
+          logStep: visibleStep,
+          logStepKey: 'phone-verification',
+        });
 
-      if (result?.error) {
-        throw new Error(result.error);
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+        return result || {};
+      })();
+
+      try {
+        return await Promise.race([readPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
       }
-      return result || {};
+    }
+
+    function resolveCountryCandidatesForProvider(state = {}, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) {
+      if (normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+        const provider = getFiveSimProviderForState(state);
+        if (provider) {
+          return provider.resolveCountryCandidates(state);
+        }
+        return resolveFiveSimCountryCandidates(state);
+      }
+      if (normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_NEXSMS) {
+        return resolveNexSmsCountryCandidates(state);
+      }
+      return resolveCountryCandidates(state);
     }
 
     function resolveCountryConfigFromActivation(activation, fallbackState = {}) {
-      const provider = normalizePhoneSmsProvider(
-        activation?.provider || fallbackState?.phoneSmsProvider || DEFAULT_PHONE_SMS_PROVIDER
-      );
-      const candidates = provider === PHONE_SMS_PROVIDER_5SIM
-        ? resolveFiveSimCountryCandidates(fallbackState)
-        : (
-          provider === PHONE_SMS_PROVIDER_NEXSMS
-            ? resolveNexSmsCountryCandidates(fallbackState)
-            : resolveCountryCandidates(fallbackState)
-        );
+      const providerId = getActivationProviderId(activation, fallbackState);
+      const candidates = resolveCountryCandidatesForProvider(fallbackState, providerId);
       if (activation && typeof activation === 'object') {
-        if (provider === PHONE_SMS_PROVIDER_5SIM) {
-          const countryCode = normalizeFiveSimCountryCode(
-            activation.countryCode || activation.countryId || '',
-            ''
-          );
-          if (countryCode) {
-            const matched = candidates.find((entry) => String(entry.id || entry.code || '') === countryCode);
-            if (matched) {
-              return matched;
-            }
-            return {
-              id: countryCode,
-              code: countryCode,
-              label: normalizeCountryLabel(activation.countryLabel, countryCode),
-            };
-          }
-        } else if (provider === PHONE_SMS_PROVIDER_NEXSMS) {
-          const countryId = normalizeNexSmsCountryId(activation.countryId, -1);
-          if (countryId >= 0) {
-            const matched = candidates.find((entry) => normalizeNexSmsCountryId(entry.id, -1) === countryId);
-            if (matched) {
-              return matched;
-            }
+        if (providerId === PHONE_SMS_PROVIDER_FIVE_SIM) {
+          const countryId = normalizeFiveSimCountryId(activation.countryId, '');
+          if (countryId) {
+            const matched = candidates.find((entry) => String(entry.id) === countryId);
+            if (matched) return matched;
             return {
               id: countryId,
-              label: normalizeCountryLabel(activation.countryLabel, `Country #${countryId}`),
+              label: normalizeFiveSimCountryLabel(activation.countryLabel, countryId),
             };
           }
         } else {
-          const countryId = normalizeCountryId(activation.countryId, 0);
+          const inferredCountry = inferHeroSmsCountryFromPhoneNumber(activation.phoneNumber);
+          const rawCountryId = normalizeCountryId(activation.countryId, 0);
+          const hasExplicitCountry = Object.prototype.hasOwnProperty.call(activation, 'countryId')
+            && Number.isFinite(rawCountryId)
+            && rawCountryId > 0
+            && !(activation.manualOnly && rawCountryId === HERO_SMS_COUNTRY_ID && inferredCountry?.id && inferredCountry.id !== rawCountryId);
+          const countryId = hasExplicitCountry ? rawCountryId : normalizeCountryId(inferredCountry?.id, rawCountryId);
+          const countryLabel = hasExplicitCountry
+            ? activation.countryLabel
+            : (inferredCountry?.label || activation.countryLabel);
           if (countryId > 0) {
             const matched = candidates.find((entry) => entry.id === countryId);
             if (matched) {
@@ -3246,32 +4149,22 @@
             }
             return {
               id: countryId,
-              label: normalizeCountryLabel(activation.countryLabel, `Country #${countryId}`),
+              label: normalizeCountryLabel(countryLabel, `Country #${countryId}`),
             };
           }
         }
       }
-      if (provider === PHONE_SMS_PROVIDER_5SIM) {
-        return candidates[0] || {
-          id: '',
-          code: '',
-          label: '',
-        };
-      }
-      if (provider === PHONE_SMS_PROVIDER_NEXSMS) {
-        return candidates[0] || {
-          id: 0,
-          label: '',
-        };
-      }
-      return candidates[0] || resolveCountryConfig(fallbackState);
+      return candidates[0] || (providerId === PHONE_SMS_PROVIDER_FIVE_SIM
+        ? { id: 'england', label: 'England' }
+        : resolveCountryConfig(fallbackState));
     }
 
     async function submitPhoneNumber(tabId, phoneNumber, activation = null) {
       const state = await getState();
       const countryConfig = resolveCountryConfigFromActivation(activation, state);
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
       const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
-        ? await getOAuthFlowStepTimeoutMs(30000, { step: 9, actionLabel: 'submit add-phone number' })
+        ? await getOAuthFlowStepTimeoutMs(30000, { step: visibleStep, actionLabel: '提交添加手机号' })
         : 30000;
       const result = await sendToContentScriptResilient('signup-page', {
         type: 'SUBMIT_PHONE_NUMBER',
@@ -3285,7 +4178,9 @@
         timeoutMs,
         responseTimeoutMs: timeoutMs,
         retryDelayMs: 600,
-        logMessage: 'Step 9: waiting for add-phone page to become ready...',
+        logMessage: '步骤 9：等待添加手机号页面就绪...',
+        logStep: visibleStep,
+        logStepKey: 'phone-verification',
       });
 
       if (result?.error) {
@@ -3295,18 +4190,73 @@
     }
 
     async function submitPhoneVerificationCode(tabId, code) {
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+      const signupProfile = (
+        typeof generateRandomName === 'function'
+        && typeof generateRandomBirthday === 'function'
+      )
+        ? (() => {
+          const name = generateRandomName();
+          const birthday = generateRandomBirthday();
+          if (!name?.firstName || !name?.lastName || !birthday) {
+            return null;
+          }
+          return {
+            firstName: name.firstName,
+            lastName: name.lastName,
+            year: birthday.year,
+            month: birthday.month,
+            day: birthday.day,
+          };
+        })()
+        : null;
       const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
-        ? await getOAuthFlowStepTimeoutMs(45000, { step: 9, actionLabel: 'submit phone verification code' })
+        ? await getOAuthFlowStepTimeoutMs(45000, { step: visibleStep, actionLabel: '提交手机验证码' })
         : 45000;
       const result = await sendToContentScriptResilient('signup-page', {
         type: 'SUBMIT_PHONE_VERIFICATION_CODE',
         source: 'background',
-        payload: { code },
+        payload: {
+          code,
+          ...(signupProfile ? { signupProfile } : {}),
+        },
       }, {
         timeoutMs,
         responseTimeoutMs: timeoutMs,
         retryDelayMs: 600,
-        logMessage: 'Step 9: waiting for phone verification page before filling the SMS code...',
+        logMessage: '步骤 9：等待手机验证码页面就绪后填写短信验证码...',
+        logStep: visibleStep,
+        logStepKey: 'phone-verification',
+      });
+
+      if (result?.error) {
+        if (isPhoneNumberUsedError(result.error)) {
+          return {
+            invalidCode: true,
+            errorText: String(result.error || ''),
+          };
+        }
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function resendPhoneVerificationCode(tabId, options = {}) {
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+      const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
+        ? await getOAuthFlowStepTimeoutMs(65000, { step: visibleStep, actionLabel: 'resend phone verification code' })
+        : 65000;
+      const result = await sendToContentScriptResilient('signup-page', {
+        type: 'RESEND_PHONE_VERIFICATION_CODE',
+        source: 'background',
+        payload: options || {},
+      }, {
+        timeoutMs,
+        responseTimeoutMs: timeoutMs,
+        retryDelayMs: 600,
+        logMessage: '步骤 9：等待手机验证码重发按钮出现...',
+        logStep: visibleStep,
+        logStepKey: 'phone-verification',
       });
 
       if (result?.error) {
@@ -3315,25 +4265,53 @@
       return result || {};
     }
 
-    async function resendPhoneVerificationCode(tabId) {
+    async function submitSignupPhoneVerificationCode(tabId, code, options = {}) {
+      const visibleStep = 4;
       const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
-        ? await getOAuthFlowStepTimeoutMs(65000, { step: 9, actionLabel: 'resend phone verification code' })
+        ? await getOAuthFlowStepTimeoutMs(45000, { step: visibleStep, actionLabel: '提交注册手机验证码' })
+        : 45000;
+      const result = await sendToContentScriptResilient('signup-page', {
+        type: 'SUBMIT_PHONE_VERIFICATION_CODE',
+        step: visibleStep,
+        source: 'background',
+        payload: {
+          code,
+          purpose: 'signup',
+          signupProfile: options.signupProfile || null,
+        },
+      }, {
+        timeoutMs,
+        responseTimeoutMs: timeoutMs,
+        retryDelayMs: 600,
+        logMessage: '步骤 4：等待注册手机验证码页面就绪后填写短信验证码...',
+        logStep: visibleStep,
+        logStepKey: 'fetch-signup-code',
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function resendSignupPhoneVerificationCode(tabId) {
+      const visibleStep = 4;
+      const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
+        ? await getOAuthFlowStepTimeoutMs(65000, { step: visibleStep, actionLabel: '重新发送注册手机验证码' })
         : 65000;
-      const request = {
-        type: 'RESEND_PHONE_VERIFICATION_CODE',
+      const result = await sendToContentScriptResilient('signup-page', {
+        type: 'RESEND_VERIFICATION_CODE',
+        step: visibleStep,
         source: 'background',
         payload: {},
-      };
-      const result = typeof sendToContentScript === 'function'
-        ? await sendToContentScript('signup-page', request, {
-          responseTimeoutMs: timeoutMs,
-        })
-        : await sendToContentScriptResilient('signup-page', request, {
-          timeoutMs,
-          responseTimeoutMs: timeoutMs,
-          retryDelayMs: 600,
-          logMessage: 'Step 9: waiting for the phone verification resend button...',
-        });
+      }, {
+        timeoutMs,
+        responseTimeoutMs: timeoutMs,
+        retryDelayMs: 600,
+        logMessage: '步骤 4：等待注册手机验证码重发按钮出现...',
+        logStep: visibleStep,
+        logStepKey: 'fetch-signup-code',
+      });
 
       if (result?.error) {
         throw new Error(result.error);
@@ -3342,8 +4320,9 @@
     }
 
     async function returnToAddPhone(tabId) {
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
       const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
-        ? await getOAuthFlowStepTimeoutMs(30000, { step: 9, actionLabel: 'return to add-phone page' })
+        ? await getOAuthFlowStepTimeoutMs(30000, { step: visibleStep, actionLabel: 'return to add-phone page' })
         : 30000;
       const result = await sendToContentScriptResilient('signup-page', {
         type: 'RETURN_TO_ADD_PHONE',
@@ -3353,13 +4332,87 @@
         timeoutMs,
         responseTimeoutMs: timeoutMs,
         retryDelayMs: 600,
-        logMessage: 'Step 9: returning to add-phone page to replace the phone number...',
+        logMessage: '步骤 9：返回添加手机号页面以更换号码...',
+        logStep: visibleStep,
+        logStepKey: 'phone-verification',
       });
 
       if (result?.error) {
         throw new Error(result.error);
       }
       return result || {};
+    }
+
+    async function checkPhoneResendPageError(tabId, state = {}) {
+      if (!usePageProbeForPhoneResend(state)) {
+        return {
+          hasError: false,
+          reason: '',
+          message: '',
+        };
+      }
+      const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+      try {
+        const result = await sendToContentScriptResilient('signup-page', {
+          type: 'CHECK_PHONE_RESEND_ERROR',
+          source: 'background',
+          payload: { visibleStep },
+        }, {
+          timeoutMs: 3000,
+          responseTimeoutMs: 3000,
+          retryDelayMs: 500,
+          logStep: visibleStep,
+          logStepKey: 'phone-verification',
+        });
+
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+        return result || {};
+      } catch (error) {
+        if (isStopRequestedError(error)) {
+          throw error;
+        }
+        if (isPhoneResendBannedNumberError(error)) {
+          return {
+            hasError: true,
+            reason: 'resend_phone_banned',
+            message: error.message,
+          };
+        }
+        if (isPhoneResendThrottledError(error)) {
+          return {
+            hasError: true,
+            reason: 'resend_throttled',
+            message: error.message,
+          };
+        }
+        if (isPhoneResendServerError(error)) {
+          return {
+            hasError: true,
+            reason: 'resend_server_error',
+            message: error.message,
+          };
+        }
+        if (isPhoneMaxUsageExceededFlowError(error)) {
+          return {
+            hasError: true,
+            reason: 'phone_max_usage_exceeded',
+            message: error.message,
+          };
+        }
+        await addLog(`步骤 9：检查手机重发错误时遇到暂时性问题，已忽略。${error.message}`, 'warn');
+        return {
+          hasError: false,
+          reason: '',
+          message: '',
+        };
+      }
+    }
+
+    function usePageProbeForPhoneResend(state = {}) {
+      const provider = normalizePhoneSmsProvider(state?.phoneSmsProvider || DEFAULT_PHONE_SMS_PROVIDER);
+      return provider === PHONE_SMS_PROVIDER_HERO || provider === PHONE_SMS_PROVIDER_NEXSMS || provider === PHONE_SMS_PROVIDER_5SIM;
     }
 
     async function persistCurrentActivation(activation) {
@@ -3428,6 +4481,71 @@
       await persistReusableActivation(null);
     }
 
+    async function handoffFreeReusablePhone(tabId, state = {}) {
+      if (!normalizeFreePhoneReuseEnabled(state?.freePhoneReuseEnabled)) {
+        return null;
+      }
+      const freeReusableActivation = normalizeFreeReusablePhoneActivation(
+        state[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]
+      );
+      if (!freeReusableActivation) {
+        return null;
+      }
+
+      if (freeReusableActivation.successfulUses >= freeReusableActivation.maxUses) {
+        await retireFreeReusableActivation(
+          `保存的手机号 ${freeReusableActivation.phoneNumber} 已达到 ${freeReusableActivation.successfulUses}/${freeReusableActivation.maxUses} 次。`
+        );
+        return null;
+      }
+
+      const canPrepareAutomaticFreeReuse = normalizeFreePhoneReuseAutoEnabled(state)
+        && !freeReusableActivation.manualOnly
+        && Boolean(String(freeReusableActivation.activationId || '').trim());
+
+      if (canPrepareAutomaticFreeReuse) {
+        await addLog(
+          `步骤 9：准备自动白嫖复用已保存手机号 ${freeReusableActivation.phoneNumber}（${freeReusableActivation.successfulUses + 1}/${freeReusableActivation.maxUses}）。`,
+          'info'
+        );
+        const prepared = await prepareFreeReusablePhoneActivation(state, freeReusableActivation);
+        if (!prepared.ok) {
+          const reason = prepared.message || prepared.reason || 'unknown error';
+          const stopMessage = `自动白嫖复用准备失败：${freeReusableActivation.phoneNumber} 未确认进入等待短信状态，本次不购买新 HeroSMS 号码。原因：${reason}`;
+          await addLog(
+            `步骤 9：自动白嫖复用准备失败，停止本次接码且不购买新 HeroSMS 号码。${reason}`,
+            'error'
+          );
+          if (prepared.reason === 'activation_cancelled') {
+            await retireFreeReusableActivation(
+              `自动白嫖复用号码 ${freeReusableActivation.phoneNumber} 已被 HeroSMS 取消。`
+            );
+          }
+          if (typeof requestStop === 'function') {
+            await requestStop({ logMessage: stopMessage });
+          }
+          throw new Error(`${PHONE_AUTO_FREE_REUSE_PREPARE_ERROR_PREFIX}${stopMessage}`);
+        }
+        await persistCurrentActivation(prepared.activation);
+        return prepared.activation;
+      }
+
+      const fillResult = await submitPhoneNumber(tabId, freeReusableActivation.phoneNumber, freeReusableActivation);
+      await clearCurrentActivation();
+      const message = `开始手动复用手机 ${freeReusableActivation.phoneNumber}，请到 SMS 上刷新。`;
+      await addLog(`步骤 9：${message}`, 'warn');
+      if (typeof requestStop === 'function') {
+        await requestStop({ logMessage: message });
+      }
+      const handoffError = new Error(`${PHONE_MANUAL_FREE_REUSE_ERROR_PREFIX}${message}`);
+      handoffError.result = {
+        manualFreePhoneReuse: true,
+        phoneNumber: freeReusableActivation.phoneNumber,
+        fillResult,
+      };
+      throw handoffError;
+    }
+
     async function setPhoneRuntimeCountdown(activation, waitSeconds, windowIndex, windowTotal) {
       const normalizedActivation = normalizeActivation(activation);
       if (!normalizedActivation) {
@@ -3450,21 +4568,34 @@
       });
     }
 
+    async function persistSignupPhoneRuntimeState(updates = {}) {
+      await setPhoneRuntimeState({
+        signupPhoneNumber: '',
+        signupPhoneActivation: null,
+        signupPhoneVerificationRequestedAt: null,
+        signupPhoneVerificationPurpose: '',
+        accountIdentifierType: null,
+        accountIdentifier: '',
+        ...updates,
+      });
+    }
+
+    async function clearSignupPhoneRuntimeState(extraUpdates = {}) {
+      await persistSignupPhoneRuntimeState({
+        [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+        ...extraUpdates,
+      });
+    }
+
     async function acquirePhoneActivation(state = {}, options = {}) {
       const provider = normalizePhoneSmsProvider(state?.phoneSmsProvider || DEFAULT_PHONE_SMS_PROVIDER);
       const providerOrder = resolvePhoneProviderOrder(state, provider);
-      const countryCandidates = provider === PHONE_SMS_PROVIDER_5SIM
-        ? resolveFiveSimCountryCandidates(state)
-        : (
-          provider === PHONE_SMS_PROVIDER_NEXSMS
-            ? resolveNexSmsCountryCandidates(state)
-            : resolveCountryCandidates(state)
-        );
+      const countryCandidates = resolveCountryCandidatesForProvider(state, provider);
       if (
         (provider === PHONE_SMS_PROVIDER_5SIM || provider === PHONE_SMS_PROVIDER_NEXSMS)
         && !countryCandidates.length
       ) {
-        throw new Error(`Step 9: ${provider === PHONE_SMS_PROVIDER_5SIM ? '5sim' : 'NexSMS'} countries are empty. Please select at least one country in 接码设置。`);
+        throw new Error(`Step ${getActivePhoneVerificationVisibleStep()}: ${provider === PHONE_SMS_PROVIDER_5SIM ? '5sim' : 'NexSMS'} countries are empty. Please select at least one country in 接码设置。`);
       }
       const normalizeCountryKey = (value) => (
         provider === PHONE_SMS_PROVIDER_5SIM
@@ -3526,7 +4657,7 @@
         try {
           const reactivated = await reactivatePhoneActivation(state, preferredActivation);
           await addLog(
-            `Step 9: using preferred number ${reactivated.phoneNumber}${reactivated.countryId ? ` (${resolveCountryLabelById(reactivated.countryId)})` : ''}.`,
+            `步骤 9：优先复用手动选择号码 ${reactivated.phoneNumber}${reactivated.countryId ? `（${resolveCountryLabelById(reactivated.countryId)}）` : ''}。`,
             'info'
           );
           await resetPhoneNoSupplyFailureStreak(state);
@@ -3535,12 +4666,12 @@
           failedPreferredActivation = preferredActivation;
           await removeReusableActivationFromPool(preferredActivation, { state }).catch(() => {});
           await addLog(
-            `Step 9: preferred number ${preferredActivation.phoneNumber} is unavailable, falling back to a new number. ${error.message}`,
+            `步骤 9：手动选择号码 ${preferredActivation.phoneNumber} 不可用，将改为获取新号码。${error.message}`,
             'warn'
           );
         }
       }
-      const reuseEnabled = normalizeHeroSmsReuseEnabled(state.heroSmsReuseEnabled);
+      const reuseEnabled = isPhoneSmsReuseEnabled(state);
       const reusableActivation = normalizeActivation(state[REUSABLE_PHONE_ACTIVATION_STATE_KEY]);
       const reusableActivationPool = readReusableActivationPoolFromState(state);
       const reusableCandidates = [];
@@ -3580,13 +4711,13 @@
           try {
             const reactivated = await reactivatePhoneActivation(state, candidateActivation);
             await addLog(
-              `Step 9: reusing ${resolveCountryLabelById(reactivated.countryId)} number ${reactivated.phoneNumber} (${reactivated.successfulUses + 1}/${reactivated.maxUses}).`,
+              `步骤 9：复用 ${resolveCountryLabelById(reactivated.countryId)} 号码 ${reactivated.phoneNumber}（第 ${reactivated.successfulUses + 1}/${reactivated.maxUses} 次）。`,
               'info'
             );
             await resetPhoneNoSupplyFailureStreak(state);
             return reactivated;
           } catch (error) {
-            await addLog(`Step 9: failed to reuse phone number ${candidateActivation.phoneNumber}, falling back to a new number. ${error.message}`, 'warn');
+            await addLog(`步骤 9：复用号码 ${candidateActivation.phoneNumber} 失败，将改为获取新号码。${error.message}`, 'warn');
             await removeReusableActivationFromPool(candidateActivation, { state }).catch(() => {});
             if (isSameActivation(reusableActivation, candidateActivation)) {
               await clearReusableActivation();
@@ -3617,20 +4748,18 @@
               countryPriceFloorByCountryId: useCountryPriceFloorByCountryId,
             }
           );
-          const providerLabel = providerCandidate === PHONE_SMS_PROVIDER_5SIM
-            ? '5sim'
-            : (providerCandidate === PHONE_SMS_PROVIDER_NEXSMS ? 'NexSMS' : HERO_SMS_SERVICE_LABEL);
+          const providerLabel = getPhoneSmsProviderLabel(providerCandidate);
           const providerCountryLabel = providerCandidate === provider
             ? resolveCountryLabelById(activation.countryId)
             : String(activation?.countryLabel || activation?.countryId || '').trim();
           if (providerCandidate !== provider) {
             await addLog(
-              `Step 9: primary provider ${provider} has no usable number, fallback succeeded on ${providerLabel}${providerCountryLabel ? ` / ${providerCountryLabel}` : ''}.`,
+              `步骤 9：主接码平台 ${getPhoneSmsProviderLabel(provider)} 暂无可用号码，已回退到 ${providerLabel}${providerCountryLabel ? ` / ${providerCountryLabel}` : ''}。`,
               'warn'
             );
           }
           await addLog(
-            `Step 9: acquired ${providerLabel}${providerCountryLabel ? ` / ${providerCountryLabel}` : ''} number ${activation.phoneNumber}.`,
+            `步骤 9：已从 ${providerLabel}${providerCountryLabel ? ` / ${providerCountryLabel}` : ''} 获取号码 ${activation.phoneNumber}。`,
             'info'
           );
           await resetPhoneNoSupplyFailureStreak(state);
@@ -3640,16 +4769,14 @@
             throw error;
           }
           const providerErrorMessage = String(error?.message || error || 'unknown error');
-          const providerLabel = providerCandidate === PHONE_SMS_PROVIDER_5SIM
-            ? '5sim'
-            : (providerCandidate === PHONE_SMS_PROVIDER_NEXSMS ? 'NexSMS' : HERO_SMS_SERVICE_LABEL);
+          const providerLabel = getPhoneSmsProviderLabel(providerCandidate);
           if (
             providerCandidate !== provider
             && /step\s*9:\s*(?:5sim|nexsms)\s+countries\s+are\s+empty/i.test(providerErrorMessage)
           ) {
             skippedFallbackProviders.push(`${providerLabel}: countries are empty`);
             await addLog(
-              `Step 9: skipping fallback provider ${providerLabel} because countries are empty in 接码设置。`,
+              `步骤 9：跳过回退接码平台 ${providerLabel}，因为接码设置中未选择国家。`,
               'warn'
             );
             continue;
@@ -3664,21 +4791,53 @@
         const skippedSuffix = skippedFallbackProviders.length
           ? ` | skipped fallback providers: ${skippedFallbackProviders.join('; ')}`
           : '';
-        throw new Error(`Step 9: all provider candidates failed to acquire number. ${providerErrors.join(' | ')}${skippedSuffix}`);
+        throw new Error(`Step ${getActivePhoneVerificationVisibleStep()}: all provider candidates failed to acquire number. ${providerErrors.join(' | ')}${skippedSuffix}`);
       }
-      throw lastProviderError || new Error('Step 9: failed to acquire phone activation.');
+      throw lastProviderError || new Error(`Step ${getActivePhoneVerificationVisibleStep()}: failed to acquire phone activation.`);
+    }
+
+    async function prepareSignupPhoneActivation(state = {}, options = {}) {
+      return withPhoneVerificationLogContext({ step: 2, stepKey: 'submit-signup-email' }, async () => {
+        const activation = await acquirePhoneActivation(state, {
+          ...options,
+          logLabel: options?.logLabel || '步骤 2',
+        });
+        const normalizedActivation = normalizeActivation(activation);
+        if (!normalizedActivation) {
+          throw new Error('步骤 2：接码平台返回的手机号订单无效。');
+        }
+        const countryConfig = resolveCountryConfigFromActivation(normalizedActivation, state);
+        const signupActivation = normalizeActivation({
+          ...normalizedActivation,
+          countryId: countryConfig?.id ?? normalizedActivation.countryId,
+          countryLabel: normalizedActivation.countryLabel || countryConfig?.label || '',
+        }) || normalizedActivation;
+        await persistSignupPhoneRuntimeState({
+          signupPhoneNumber: signupActivation.phoneNumber,
+          signupPhoneActivation: signupActivation,
+          signupPhoneVerificationRequestedAt: null,
+          signupPhoneVerificationPurpose: 'signup',
+          accountIdentifierType: 'phone',
+          accountIdentifier: signupActivation.phoneNumber,
+        });
+        return signupActivation;
+      });
     }
 
     async function markActivationReusableAfterSuccess(state, activation) {
       const normalizedActivation = normalizeActivation(activation);
-      const reusableProvider = normalizedActivation?.provider;
-      const canPersistReusableActivation = reusableProvider === PHONE_SMS_PROVIDER_HERO
-        || reusableProvider === PHONE_SMS_PROVIDER_5SIM;
-      if (!canPersistReusableActivation) {
+      if (!isPhoneSmsReuseEnabled(state)) {
         await clearReusableActivation();
         return;
       }
       if (!normalizedActivation) {
+        await clearReusableActivation();
+        return;
+      }
+      const reusableProvider = normalizedActivation.provider;
+      const canPersistReusableActivation = reusableProvider === PHONE_SMS_PROVIDER_HERO
+        || reusableProvider === PHONE_SMS_PROVIDER_5SIM;
+      if (!canPersistReusableActivation) {
         await clearReusableActivation();
         return;
       }
@@ -3688,6 +4847,8 @@
         ...normalizedActivation,
         successfulUses,
       };
+      delete nextReusableActivation.phoneCodeReceived;
+      delete nextReusableActivation.phoneCodeReceivedAt;
       await upsertReusableActivationPool(nextReusableActivation, { state });
       if (!normalizeHeroSmsReuseEnabled(state?.heroSmsReuseEnabled)) {
         await clearReusableActivation();
@@ -3702,10 +4863,171 @@
       await persistReusableActivation(nextReusableActivation);
     }
 
+    function shouldPreserveActivationForFreeReuse(state, activation) {
+      if (!normalizeFreePhoneReuseEnabled(state?.freePhoneReuseEnabled)) {
+        return false;
+      }
+      const normalizedActivation = normalizeActivation(activation);
+      return Boolean(
+        normalizedActivation
+        && normalizedActivation.provider === PHONE_SMS_PROVIDER_HERO
+        && normalizedActivation.source === 'hero-sms-new'
+        && normalizedActivation.phoneCodeReceived
+      );
+    }
+
+    function shouldSkipTerminalStatusForFreeReuse(state, activation) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation || normalizedActivation.provider !== PHONE_SMS_PROVIDER_HERO) {
+        return false;
+      }
+      if (isFreeAutoReuseActivation(normalizedActivation)) {
+        return true;
+      }
+      if (normalizedActivation.source === 'free-manual-reuse') {
+        return true;
+      }
+      const savedFreeActivation = normalizeFreeReusablePhoneActivation(
+        state?.[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]
+      );
+      if (
+        savedFreeActivation
+        && (
+          isSameActivation(savedFreeActivation, normalizedActivation)
+          || phoneNumbersMatch(savedFreeActivation.phoneNumber, normalizedActivation.phoneNumber)
+        )
+      ) {
+        return true;
+      }
+      return shouldPreserveActivationForFreeReuse(state, normalizedActivation);
+    }
+
+    async function markFreeReusableActivationAfterCode(state, activation) {
+      const latestState = {
+        ...(state || {}),
+        ...(typeof getState === 'function' ? await getState() : {}),
+      };
+      if (!normalizeFreePhoneReuseEnabled(latestState?.freePhoneReuseEnabled)) {
+        return;
+      }
+      if (normalizeFreeReusablePhoneActivation(latestState[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY])) {
+        return;
+      }
+      const normalizedActivation = normalizeActivation(activation);
+      if (
+        !normalizedActivation
+        || normalizedActivation.provider !== PHONE_SMS_PROVIDER_HERO
+        || !normalizedActivation.phoneCodeReceived
+        || isFreeAutoReuseActivation(normalizedActivation)
+      ) {
+        return;
+      }
+      const countryConfig = resolveCountryConfigFromActivation(normalizedActivation, latestState);
+      await persistFreeReusableActivation({
+        ...normalizedActivation,
+        source: 'free-manual-reuse',
+        countryId: countryConfig.id,
+        ...(countryConfig.label ? { countryLabel: countryConfig.label } : {}),
+        recordedAt: Date.now(),
+      });
+      await addLog(
+        `步骤 9：收到有效短信后已保存白嫖复用手机号 ${normalizedActivation.phoneNumber}。`,
+        'info'
+      );
+    }
+
+    async function markFreeReusableActivationAfterAutoSuccess(state, activation) {
+      const normalizedActivation = normalizeFreeReusablePhoneActivation(activation);
+      if (!normalizedActivation || !isFreeAutoReuseActivation(activation)) {
+        return;
+      }
+
+      const latestState = {
+        ...(state || {}),
+        ...(typeof getState === 'function' ? await getState() : {}),
+      };
+      const savedActivation = normalizeFreeReusablePhoneActivation(
+        latestState[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]
+      );
+      if (!savedActivation || savedActivation.activationId !== normalizedActivation.activationId) {
+        return;
+      }
+
+      const successfulUses = savedActivation.successfulUses + 1;
+      const maxUses = Math.max(1, Math.floor(Number(savedActivation.maxUses) || DEFAULT_PHONE_NUMBER_MAX_USES));
+      if (successfulUses >= maxUses) {
+        await clearFreeReusableActivation();
+        await addLog(
+          `步骤 9：自动白嫖复用手机号 ${savedActivation.phoneNumber} 已达到 ${successfulUses}/${maxUses} 次，已清除本地记录。`,
+          'info'
+        );
+        return;
+      }
+
+      await persistFreeReusableActivation({
+        ...savedActivation,
+        source: 'free-manual-reuse',
+        successfulUses,
+        maxUses,
+      });
+      await addLog(
+        `步骤 9：自动白嫖复用手机号 ${savedActivation.phoneNumber} 成功（${successfulUses}/${maxUses}），保留供后续注册使用。`,
+        'info'
+      );
+    }
+
+    async function markFreeReusableActivationAfterInitialSuccess(state, activation) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (
+        !normalizedActivation
+        || normalizedActivation.provider !== PHONE_SMS_PROVIDER_HERO
+        || isFreeAutoReuseActivation(normalizedActivation)
+      ) {
+        return;
+      }
+
+      const latestState = {
+        ...(state || {}),
+        ...(typeof getState === 'function' ? await getState() : {}),
+      };
+      const savedActivation = normalizeFreeReusablePhoneActivation(
+        latestState[FREE_REUSABLE_PHONE_ACTIVATION_STATE_KEY]
+      );
+      if (
+        !savedActivation
+        || !(
+          isSameActivation(savedActivation, normalizedActivation)
+          || phoneNumbersMatch(savedActivation.phoneNumber, normalizedActivation.phoneNumber)
+        )
+      ) {
+        return;
+      }
+
+      const maxUses = Math.max(1, Math.floor(Number(savedActivation.maxUses) || DEFAULT_PHONE_NUMBER_MAX_USES));
+      const successfulUses = Math.min(maxUses, Math.max(1, normalizeUseCount(savedActivation.successfulUses)));
+      if (successfulUses >= maxUses) {
+        await clearFreeReusableActivation();
+        await addLog(
+          `步骤 9：白嫖复用手机号 ${savedActivation.phoneNumber} 已达到 ${successfulUses}/${maxUses} 次，已清除本地记录。`,
+          'info'
+        );
+        return;
+      }
+
+      if (successfulUses !== savedActivation.successfulUses || savedActivation.maxUses !== maxUses) {
+        await persistFreeReusableActivation({
+          ...savedActivation,
+          source: 'free-manual-reuse',
+          successfulUses,
+          maxUses,
+        });
+      }
+    }
+
     async function waitForPhoneCodeOrRotateNumber(tabId, state, activation) {
       const normalizedActivation = normalizeActivation(activation);
       if (!normalizedActivation) {
-        throw new Error('Phone activation is missing.');
+        throw new Error('缺少手机号接码订单。');
       }
       const providerLabel = normalizedActivation.provider === PHONE_SMS_PROVIDER_5SIM
         ? '5sim'
@@ -3723,18 +5045,39 @@
       for (let windowIndex = 1; windowIndex <= timeoutWindows; windowIndex += 1) {
         await setPhoneRuntimeCountdown(normalizedActivation, waitSeconds, windowIndex, timeoutWindows);
         await addLog(
-          `Step 9: waiting up to ${waitSeconds} seconds for SMS on ${normalizedActivation.phoneNumber} (${windowIndex}/${timeoutWindows}).`,
+          `步骤 9：等待号码 ${normalizedActivation.phoneNumber} 接收短信，最长 ${waitSeconds} 秒（第 ${windowIndex}/${timeoutWindows} 轮）。`,
           'info'
         );
         try {
           const code = await pollPhoneActivationCode(state, normalizedActivation, {
             actionLabel: windowIndex === 1
-              ? `poll phone verification code from ${providerLabel}`
-              : `poll resent phone verification code from ${providerLabel}`,
+              ? '从接码平台轮询手机验证码'
+              : '从接码平台轮询重发后的手机验证码',
             timeoutMs: waitSeconds * 1000,
             intervalMs: pollIntervalSeconds * 1000,
             maxRounds: pollMaxRounds,
             onStatus: async ({ elapsedMs, pollCount, statusText }) => {
+              if (/^STATUS_(WAIT_CODE|WAIT_RETRY|WAIT_RESEND)(?::.+)?$/i.test(String(statusText || '').trim())) {
+                const pageError = await checkPhoneResendPageError(tabId, state);
+                if (pageError?.reason === 'resend_phone_banned') {
+                  throw new Error(`${PHONE_RESEND_BANNED_NUMBER_ERROR_PREFIX}${pageError.message || 'OpenAI could not send SMS to this phone number.'}`);
+                }
+                if (pageError?.reason === 'phone_max_usage_exceeded') {
+                  throw buildPhoneMaxUsageExceededError(pageError.message);
+                }
+                if (pageError?.reason === 'resend_server_error') {
+                  throw buildPhoneResendServerError(pageError.message);
+                }
+                if (pageError?.reason === 'resend_throttled') {
+                  if (shouldTreatResendThrottledAsBanned(state)) {
+                    throw buildHighRiskResendThrottledError(pageError.message);
+                  }
+                  await addLog(
+                    `步骤 9：检测到号码 ${normalizedActivation.phoneNumber} 重发限流，但未启用“按疑似封禁处理”，继续等待短信。${pageError.message || ''}`.trim(),
+                    'warn'
+                  );
+                }
+              }
               const shouldLog = (
                 pollCount === 1
                 || statusText !== lastLoggedStatus
@@ -3746,7 +5089,7 @@
               lastLoggedStatus = statusText;
               lastLoggedPollCount = pollCount;
               await addLog(
-                `Step 9: ${providerLabel} status for ${normalizedActivation.phoneNumber}: ${statusText} (${Math.ceil(elapsedMs / 1000)}s elapsed, round ${pollCount}/${pollMaxRounds}).`,
+                `步骤 9：${getPhoneSmsProviderLabel(normalizedActivation.provider)} 号码 ${normalizedActivation.phoneNumber} 状态：${statusText}（已等待 ${Math.ceil(elapsedMs / 1000)} 秒，第 ${pollCount}/${pollMaxRounds} 次轮询）。`,
                 'info'
               );
             },
@@ -3758,6 +5101,62 @@
           };
         } catch (error) {
           if (!isPhoneCodeTimeoutError(error)) {
+            if (isPhoneResendBannedNumberError(error)) {
+              await addLog(
+                `步骤 9：OpenAI 无法向号码 ${normalizedActivation.phoneNumber} 发送短信，立即更换号码。${error.message}`,
+                'warn'
+              );
+              await clearPhoneRuntimeCountdown();
+              return {
+                code: '',
+                replaceNumber: true,
+                reason: 'resend_phone_banned',
+              };
+            }
+            if (isPhoneMaxUsageExceededFlowError(error)) {
+              await addLog(
+                `步骤 9：OpenAI 提示号码 ${normalizedActivation.phoneNumber} 达到使用上限，立即更换号码。${error.message}`,
+                'warn'
+              );
+              await clearPhoneRuntimeCountdown();
+              return {
+                code: '',
+                replaceNumber: true,
+                reason: 'phone_max_usage_exceeded',
+              };
+            }
+            if (isPhoneResendServerError(error)) {
+              await addLog(
+                `步骤 9：重发短信后进入 contact-verification 500 页面，立即更换号码。${error.message}`,
+                'warn'
+              );
+              await clearPhoneRuntimeCountdown();
+              return {
+                code: '',
+                replaceNumber: true,
+                reason: 'resend_server_error',
+              };
+            }
+            if (isPhoneResendThrottledError(error)) {
+              if (shouldTreatResendThrottledAsBanned(state)) {
+                await addLog(
+                  `步骤 9：号码 ${normalizedActivation.phoneNumber} 重发限流且配置为高风险封禁，立即更换号码。${error.message}`,
+                  'warn'
+                );
+                await clearPhoneRuntimeCountdown();
+                return {
+                  code: '',
+                  replaceNumber: true,
+                  reason: 'resend_throttled_high_risk_banned',
+                };
+              }
+              await addLog(
+                `步骤 9：号码 ${normalizedActivation.phoneNumber} 重发限流，但未启用高风险换号，继续原等待逻辑。${error.message}`,
+                'warn'
+              );
+              await sleepWithStop(pollIntervalSeconds * 1000);
+              continue;
+            }
             if (isPhoneActivationOrderMissingError(error, normalizedActivation.provider)) {
               await addLog(
                 `Step 9: ${providerLabel} activation for ${normalizedActivation.phoneNumber} became invalid (${error.message || error}), replacing number immediately.`,
@@ -3775,7 +5174,7 @@
 
           if (windowIndex < timeoutWindows) {
             await addLog(
-              `Step 9: no SMS arrived for ${normalizedActivation.phoneNumber} within ${waitSeconds} seconds, requesting another SMS.`,
+              `步骤 9：号码 ${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，正在请求再次发送。`,
               'warn'
             );
             if (!usePageResend) {
@@ -3785,53 +5184,94 @@
               );
               continue;
             }
-            await requestAdditionalPhoneSms(state, normalizedActivation);
             if (resendTriggeredForCurrentNumber) {
               await addLog(
-                `Step 9: resend already used once for ${normalizedActivation.phoneNumber}; continue polling without another page resend to avoid rate limit.`,
+                `步骤 9：号码 ${normalizedActivation.phoneNumber} 已触发过一次页面重发；为避免限流，将继续轮询不再点击重发。`,
                 'warn'
               );
               continue;
             }
             try {
-              await resendPhoneVerificationCode(tabId);
+              const resendProbeResult = await resendPhoneVerificationCode(tabId, { probeOnly: true });
+              if (isWhatsAppPhoneResendResult(resendProbeResult)) {
+                await addLog(
+                  `步骤 9：页面重发入口显示 WhatsApp 通道（${resendProbeResult.channelText || resendProbeResult.text || 'WhatsApp'}），当前接码平台无法读取 WhatsApp 消息，立即更换号码。`,
+                  'warn'
+                );
+                await clearPhoneRuntimeCountdown();
+                return {
+                  code: '',
+                  replaceNumber: true,
+                  reason: 'whatsapp_resend_channel',
+                };
+              }
+              await requestAdditionalPhoneSms(state, normalizedActivation);
+              if (resendProbeResult?.probed) {
+                const resendResult = await resendPhoneVerificationCode(tabId);
+                if (isWhatsAppPhoneResendResult(resendResult)) {
+                  await addLog(
+                    `步骤 9：页面重发入口切换为 WhatsApp 通道（${resendResult.channelText || resendResult.text || 'WhatsApp'}），当前接码平台无法读取 WhatsApp 消息，立即更换号码。`,
+                    'warn'
+                  );
+                  await clearPhoneRuntimeCountdown();
+                  return {
+                    code: '',
+                    replaceNumber: true,
+                    reason: 'whatsapp_resend_channel',
+                  };
+                }
+              }
               resendTriggeredForCurrentNumber = true;
-              await addLog('Step 9: clicked "Resend text message" on the phone verification page.', 'info');
+              await addLog('步骤 9：已点击手机验证码页面的“重新发送短信”。', 'info');
             } catch (resendError) {
               if (isStopRequestedError(resendError)) {
                 throw resendError;
               }
+              if (isPhoneResendBannedNumberError(resendError)) {
+                await addLog(
+                  `步骤 9：OpenAI 无法向号码 ${normalizedActivation.phoneNumber} 发送短信，立即更换号码。${resendError.message}`,
+                  'warn'
+                );
+                await clearPhoneRuntimeCountdown();
+                return {
+                  code: '',
+                  replaceNumber: true,
+                  reason: 'resend_phone_banned',
+                };
+              }
               if (isPhoneResendThrottledError(resendError)) {
                 await addLog(
-                  `Step 9: resend is throttled for ${normalizedActivation.phoneNumber}, replacing number immediately. ${resendError.message}`,
+                  `步骤 9：号码 ${normalizedActivation.phoneNumber} 重发短信被限流，立即更换号码。${resendError.message}`,
                   'warn'
                 );
                 await clearPhoneRuntimeCountdown();
                 return {
                   code: '',
                   replaceNumber: true,
-                  reason: 'resend_throttled',
+                  reason: shouldTreatResendThrottledAsBanned(state)
+                    ? 'resend_throttled_high_risk_banned'
+                    : 'resend_throttled',
                 };
               }
-              if (isPhoneRoute405RecoveryError(resendError)) {
+              if (isPhoneResendServerError(resendError)) {
                 await addLog(
-                  `Step 9: phone verification page is stuck on route-405 retry loop for ${normalizedActivation.phoneNumber}, replacing number immediately. ${resendError.message}`,
+                  `步骤 9：重发短信后进入 contact-verification 500 页面，立即更换号码。${resendError.message}`,
                   'warn'
                 );
                 await clearPhoneRuntimeCountdown();
                 return {
                   code: '',
                   replaceNumber: true,
-                  reason: 'route_405_retry_loop',
+                  reason: 'resend_server_error',
                 };
               }
-              await addLog(`Step 9: failed to click resend on the phone verification page. ${resendError.message}`, 'warn');
+              await addLog(`步骤 9：点击手机验证码页面重发按钮失败。${resendError.message}`, 'warn');
             }
             continue;
           }
 
           await addLog(
-            `Step 9: no SMS for ${normalizedActivation.phoneNumber} after ${timeoutWindows} window(s), replacing the number inside step 9.`,
+            `步骤 9：号码 ${normalizedActivation.phoneNumber} 连续 ${timeoutWindows} 轮未收到短信，将在步骤 9 内更换号码。`,
             'warn'
           );
           await clearPhoneRuntimeCountdown();
@@ -3843,10 +5283,559 @@
         }
       }
 
-      throw new Error('Phone verification did not complete successfully.');
+      throw new Error('手机号验证未完成。');
     }
 
-    async function completePhoneVerificationFlow(tabId, initialPageState = null) {
+    function buildCompletedActivationSnapshot(activation) {
+      const normalizedActivation = normalizeActivation(activation);
+      if (!normalizedActivation) {
+        return null;
+      }
+      return {
+        ...normalizedActivation,
+        successfulUses: normalizedActivation.successfulUses + 1,
+      };
+    }
+
+    async function waitForScopedPhoneCode(state = {}, activation, options = {}) {
+      const normalizedActivation = normalizeActivation(activation);
+      const visibleStep = normalizeLogStep(options?.step) || 4;
+      const stepKey = String(options?.stepKey || 'fetch-signup-code').trim() || 'fetch-signup-code';
+      const purpose = String(options?.purpose || 'signup').trim() || 'signup';
+      const actionLabelPrefix = String(options?.actionLabelPrefix || 'signup phone verification').trim() || 'phone verification';
+      const onPollStatus = typeof options?.onPollStatus === 'function' ? options.onPollStatus : null;
+      if (!normalizedActivation) {
+        throw new Error(options?.missingActivationMessage || `步骤 ${visibleStep}：手机号激活记录缺失，请重新执行前置步骤。`);
+      }
+
+      return withPhoneVerificationLogContext({ step: visibleStep, stepKey }, async () => {
+        const providerLabel = getPhoneSmsProviderLabel(normalizedActivation.provider);
+        const waitSeconds = normalizePhoneCodeWaitSeconds(state?.phoneCodeWaitSeconds);
+        const timeoutWindows = normalizePhoneCodeTimeoutWindows(state?.phoneCodeTimeoutWindows);
+        const pollIntervalSeconds = normalizePhoneCodePollIntervalSeconds(state?.phoneCodePollIntervalSeconds);
+        const pollMaxRounds = normalizePhoneCodePollMaxRounds(state?.phoneCodePollMaxRounds);
+        let lastLoggedStatus = '';
+        let lastLoggedPollCount = 0;
+
+        for (let windowIndex = 1; windowIndex <= timeoutWindows; windowIndex += 1) {
+          await setPhoneRuntimeState({
+            signupPhoneActivation: normalizedActivation,
+            signupPhoneNumber: normalizedActivation.phoneNumber,
+            signupPhoneVerificationPurpose: purpose,
+            signupPhoneVerificationRequestedAt: Date.now(),
+            [PHONE_RUNTIME_COUNTDOWN_ENDS_AT_KEY]: Date.now() + waitSeconds * 1000,
+            [PHONE_RUNTIME_COUNTDOWN_WINDOW_INDEX_KEY]: windowIndex,
+            [PHONE_RUNTIME_COUNTDOWN_WINDOW_TOTAL_KEY]: timeoutWindows,
+          });
+          await addLog(
+            `步骤 ${visibleStep}：正在等待 ${normalizedActivation.phoneNumber} 的短信验证码（${windowIndex}/${timeoutWindows}，最长 ${waitSeconds} 秒）。`,
+            'info',
+            { step: visibleStep, stepKey }
+          );
+          try {
+            const code = await pollPhoneActivationCode(state, normalizedActivation, {
+              actionLabel: windowIndex === 1
+                ? `poll ${actionLabelPrefix} code from ${providerLabel}`
+                : `poll resent ${actionLabelPrefix} code from ${providerLabel}`,
+              timeoutMs: waitSeconds * 1000,
+              intervalMs: pollIntervalSeconds * 1000,
+              maxRounds: pollMaxRounds,
+              onStatus: async ({ elapsedMs, pollCount, statusText }) => {
+                const shouldLog = (
+                  pollCount === 1
+                  || statusText !== lastLoggedStatus
+                  || pollCount - lastLoggedPollCount >= 3
+                );
+                if (!shouldLog) {
+                  return;
+                }
+                lastLoggedStatus = statusText;
+                lastLoggedPollCount = pollCount;
+                await addLog(
+                  `步骤 ${visibleStep}：${providerLabel} 状态 ${normalizedActivation.phoneNumber}: ${statusText}（已等待 ${Math.ceil(elapsedMs / 1000)} 秒，第 ${pollCount}/${pollMaxRounds} 轮）。`,
+                  'info',
+                  { step: visibleStep, stepKey }
+                );
+              },
+              onWaitingForCode: async ({ elapsedMs, pollCount, statusText }) => {
+                if (onPollStatus) {
+                  await onPollStatus({ elapsedMs, pollCount, statusText });
+                }
+              },
+            });
+            await clearPhoneRuntimeCountdown();
+            await setPhoneRuntimeState({
+              [PHONE_VERIFICATION_CODE_STATE_KEY]: String(code || '').trim(),
+              signupPhoneVerificationRequestedAt: Date.now(),
+            });
+            return code;
+          } catch (error) {
+            if (!isPhoneCodeTimeoutError(error)) {
+              if (isPhoneActivationOrderMissingError(error, normalizedActivation.provider)) {
+                throw new Error(`步骤 ${visibleStep}：当前手机号激活已失效，请重新执行前置步骤获取新短信。${error.message || error}`);
+              }
+              throw error;
+            }
+
+            if (windowIndex < timeoutWindows) {
+              await addLog(
+                `步骤 ${visibleStep}：${normalizedActivation.phoneNumber} 在 ${waitSeconds} 秒内未收到短信，准备请求重发。`,
+                'warn',
+                { step: visibleStep, stepKey }
+              );
+              await requestAdditionalPhoneSms(state, normalizedActivation);
+              if (typeof options.onTimeoutWindow === 'function') {
+                await options.onTimeoutWindow({
+                  activation: normalizedActivation,
+                  windowIndex,
+                  timeoutWindows,
+                });
+              }
+              continue;
+            }
+
+            await clearPhoneRuntimeCountdown();
+            throw error;
+          }
+        }
+
+        throw new Error(`步骤 ${visibleStep}：手机验证码未能成功获取。`);
+      });
+    }
+
+    async function waitForSignupPhoneCode(state = {}, activation, options = {}) {
+      return waitForScopedPhoneCode(state, activation, {
+        ...options,
+        step: 4,
+        stepKey: 'fetch-signup-code',
+        purpose: 'signup',
+        actionLabelPrefix: 'signup phone verification',
+        missingActivationMessage: '步骤 4：注册手机号激活记录缺失，请重新执行步骤 2。',
+      });
+    }
+
+    async function waitForLoginPhoneCode(state = {}, activation, options = {}) {
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      return waitForScopedPhoneCode(state, activation, {
+        ...options,
+        step: visibleStep,
+        stepKey: 'fetch-login-code',
+        purpose: 'login',
+        actionLabelPrefix: 'login phone verification',
+        missingActivationMessage: `步骤 ${visibleStep}：登录手机号激活记录缺失，请重新执行步骤 ${visibleStep >= 11 ? 10 : 7}。`,
+      });
+    }
+
+    async function finalizeSignupPhoneActivationAfterSuccess(state = {}, activation = null) {
+      const normalizedActivation = normalizeActivation(activation || state?.signupPhoneActivation);
+      if (!normalizedActivation) {
+        await clearSignupPhoneRuntimeState();
+        return null;
+      }
+      await completePhoneActivation(state, normalizedActivation);
+      await markActivationReusableAfterSuccess(state, normalizedActivation);
+      await clearSignupPhoneRuntimeState({
+        signupPhoneCompletedActivation: buildCompletedActivationSnapshot(normalizedActivation),
+        signupPhoneNumber: normalizedActivation.phoneNumber,
+        accountIdentifierType: 'phone',
+        accountIdentifier: normalizedActivation.phoneNumber,
+      });
+      return normalizedActivation;
+    }
+
+    async function cancelSignupPhoneActivation(state = {}, activation = null) {
+      const normalizedActivation = normalizeActivation(activation || state?.signupPhoneActivation);
+      if (normalizedActivation) {
+        await cancelPhoneActivation(state, normalizedActivation);
+      }
+      await clearSignupPhoneRuntimeState();
+    }
+
+    async function completeSignupPhoneVerificationFlow(tabId, options = {}) {
+      return withPhoneVerificationLogContext({ step: 4, stepKey: 'fetch-signup-code' }, async () => {
+        let state = options?.state || await getState();
+        const activation = normalizeActivation(options?.activation || state?.signupPhoneActivation);
+        const pageStateCheckTimeoutMs = Math.max(1, Math.floor(Number(options?.pageStateCheckTimeoutMs) || 5000));
+        if (!activation) {
+          throw new Error('步骤 4：未找到当前注册手机号激活记录，请重新执行步骤 2。');
+        }
+
+        const assertSignupPhoneStillApplicable = async (phaseLabel) => {
+          try {
+            const pageState = await readPhonePageState(tabId, pageStateCheckTimeoutMs);
+            if (isSignupEmailVerificationPageState(pageState)) {
+              throw buildSignupPhoneStaleEmailVerificationError(pageState);
+            }
+            return pageState;
+          } catch (error) {
+            if (isStopRequestedError(error) || isStaleSignupPhoneEmailVerificationError(error)) {
+              throw error;
+            }
+            await throwPhoneResendServerErrorIfAuthTabShowsIt(tabId);
+            await addLog(
+              `步骤 4：检查注册手机号页面状态（${phaseLabel}）失败，将继续等待短信。${error.message}`,
+              'warn',
+              {
+                step: 4,
+                stepKey: 'fetch-signup-code',
+              }
+            );
+            return null;
+          }
+        };
+
+        let shouldCancelActivation = true;
+        try {
+          for (let attempt = 1; attempt <= DEFAULT_PHONE_SUBMIT_ATTEMPTS; attempt += 1) {
+            throwIfStopped();
+            state = await getState();
+            await assertSignupPhoneStillApplicable('waiting for SMS code');
+            const code = await waitForSignupPhoneCode(state, activation, {
+              onPollStatus: async () => {
+                await assertSignupPhoneStillApplicable('while waiting for SMS code');
+              },
+              onTimeoutWindow: async () => {
+                try {
+                  await resendSignupPhoneVerificationCode(tabId);
+                  await addLog('步骤 4：已点击注册手机验证码页面的“重新发送”。', 'info', {
+                    step: 4,
+                    stepKey: 'fetch-signup-code',
+                  });
+                } catch (resendError) {
+                  if (isStopRequestedError(resendError)) {
+                    throw resendError;
+                  }
+                  if (isPhoneResendServerError(resendError)) {
+                    throw buildPhoneResendServerError(resendError);
+                  }
+                  await throwPhoneResendServerErrorIfAuthTabShowsIt(tabId);
+                  await addLog(`步骤 4：注册手机验证码页面重发失败，将继续轮询短信。${resendError.message}`, 'warn', {
+                    step: 4,
+                    stepKey: 'fetch-signup-code',
+                  });
+                }
+              },
+            });
+
+            await assertSignupPhoneStillApplicable('before submitting SMS code');
+
+            await setPhoneRuntimeState({
+              [PHONE_VERIFICATION_CODE_STATE_KEY]: String(code || '').trim(),
+              signupPhoneVerificationRequestedAt: Date.now(),
+              signupPhoneVerificationPurpose: 'signup',
+            });
+            await addLog(`步骤 4：已获取手机验证码 ${code}。`, 'info', {
+              step: 4,
+              stepKey: 'fetch-signup-code',
+            });
+
+            const submitResult = await submitSignupPhoneVerificationCode(tabId, code, {
+              signupProfile: options.signupProfile || null,
+            });
+
+            if (submitResult.invalidCode) {
+              const invalidErrorText = String(submitResult.errorText || submitResult.url || '未知错误').trim();
+              if (attempt >= DEFAULT_PHONE_SUBMIT_ATTEMPTS) {
+                throw new Error(`步骤 4：手机验证码连续 ${DEFAULT_PHONE_SUBMIT_ATTEMPTS} 次被拒绝：${invalidErrorText}`);
+              }
+
+              await requestAdditionalPhoneSms(state, activation);
+              try {
+                await resendSignupPhoneVerificationCode(tabId);
+              } catch (resendError) {
+                if (isStopRequestedError(resendError)) {
+                  throw resendError;
+                }
+                if (isPhoneResendServerError(resendError)) {
+                  throw buildPhoneResendServerError(resendError);
+                }
+                await throwPhoneResendServerErrorIfAuthTabShowsIt(tabId);
+                await addLog(`步骤 4：验证码被拒后点击重发失败。${resendError.message}`, 'warn', {
+                  step: 4,
+                  stepKey: 'fetch-signup-code',
+                });
+              }
+              await addLog(
+                `步骤 4：手机验证码被拒绝，已请求新短信（${attempt + 1}/${DEFAULT_PHONE_SUBMIT_ATTEMPTS}）。`,
+                'warn',
+                { step: 4, stepKey: 'fetch-signup-code' }
+              );
+              continue;
+            }
+
+            await finalizeSignupPhoneActivationAfterSuccess(state, activation);
+            shouldCancelActivation = false;
+            await setPhoneRuntimeState({
+              [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+              signupPhoneVerificationRequestedAt: null,
+              signupPhoneVerificationPurpose: '',
+            });
+            await addLog('步骤 4：手机验证码已通过，继续进入资料填写。', 'ok', {
+              step: 4,
+              stepKey: 'fetch-signup-code',
+            });
+            return submitResult || {};
+          }
+
+          throw new Error('步骤 4：手机验证码未能成功提交。');
+        } catch (error) {
+          if (shouldCancelActivation && activation) {
+            await cancelSignupPhoneActivation(state, activation).catch(() => {});
+          }
+          await setPhoneRuntimeState({
+            [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+            signupPhoneVerificationRequestedAt: null,
+            signupPhoneVerificationPurpose: '',
+          });
+          throw sanitizePhoneCodeTimeoutError(error);
+        }
+      });
+    }
+
+    async function submitLoginPhoneVerificationCode(tabId, code, options = {}) {
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
+        ? await getOAuthFlowStepTimeoutMs(45000, { step: visibleStep, actionLabel: '提交登录手机验证码' })
+        : 45000;
+      const result = await sendToContentScriptResilient('signup-page', {
+        type: 'SUBMIT_PHONE_VERIFICATION_CODE',
+        step: visibleStep,
+        source: 'background',
+        payload: {
+          code,
+          purpose: 'login',
+          visibleStep,
+        },
+      }, {
+        timeoutMs,
+        responseTimeoutMs: timeoutMs,
+        retryDelayMs: 600,
+        logMessage: `步骤 ${visibleStep}：等待登录手机验证码页面就绪后填写短信验证码...`,
+        logStep: visibleStep,
+        logStepKey: 'fetch-login-code',
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function resendLoginPhoneVerificationCode(tabId, options = {}) {
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      const timeoutMs = typeof getOAuthFlowStepTimeoutMs === 'function'
+        ? await getOAuthFlowStepTimeoutMs(65000, { step: visibleStep, actionLabel: '重新发送登录手机验证码' })
+        : 65000;
+      const result = await sendToContentScriptResilient('signup-page', {
+        type: 'RESEND_VERIFICATION_CODE',
+        step: visibleStep,
+        source: 'background',
+        payload: {},
+      }, {
+        timeoutMs,
+        responseTimeoutMs: timeoutMs,
+        retryDelayMs: 600,
+        logMessage: `步骤 ${visibleStep}：等待登录手机验证码重发按钮出现...`,
+        logStep: visibleStep,
+        logStepKey: 'fetch-login-code',
+      });
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+      return result || {};
+    }
+
+    async function prepareLoginPhoneActivation(state = {}, options = {}) {
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      return withPhoneVerificationLogContext({ step: visibleStep, stepKey: 'fetch-login-code' }, async () => {
+        const preferredActivation = normalizeActivation(
+          options?.activation
+          || state?.signupPhoneCompletedActivation
+          || state?.signupPhoneActivation
+        );
+        if (!preferredActivation) {
+          throw new Error(`步骤 ${visibleStep}：缺少已注册手机号激活记录，无法继续手机号登录验证码流程。`);
+        }
+
+        const activeActivation = normalizeActivation(state?.signupPhoneActivation);
+        if (activeActivation && isSameActivation(activeActivation, preferredActivation)) {
+          await setPhoneRuntimeState({
+            signupPhoneNumber: activeActivation.phoneNumber,
+            signupPhoneVerificationPurpose: 'login',
+          });
+          return activeActivation;
+        }
+
+        const reactivated = await reactivatePhoneActivation(state, preferredActivation);
+        const normalizedActivation = normalizeActivation(reactivated);
+        if (!normalizedActivation) {
+          throw new Error(`步骤 ${visibleStep}：无法复用当前注册手机号，请重新执行步骤 ${visibleStep >= 11 ? 10 : 7}。`);
+        }
+
+        await setPhoneRuntimeState({
+          signupPhoneActivation: normalizedActivation,
+          signupPhoneCompletedActivation: preferredActivation,
+          signupPhoneNumber: normalizedActivation.phoneNumber,
+          signupPhoneVerificationRequestedAt: null,
+          signupPhoneVerificationPurpose: 'login',
+          [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+          accountIdentifierType: 'phone',
+          accountIdentifier: normalizedActivation.phoneNumber,
+        });
+        return normalizedActivation;
+      });
+    }
+
+    async function finalizeLoginPhoneActivationAfterSuccess(state = {}, activation = null, options = {}) {
+      const normalizedActivation = normalizeActivation(activation || state?.signupPhoneActivation);
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      if (!normalizedActivation) {
+        await setPhoneRuntimeState({
+          signupPhoneActivation: null,
+          signupPhoneVerificationRequestedAt: null,
+          signupPhoneVerificationPurpose: '',
+          [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+        });
+        return null;
+      }
+
+      return withPhoneVerificationLogContext({ step: visibleStep, stepKey: 'fetch-login-code' }, async () => {
+        await completePhoneActivation(state, normalizedActivation);
+        await setPhoneRuntimeState({
+          signupPhoneActivation: null,
+          signupPhoneCompletedActivation: buildCompletedActivationSnapshot(normalizedActivation),
+          signupPhoneNumber: normalizedActivation.phoneNumber,
+          signupPhoneVerificationRequestedAt: null,
+          signupPhoneVerificationPurpose: '',
+          [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+          accountIdentifierType: 'phone',
+          accountIdentifier: normalizedActivation.phoneNumber,
+        });
+        return normalizedActivation;
+      });
+    }
+
+    async function completeLoginPhoneVerificationFlow(tabId, options = {}) {
+      const visibleStep = normalizeLogStep(options?.visibleStep || options?.step) || 8;
+      return withPhoneVerificationLogContext({ step: visibleStep, stepKey: 'fetch-login-code' }, async () => {
+        let state = options?.state || await getState();
+        const baseActivation = normalizeActivation(
+          options?.activation
+          || state?.signupPhoneCompletedActivation
+          || state?.signupPhoneActivation
+        );
+        if (!baseActivation) {
+          throw new Error(`步骤 ${visibleStep}：未找到当前登录手机号激活记录，请重新执行步骤 ${visibleStep >= 11 ? 10 : 7}。`);
+        }
+
+        let activation = await prepareLoginPhoneActivation(state, {
+          activation: baseActivation,
+          visibleStep,
+        });
+        let shouldCancelActivation = true;
+
+        try {
+          for (let attempt = 1; attempt <= DEFAULT_PHONE_SUBMIT_ATTEMPTS; attempt += 1) {
+            throwIfStopped();
+            state = await getState();
+            const code = await waitForLoginPhoneCode(state, activation, {
+              visibleStep,
+              onTimeoutWindow: async () => {
+                try {
+                  await resendLoginPhoneVerificationCode(tabId, { visibleStep });
+                  await addLog(`步骤 ${visibleStep}：已点击登录手机验证码页面的“重新发送”。`, 'info', {
+                    step: visibleStep,
+                    stepKey: 'fetch-login-code',
+                  });
+                } catch (resendError) {
+                  if (isStopRequestedError(resendError)) {
+                    throw resendError;
+                  }
+                  if (isPhoneResendServerError(resendError)) {
+                    throw buildPhoneResendServerError(resendError);
+                  }
+                  await addLog(`步骤 ${visibleStep}：登录手机验证码页面重发失败，将继续轮询短信。${resendError.message}`, 'warn', {
+                    step: visibleStep,
+                    stepKey: 'fetch-login-code',
+                  });
+                }
+              },
+            });
+
+            await setPhoneRuntimeState({
+              [PHONE_VERIFICATION_CODE_STATE_KEY]: String(code || '').trim(),
+              signupPhoneVerificationRequestedAt: Date.now(),
+              signupPhoneVerificationPurpose: 'login',
+            });
+            await addLog(`步骤 ${visibleStep}：已获取登录手机验证码 ${code}。`, 'info', {
+              step: visibleStep,
+              stepKey: 'fetch-login-code',
+            });
+
+            const submitResult = await submitLoginPhoneVerificationCode(tabId, code, {
+              visibleStep,
+            });
+
+            if (submitResult.invalidCode) {
+              const invalidErrorText = String(submitResult.errorText || submitResult.url || '未知错误').trim();
+              if (attempt >= DEFAULT_PHONE_SUBMIT_ATTEMPTS) {
+                throw new Error(`步骤 ${visibleStep}：登录手机验证码连续 ${DEFAULT_PHONE_SUBMIT_ATTEMPTS} 次被拒绝：${invalidErrorText}`);
+              }
+
+              await requestAdditionalPhoneSms(state, activation);
+              try {
+                await resendLoginPhoneVerificationCode(tabId, { visibleStep });
+              } catch (resendError) {
+                if (isStopRequestedError(resendError)) {
+                  throw resendError;
+                }
+                if (isPhoneResendServerError(resendError)) {
+                  throw buildPhoneResendServerError(resendError);
+                }
+                await addLog(`步骤 ${visibleStep}：登录手机验证码被拒后点击重发失败。${resendError.message}`, 'warn', {
+                  step: visibleStep,
+                  stepKey: 'fetch-login-code',
+                });
+              }
+              await addLog(
+                `步骤 ${visibleStep}：登录手机验证码被拒绝，已请求新短信（${attempt + 1}/${DEFAULT_PHONE_SUBMIT_ATTEMPTS}）。`,
+                'warn',
+                { step: visibleStep, stepKey: 'fetch-login-code' }
+              );
+              continue;
+            }
+
+            await finalizeLoginPhoneActivationAfterSuccess(state, activation, { visibleStep });
+            shouldCancelActivation = false;
+            await addLog(`步骤 ${visibleStep}：登录手机验证码已通过，继续进入后续授权流程。`, 'ok', {
+              step: visibleStep,
+              stepKey: 'fetch-login-code',
+            });
+            return submitResult || {};
+          }
+
+          throw new Error(`步骤 ${visibleStep}：登录手机验证码未能成功提交。`);
+        } catch (error) {
+          if (shouldCancelActivation && activation) {
+            await cancelPhoneActivation(state, activation).catch(() => {});
+          }
+          await setPhoneRuntimeState({
+            signupPhoneActivation: null,
+            [PHONE_VERIFICATION_CODE_STATE_KEY]: '',
+            signupPhoneVerificationRequestedAt: null,
+            signupPhoneVerificationPurpose: '',
+          });
+          throw sanitizePhoneCodeTimeoutError(error);
+        }
+      });
+    }
+
+    async function completePhoneVerificationFlow(tabId, initialPageState = null, options = {}) {
+      const previousLogStep = activePhoneVerificationLogStep;
+      const previousLogStepKey = activePhoneVerificationLogStepKey;
+      activePhoneVerificationLogStep = normalizeLogStep(options.visibleStep || options.step) || 9;
+      activePhoneVerificationLogStepKey = 'phone-verification';
       let state = await getState();
       let activation = normalizeActivation(state[PHONE_ACTIVATION_STATE_KEY]);
       let pageState = initialPageState || await readPhonePageState(tabId);
@@ -3917,11 +5906,37 @@
         return matched?.label || `Country #${normalizedCountryId}`;
       };
 
-      const ensureAddPhonePageBeforeSubmit = async (attemptLabel = 'before submit') => {
+      const directNavigateToAddPhone = async (attemptLabel = 'after replace-number rotation') => {
+        if (typeof navigateAuthTabToAddPhone !== 'function') {
+          return null;
+        }
+        const visibleStep = normalizeLogStep(activePhoneVerificationLogStep) || 9;
+        const result = await navigateAuthTabToAddPhone(tabId, {
+          visibleStep,
+          timeoutMs: 30000,
+          logMessage: '步骤 9：认证页已失联，直接打开添加手机号页面后等待脚本恢复。',
+          logStepKey: 'phone-verification',
+          attemptLabel,
+        });
+        if (result?.error) {
+          throw new Error(result.error);
+        }
+        return {
+          addPhonePage: true,
+          phoneVerificationPage: false,
+          url: 'https://auth.openai.com/add-phone',
+          ...(result || {}),
+        };
+      };
+
+      const ensureAddPhonePageBeforeSubmit = async (attemptLabel = 'before submit', options = {}) => {
+        const allowDirectNavigation = Boolean(options.allowDirectNavigation);
         let snapshot = null;
+        let snapshotError = null;
         try {
           snapshot = await readPhonePageState(tabId, 12000);
         } catch (error) {
+          snapshotError = error;
           await addLog(
             `Step 9: failed to inspect auth page ${attemptLabel}. ${error.message}`,
             'warn'
@@ -3933,6 +5948,7 @@
           return snapshot;
         }
 
+        let returnError = null;
         try {
           const returned = await returnToAddPhone(tabId);
           const merged = {
@@ -3943,13 +5959,38 @@
             return merged;
           }
         } catch (error) {
+          returnError = error;
           await addLog(
             `Step 9: failed to return to add-phone page ${attemptLabel}. ${error.message}`,
             'warn'
           );
         }
 
-        const latest = await readPhonePageState(tabId, 15000);
+        if (
+          allowDirectNavigation
+          && (
+            isAuthContentScriptUnreachableError(snapshotError)
+            || isAuthContentScriptUnreachableError(returnError)
+          )
+        ) {
+          const navigated = await directNavigateToAddPhone(attemptLabel);
+          if (navigated) {
+            return navigated;
+          }
+        }
+
+        let latest = null;
+        try {
+          latest = await readPhonePageState(tabId, 15000);
+        } catch (error) {
+          if (allowDirectNavigation && isAuthContentScriptUnreachableError(error)) {
+            const navigated = await directNavigateToAddPhone(attemptLabel);
+            if (navigated) {
+              return navigated;
+            }
+          }
+          throw error;
+        }
         if (!latest?.addPhonePage) {
           throw new Error(
             `Step 9: auth page is not on add-phone before phone submit (${attemptLabel}). URL: ${latest?.url || 'unknown'}`
@@ -3958,32 +5999,39 @@
         return latest;
       };
 
-      const getCountryFailureCount = (countryId) => {
-        const countryKey = normalizeCountryFailureKey(countryId);
+      const getCountryFailureKey = (countryId, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => (
+        normalizePhoneSmsProvider(providerId) === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? normalizeFiveSimCountryId(countryId, '')
+          : String(normalizeCountryId(countryId, 0) || '')
+      );
+
+      const getCountryFailureCount = (countryId, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => {
+        const countryKey = normalizeCountryFailureKey(countryId, providerId);
         if (!countryKey) {
           return 0;
         }
         return Math.max(0, Math.floor(Number(countrySmsFailureCounts.get(countryKey)) || 0));
       };
 
-      const markCountrySmsFailure = async (countryId, reason = 'sms_timeout') => {
-        const countryKey = normalizeCountryFailureKey(countryId);
+      const markCountrySmsFailure = async (countryId, reason = 'sms_timeout', providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => {
+        const countryKey = normalizeCountryFailureKey(countryId, providerId);
         if (!countryKey) {
           return;
         }
-        const nextCount = getCountryFailureCount(countryKey) + 1;
+        const parsed = splitCountryFailureKey(countryKey, providerId);
+        const nextCount = getCountryFailureCount(parsed.countryKey, parsed.provider) + 1;
         countrySmsFailureCounts.set(countryKey, nextCount);
         if (nextCount >= PHONE_SMS_FAILURE_SKIP_THRESHOLD) {
-          const countryLabel = resolveCountryLabelByFailureKey(countryKey);
+          const countryLabel = resolveCountryLabelByFailureKey(countryKey, providerId);
           await addLog(
-            `Step 9: ${countryLabel} reached ${nextCount} SMS failures (${reason}); next acquisition will fallback to other selected country candidates first.`,
+            `步骤 9：${countryLabel} 已累计 ${nextCount} 次短信失败（${formatStep9Reason(reason)}）；下次获取号码会优先尝试其它已选国家。`,
             'warn'
           );
         }
       };
 
-      const clearCountrySmsFailure = (countryId) => {
-        const countryKey = normalizeCountryFailureKey(countryId);
+      const clearCountrySmsFailure = (countryId, providerId = normalizePhoneSmsProvider(state?.phoneSmsProvider)) => {
+        const countryKey = normalizeCountryFailureKey(countryId, providerId);
         if (!countryKey) {
           return;
         }
@@ -3996,7 +6044,10 @@
           state?.phoneSmsProvider || activation?.provider || DEFAULT_PHONE_SMS_PROVIDER
         );
         return Array.from(countrySmsFailureCounts.entries())
-          .filter(([, count]) => Number(count) >= PHONE_SMS_FAILURE_SKIP_THRESHOLD)
+          .filter(([countryKey, count]) => (
+            Number(count) >= PHONE_SMS_FAILURE_SKIP_THRESHOLD
+            || !countryPriceFloorByKey.has(countryKey)
+          ))
           .map(([countryKey]) => splitCountryFailureKey(countryKey, activeProvider))
           .filter((entry) => entry.provider === activeProvider)
           .map((entry) => String(entry.countryKey || '').trim())
@@ -4082,9 +6133,7 @@
         await markPreferredActivationExhausted(failureCode || failureReason);
         usedNumberReplacementAttempts += 1;
         if (usedNumberReplacementAttempts > maxNumberReplacementAttempts) {
-          throw new Error(
-            `Step 9: phone verification did not succeed after ${maxNumberReplacementAttempts} number replacements. Last reason: ${failureCode || 'add_phone_rejected'}.`
-          );
+          throw buildPhoneReplacementLimitError(maxNumberReplacementAttempts, failureCode || 'add_phone_rejected');
         }
         await addLog(
           `Step 9: replacing number after add-phone failure (${failureReason}) (${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}).`,
@@ -4151,27 +6200,35 @@
               );
             }
             if (!activation) {
-              activation = await acquirePhoneActivation(state, {
-                blockedCountryIds: getBlockedCountryIds(),
-                countryPriceFloorByCountryId: getCountryPriceFloorById(),
-                skipPreferredActivation: preferredActivationExhausted,
-              });
-              shouldCancelActivation = true;
-              await persistCurrentActivation(activation);
+              activation = await handoffFreeReusablePhone(tabId, state);
+              if (activation) {
+                shouldCancelActivation = false;
+              } else {
+                activation = await acquirePhoneActivation(state, {
+                  blockedCountryIds: getBlockedCountryIds(),
+                  countryPriceFloorByCountryId: getCountryPriceFloorById(),
+                  skipPreferredActivation: preferredActivationExhausted,
+                });
+                shouldCancelActivation = true;
+                await persistCurrentActivation(activation);
+              }
               addPhoneReentryWithSameActivation = 0;
             } else if (preferReuseExistingActivationOnAddPhone) {
               addPhoneReentryWithSameActivation += 1;
               if (addPhoneReentryWithSameActivation > 1) {
                 usedNumberReplacementAttempts += 1;
                 if (usedNumberReplacementAttempts > maxNumberReplacementAttempts) {
-                  throw new Error(
-                    `Step 9: phone verification did not succeed after ${maxNumberReplacementAttempts} number replacements. Last reason: returned_to_add_phone_loop.`
-                  );
+                  throw buildPhoneReplacementLimitError(maxNumberReplacementAttempts, 'returned_to_add_phone_loop');
                 }
                 await addLog(
-                  `Step 9: current number ${activation.phoneNumber} returned to add-phone repeatedly, replacing number (${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}).`,
+                  `步骤 9：当前号码 ${activation.phoneNumber} 反复返回添加手机号页，正在更换号码（${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}）。`,
                   'warn'
                 );
+                if (isFreeAutoReuseActivation(activation)) {
+                  await retireFreeReusableActivation(
+                    `自动白嫖复用号码 ${activation.phoneNumber} 反复返回添加手机号页。`
+                  );
+                }
                 if (shouldCancelActivation && activation) {
                   await cancelPhoneActivation(state, activation);
                 }
@@ -4188,7 +6245,7 @@
                 continue;
               }
               await addLog(
-                `Step 9: add-phone returned, re-submitting current number ${activation.phoneNumber} before requesting a new number.`,
+                `步骤 9：页面返回添加手机号，将先重新提交当前号码 ${activation.phoneNumber}，暂不获取新号码。`,
                 'warn'
               );
             }
@@ -4198,10 +6255,10 @@
               submitResult = await submitPhoneNumber(tabId, activation.phoneNumber, activation);
             } catch (submitError) {
               const submitErrorText = String(submitError?.message || submitError || 'unknown error');
-              if (isRecoverableAddPhoneSubmitError(submitErrorText)) {
+              if (isPhoneNumberDeliveryRefusedError(submitErrorText) || isRecoverableAddPhoneSubmitError(submitErrorText)) {
                 await rotateActivationAfterAddPhoneFailure(
                   submitErrorText,
-                  'add_phone_submit_failed',
+                  isPhoneNumberDeliveryRefusedError(submitErrorText) ? 'phone_delivery_refused' : 'add_phone_submit_failed',
                   { url: pageState?.url || '' }
                 );
                 continue;
@@ -4211,16 +6268,54 @@
             if (submitResult.addPhoneRejected) {
               const addPhoneRejectText = String(submitResult.errorText || submitResult.url || 'unknown error');
               if (isPhoneNumberUsedError(addPhoneRejectText)) {
+                usedNumberReplacementAttempts += 1;
+                if (usedNumberReplacementAttempts > maxNumberReplacementAttempts) {
+                  throw new Error(
+                    `步骤 9：更换 ${maxNumberReplacementAttempts} 次号码后手机号验证仍未成功。最后原因：${formatStep9Reason('phone_number_used')}。`
+                  );
+                }
+
+                await addLog(
+                  `步骤 9：添加手机号页面提示 ${activation.phoneNumber} 已被使用（${addPhoneRejectText}），正在更换号码（${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}）。`,
+                  'warn'
+                );
+                await discardPhoneActivationFromReuse(
+                  `目标站拒绝该号码（${addPhoneRejectText}）。`,
+                  activation,
+                  await getState()
+                );
+                if (isFreeAutoReuseActivation(activation)) {
+                  await retireFreeReusableActivation(
+                    `自动白嫖复用号码 ${activation.phoneNumber} 被目标站拒绝。`
+                  );
+                }
+                if (shouldCancelActivation && activation) {
+                  await banPhoneActivation(state, activation);
+                }
+                await clearCurrentActivation();
+                activation = null;
+                shouldCancelActivation = false;
+                preferReuseExistingActivationOnAddPhone = false;
+                addPhoneReentryWithSameActivation = 0;
+                pageState = {
+                  ...pageState,
+                  ...submitResult,
+                  addPhonePage: true,
+                  phoneVerificationPage: false,
+                };
+                continue;
+              }
+              if (isPhoneNumberDeliveryRefusedError(addPhoneRejectText)) {
                 await rotateActivationAfterAddPhoneFailure(
-                  `add-phone rejected ${activation.phoneNumber} as already used (${addPhoneRejectText})`,
-                  'phone_number_used',
-                  submitResult
+                  addPhoneRejectText,
+                  'phone_delivery_refused',
+                  submitResult || {}
                 );
                 continue;
               }
 
               await addLog(
-                `Step 9: add-phone rejected current number but did not mark it as used (${addPhoneRejectText}), retrying once with the same number.`,
+                `步骤 9：添加手机号页面拒绝当前号码，但未明确提示已使用（${addPhoneRejectText}），将用同一号码再试一次。`,
                 'warn'
               );
               let retrySubmitError = null;
@@ -4236,21 +6331,27 @@
                   || submitResult?.url
                   || 'unknown error'
                 );
-                if (isPhoneNumberUsedError(retryRejectText) || isRecoverableAddPhoneSubmitError(retryRejectText)) {
+                if (
+                  isPhoneNumberUsedError(retryRejectText)
+                  || isPhoneNumberDeliveryRefusedError(retryRejectText)
+                  || isRecoverableAddPhoneSubmitError(retryRejectText)
+                ) {
                   await rotateActivationAfterAddPhoneFailure(
                     `add-phone keeps rejecting ${activation.phoneNumber} (${retryRejectText})`,
-                    isPhoneNumberUsedError(retryRejectText) ? 'phone_number_used' : 'add_phone_rejected',
+                    isPhoneNumberUsedError(retryRejectText)
+                      ? 'phone_number_used'
+                      : (isPhoneNumberDeliveryRefusedError(retryRejectText) ? 'phone_delivery_refused' : 'add_phone_rejected'),
                     submitResult || {}
                   );
                   continue;
                 }
                 throw new Error(
-                  `Step 9: add-phone keeps rejecting current number without explicit "used" status: ${retryRejectText}.`
+                  `步骤 9：添加手机号页面持续拒绝当前号码，但没有明确“已使用”状态：${submitResult.errorText || submitResult.url || '未知错误'}。`
                 );
               }
             }
 
-            await addLog('Step 9: submitted the phone number on add-phone page.', 'info');
+            await addLog('步骤 9：已在添加手机号页面提交号码。', 'info');
             pageState = {
               ...pageState,
               ...submitResult,
@@ -4270,7 +6371,7 @@
           }
 
           if (!activation) {
-            throw new Error('The auth page is waiting for a phone verification code, but no HeroSMS activation is stored for this run.');
+            throw new Error('认证页面正在等待手机验证码，但当前运行没有保存手机号接码订单。');
           }
 
           let shouldReplaceNumber = false;
@@ -4290,49 +6391,18 @@
             await setPhoneRuntimeState({
               [PHONE_VERIFICATION_CODE_STATE_KEY]: String(codeResult.code || '').trim(),
             });
-            await addLog(`Step 9: received phone verification code ${codeResult.code}.`, 'info');
-            let submitResult = null;
-            let submitError = null;
-            try {
-              submitResult = await submitPhoneVerificationCode(tabId, codeResult.code);
-            } catch (error) {
-              submitError = error;
-            }
-            if (submitError) {
-              const submitErrorText = String(submitError?.message || submitError || 'unknown error');
-              if (isPhoneNumberUsedError(submitErrorText)) {
-                shouldReplaceNumber = true;
-                replaceReason = 'phone_number_used';
-                await addLog(
-                  `Step 9: phone verification failed with used-number signal (${submitErrorText}), replacing with a new number immediately.`,
-                  'warn'
-                );
-                break;
-              }
-              if (isPhoneNumberInvalidError(submitErrorText)) {
-                shouldReplaceNumber = true;
-                replaceReason = 'phone_number_invalid';
-                await addLog(
-                  `Step 9: phone verification failed with invalid-number signal (${submitErrorText}), replacing with a new number immediately.`,
-                  'warn'
-                );
-                break;
-              }
-              if (isPhoneRoute405RecoveryError(submitErrorText)) {
-                shouldReplaceNumber = true;
-                replaceReason = 'route_405_retry_loop';
-                await addLog(
-                  `Step 9: phone verification page entered route-405 retry loop (${submitErrorText}), replacing with a new number immediately.`,
-                  'warn'
-                );
-                break;
-              }
-              throw submitError;
-            }
+            activation = markActivationPhoneCodeReceived(activation) || activation;
+            await persistCurrentActivation(activation);
+            await setPhoneRuntimeState({
+              [PHONE_VERIFICATION_CODE_STATE_KEY]: String(codeResult.code || '').trim(),
+            });
+            await markFreeReusableActivationAfterCode(state, activation);
+            await addLog(`步骤 9：已收到手机验证码 ${codeResult.code}。`, 'info');
+            const submitResult = await submitPhoneVerificationCode(tabId, codeResult.code);
 
             if (submitResult.returnedToAddPhone) {
               await addLog(
-                'Step 9: phone verification returned to add-phone after code submission, will try current number first.',
+                '步骤 9：提交验证码后返回添加手机号页面，将先重试当前号码。',
                 'warn'
               );
               preferReuseExistingActivationOnAddPhone = true;
@@ -4350,8 +6420,22 @@
               if (isPhoneNumberUsedError(invalidErrorText)) {
                 shouldReplaceNumber = true;
                 replaceReason = 'phone_number_used';
+                await discardPhoneActivationFromReuse(
+                  `目标站拒绝该号码（${invalidErrorText}）。`,
+                  activation,
+                  await getState()
+                );
+                if (isFreeAutoReuseActivation(activation)) {
+                  await retireFreeReusableActivation(
+                    `自动白嫖复用号码 ${activation.phoneNumber} 被目标站拒绝。`
+                  );
+                }
+                if (shouldCancelActivation && activation) {
+                  await banPhoneActivation(state, activation);
+                  shouldCancelActivation = false;
+                }
                 await addLog(
-                  `Step 9: phone number was rejected as already used (${invalidErrorText}), replacing with a new number immediately.`,
+                  `步骤 9：手机号被提示已使用（${invalidErrorText}），立即更换新号码。`,
                   'warn'
                 );
                 break;
@@ -4360,8 +6444,12 @@
               if (attempt >= DEFAULT_PHONE_SUBMIT_ATTEMPTS) {
                 shouldReplaceNumber = true;
                 replaceReason = 'code_rejected';
+                if (shouldCancelActivation && activation) {
+                  await banPhoneActivation(state, activation);
+                  shouldCancelActivation = false;
+                }
                 await addLog(
-                  `Step 9: phone verification code was rejected ${DEFAULT_PHONE_SUBMIT_ATTEMPTS} times (${invalidErrorText}), replacing the number.`,
+                  `步骤 9：手机验证码连续 ${DEFAULT_PHONE_SUBMIT_ATTEMPTS} 次被拒（${invalidErrorText}），将更换号码。`,
                   'warn'
                 );
                 break;
@@ -4369,57 +6457,72 @@
 
               if (remainingResendRequests > 0) {
                 remainingResendRequests -= 1;
-                await requestAdditionalPhoneSms(state, activation);
                 try {
-                  await resendPhoneVerificationCode(tabId);
-                  await addLog('Step 9: clicked "Resend text message" after the phone code was rejected.', 'info');
+                  const resendProbeResult = await resendPhoneVerificationCode(tabId, { probeOnly: true });
+                  if (isWhatsAppPhoneResendResult(resendProbeResult)) {
+                    shouldReplaceNumber = true;
+                    replaceReason = 'whatsapp_resend_channel';
+                    await addLog(
+                      `步骤 9：验证码被拒后的重发入口显示 WhatsApp 通道（${resendProbeResult.channelText || resendProbeResult.text || 'WhatsApp'}），当前接码平台无法读取 WhatsApp 消息，将更换号码。`,
+                      'warn'
+                    );
+                    break;
+                  }
+                  await requestAdditionalPhoneSms(state, activation);
+                  if (resendProbeResult?.probed) {
+                    const resendResult = await resendPhoneVerificationCode(tabId);
+                    if (isWhatsAppPhoneResendResult(resendResult)) {
+                      shouldReplaceNumber = true;
+                      replaceReason = 'whatsapp_resend_channel';
+                      await addLog(
+                        `步骤 9：验证码被拒后的重发入口切换为 WhatsApp 通道（${resendResult.channelText || resendResult.text || 'WhatsApp'}），当前接码平台无法读取 WhatsApp 消息，将更换号码。`,
+                        'warn'
+                      );
+                      break;
+                    }
+                  }
+                  await addLog('步骤 9：手机验证码被拒后已点击“重新发送短信”。', 'info');
                 } catch (resendError) {
-                  if (isStopRequestedError(resendError)) {
-                    throw resendError;
-                  }
-                  if (isPhoneResendThrottledError(resendError)) {
-                    shouldReplaceNumber = true;
-                    replaceReason = 'resend_throttled';
-                    await addLog(
-                      `Step 9: resend is throttled after code rejection (${resendError.message}), replacing number immediately.`,
-                      'warn'
-                    );
-                    break;
-                  }
-                  if (isPhoneRoute405RecoveryError(resendError)) {
-                    shouldReplaceNumber = true;
-                    replaceReason = 'route_405_retry_loop';
-                    await addLog(
-                      `Step 9: phone verification page entered route-405 retry loop after code rejection (${resendError.message}), replacing number immediately.`,
-                      'warn'
-                    );
-                    break;
-                  }
-                  await addLog(`Step 9: failed to click resend after code rejection. ${resendError.message}`, 'warn');
+                  await addLog(`步骤 9：验证码被拒后点击重发失败。${resendError.message}`, 'warn');
                 }
                 if (shouldReplaceNumber) {
                   break;
                 }
                 await addLog(
-                  `Step 9: phone verification code was rejected, requested another SMS (${remainingResendRequests} resend attempts left).`,
+                  `步骤 9：手机验证码被拒，已请求再次发送短信（剩余 ${remainingResendRequests} 次重发）。`,
                   'warn'
                 );
               } else {
                 await addLog(
-                  'Step 9: phone verification code was rejected and the configured resend budget is exhausted, retrying with the current activation window.',
+                  '步骤 9：手机验证码被拒，配置的重发次数已用完，将在当前接码窗口内继续重试。',
                   'warn'
                 );
               }
               continue;
             }
 
-            await completePhoneActivation(state, activation);
-            await markActivationReusableAfterSuccess(state, activation);
-            clearCountrySmsFailure(activation.countryId);
+            const latestSuccessState = await getState();
+            if (shouldSkipTerminalStatusForFreeReuse(latestSuccessState, activation)) {
+              await addLog(
+                `步骤 9：已跳过 HeroSMS 完成状态，保留 ${activation.phoneNumber} 供白嫖复用。`,
+                'info'
+              );
+              await markFreeReusableActivationAfterInitialSuccess(latestSuccessState, activation);
+            } else {
+              await completePhoneActivation(latestSuccessState, activation);
+            }
+            await markFreeReusableActivationAfterAutoSuccess(state, activation);
+            if (!isFreeAutoReuseActivation(activation)) {
+              await markActivationReusableAfterSuccess(state, activation);
+            }
+            clearCountrySmsFailure(activation.countryId, activation.provider);
             shouldCancelActivation = false;
             await clearCurrentActivation();
+            await setPhoneRuntimeState({
+              phoneNumber: activation.phoneNumber,
+            });
             addPhoneReentryWithSameActivation = 0;
-            await addLog('Step 9: phone verification finished, waiting for OAuth consent.', 'ok');
+            await addLog('步骤 9：手机号验证已完成，等待 OAuth 授权页。', 'ok');
             return submitResult;
           }
 
@@ -4427,7 +6530,7 @@
             if (pageState?.addPhonePage) {
               continue;
             }
-            throw new Error('Phone verification did not complete successfully.');
+            throw new Error('手机号验证未完成。');
           }
 
           if (
@@ -4439,44 +6542,40 @@
             )
           ) {
             await setCountryPriceFloorFromActivation(activation, replaceReason || 'sms_timeout');
-            if (
-              replaceReason === 'resend_throttled'
-              || replaceReason === 'route_405_retry_loop'
-            ) {
-              await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout');
-            } else if (/^sms_timeout_after_/i.test(String(replaceReason || ''))) {
-              await addLog(
-                `Step 9: ${activation.countryLabel || activation.countryId || 'current country'} timed out on SMS; keep the same provider/country for number replacement first and avoid country block on timeout.`,
-                'info'
-              );
-            }
+            await markCountrySmsFailure(activation.countryId, replaceReason || 'sms_timeout', activation.provider);
           }
           await markPreferredActivationExhausted(replaceReason || 'replace_number');
 
           usedNumberReplacementAttempts += 1;
           if (usedNumberReplacementAttempts > maxNumberReplacementAttempts) {
-            throw new Error(
-              `Step 9: phone verification did not succeed after ${maxNumberReplacementAttempts} number replacements. Last reason: ${replaceReason || 'unknown'}.`
-            );
+            throw buildPhoneReplacementLimitError(maxNumberReplacementAttempts, replaceReason || 'unknown');
           }
 
           if (shouldCancelActivation && activation) {
             await cancelPhoneActivation(state, activation);
+          }
+          if (isFreeAutoReuseActivation(activation)) {
+            await retireFreeReusableActivation(
+              `自动白嫖复用号码 ${activation.phoneNumber} 在失败后被更换。`
+            );
+          }
+          if (isPhoneNumberUsedError(replaceReason)) {
+            await discardPhoneActivationFromReuse(
+              `目标站拒绝该号码（${replaceReason}）。`,
+              activation,
+              await getState()
+            );
           }
           await clearCurrentActivation();
           activation = null;
           shouldCancelActivation = false;
           addPhoneReentryWithSameActivation = 0;
 
-          let returnResult = {
-            addPhonePage: true,
-            phoneVerificationPage: false,
-            url: 'https://auth.openai.com/add-phone',
-          };
+          let returnResult = null;
           try {
             returnResult = await returnToAddPhone(tabId);
           } catch (returnError) {
-            await addLog(`Step 9: failed to return to add-phone page before replacing number. ${returnError.message}`, 'warn');
+            await addLog(`步骤 9：更换号码前返回添加手机号页面失败。${returnError.message}`, 'warn');
           }
 
           if (!returnResult?.addPhonePage) {
@@ -4484,7 +6583,7 @@
               const stateSnapshot = await readPhonePageState(tabId, 12000);
               if (stateSnapshot?.addPhonePage) {
                 returnResult = {
-                  ...returnResult,
+                  ...(returnResult || {}),
                   ...stateSnapshot,
                   addPhonePage: true,
                   phoneVerificationPage: false,
@@ -4494,23 +6593,19 @@
               // Best effort: keep fallback state for compatibility with tests and older flows.
             }
           }
-          try {
-            const verifiedAddPhoneState = await ensureAddPhonePageBeforeSubmit('after replace-number rotation');
-            returnResult = {
-              ...returnResult,
-              ...verifiedAddPhoneState,
-              addPhonePage: true,
-              phoneVerificationPage: false,
-            };
-          } catch (verifyError) {
-            await addLog(
-              `Step 9: failed to verify add-phone page after number replacement. ${verifyError.message}`,
-              'warn'
-            );
-          }
+          const verifiedAddPhoneState = await ensureAddPhonePageBeforeSubmit(
+            'after replace-number rotation',
+            { allowDirectNavigation: true }
+          );
+          returnResult = {
+            ...(returnResult || {}),
+            ...verifiedAddPhoneState,
+            addPhonePage: true,
+            phoneVerificationPage: false,
+          };
 
           await addLog(
-            `Step 9: replacing number and retrying inside step 9 (${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}).`,
+            `步骤 9：正在更换号码并在步骤 9 内重试（${usedNumberReplacementAttempts}/${maxNumberReplacementAttempts}）。`,
             'warn'
           );
           pageState = {
@@ -4521,20 +6616,45 @@
           };
         }
       } catch (error) {
+        const errorMessage = String(error?.message || error || '');
+        if (
+          errorMessage.startsWith(PHONE_MANUAL_FREE_REUSE_ERROR_PREFIX)
+          || errorMessage.startsWith(PHONE_AUTO_FREE_REUSE_PREPARE_ERROR_PREFIX)
+        ) {
+          throw error;
+        }
+        if (isFreeAutoReuseActivation(activation)) {
+          await retireFreeReusableActivation(
+            `自动白嫖复用号码 ${activation.phoneNumber} 执行失败：${errorMessage || 'unknown error'}。`
+          );
+        }
         if (shouldCancelActivation && activation) {
-          await cancelPhoneActivation(state, activation);
+          await cancelPhoneActivation(await getState(), activation);
         }
         await clearCurrentActivation();
         throw sanitizePhoneRestartStep7Error(sanitizePhoneCodeTimeoutError(error));
+      } finally {
+        activePhoneVerificationLogStep = previousLogStep;
+        activePhoneVerificationLogStepKey = previousLogStepKey;
       }
     }
 
     return {
+      cancelSignupPhoneActivation,
+      completeLoginPhoneVerificationFlow,
       completePhoneVerificationFlow,
+      completeSignupPhoneVerificationFlow,
+      finalizeLoginPhoneActivationAfterSuccess,
+      finalizeSignupPhoneActivationAfterSuccess,
+      isPhoneResendBannedNumberError,
       normalizeActivation,
       pollPhoneActivationCode,
+      prepareLoginPhoneActivation,
+      prepareSignupPhoneActivation,
       reactivatePhoneActivation,
       requestPhoneActivation,
+      waitForLoginPhoneCode,
+      waitForSignupPhoneCode,
     };
   }
 

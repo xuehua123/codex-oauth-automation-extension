@@ -254,6 +254,64 @@ return {
   });
 });
 
+test('signup verification state exposes password error text on password page', () => {
+  const api = new Function(`
+const location = {
+  href: 'https://auth.openai.com/log-in/password',
+};
+
+function isStep5Ready() {
+  return false;
+}
+
+function isVerificationPageStillVisible() {
+  return false;
+}
+
+function isSignupPasswordErrorPage() {
+  return false;
+}
+
+function getSignupPasswordTimeoutErrorPageState() {
+  return null;
+}
+
+function isSignupEmailAlreadyExistsPage() {
+  return false;
+}
+
+function getSignupPasswordInput() {
+  return { value: 'Secret123!' };
+}
+
+function getSignupPasswordSubmitButton() {
+  return { textContent: 'Continue' };
+}
+
+function getSignupPasswordFieldErrorText() {
+  return 'Incorrect phone number or password';
+}
+
+${extractFunction('isSignupProfilePageUrl')}
+${extractFunction('isLikelyLoggedInChatgptHomeUrl')}
+${extractFunction('getStep4PostVerificationState')}
+${extractFunction('inspectSignupVerificationState')}
+
+return {
+  run() {
+    return inspectSignupVerificationState();
+  },
+};
+`)();
+
+  assert.deepStrictEqual(api.run(), {
+    state: 'password',
+    passwordInput: { value: 'Secret123!' },
+    submitButton: { textContent: 'Continue' },
+    passwordErrorText: 'Incorrect phone number or password',
+  });
+});
+
 test('signup verification state keeps verification priority when email-verification page also shows profile fields', () => {
   const api = new Function(`
 const location = {
@@ -303,4 +361,69 @@ return {
   assert.deepStrictEqual(api.run(), {
     state: 'verification',
   });
+});
+
+test('logged-out chatgpt homepage with signup and login actions is not treated as logged-in home', () => {
+  const api = new Function(`
+const location = {
+  href: 'https://chatgpt.com/',
+};
+
+const signupButton = {
+  textContent: '免费注册',
+  disabled: false,
+  getAttribute(name) {
+    if (name === 'type') return 'button';
+    return '';
+  },
+};
+
+const loginButton = {
+  textContent: '登录',
+  disabled: false,
+  getAttribute(name) {
+    if (name === 'type') return 'button';
+    return '';
+  },
+};
+
+const document = {
+  querySelectorAll(selector) {
+    if (selector === 'a, button, [role="button"], [role="link"], input[type="button"], input[type="submit"]') {
+      return [signupButton, loginButton];
+    }
+    return [];
+  },
+};
+
+function findSignupEntryTrigger() {
+  return signupButton;
+}
+
+function getActionText(el) {
+  return [el?.textContent, el?.value, el?.getAttribute?.('aria-label'), el?.getAttribute?.('title')]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\\s+/g, ' ')
+    .trim();
+}
+
+function isVisibleElement() {
+  return true;
+}
+
+function isActionEnabled(el) {
+  return Boolean(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true';
+}
+
+${extractFunction('isLikelyLoggedInChatgptHomeUrl')}
+
+return {
+  run() {
+    return isLikelyLoggedInChatgptHomeUrl();
+  },
+};
+`)();
+
+  assert.equal(api.run(), false);
 });

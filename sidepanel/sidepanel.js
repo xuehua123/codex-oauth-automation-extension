@@ -31,6 +31,7 @@ const btnReleaseLog = document.getElementById('btn-release-log');
 const updateCardVersion = document.getElementById('update-card-version');
 const updateCardSummary = document.getElementById('update-card-summary');
 const updateReleaseList = document.getElementById('update-release-list');
+const btnIgnoreRelease = document.getElementById('btn-ignore-release');
 const btnOpenRelease = document.getElementById('btn-open-release');
 const settingsCard = document.getElementById('settings-card');
 const contributionModePanel = document.getElementById('contribution-mode-panel');
@@ -49,6 +50,7 @@ const displayLocalhostUrl = document.getElementById('display-localhost-url');
 const displayStatus = document.getElementById('display-status');
 const statusBar = document.getElementById('status-bar');
 const inputEmail = document.getElementById('input-email');
+const inputSignupPhone = document.getElementById('input-signup-phone');
 const inputPassword = document.getElementById('input-password');
 const btnToggleVpsUrl = document.getElementById('btn-toggle-vps-url');
 const btnToggleVpsPassword = document.getElementById('btn-toggle-vps-password');
@@ -93,6 +95,13 @@ const rowSub2ApiPassword = document.getElementById('row-sub2api-password');
 const inputSub2ApiPassword = document.getElementById('input-sub2api-password');
 const rowSub2ApiGroup = document.getElementById('row-sub2api-group');
 const inputSub2ApiGroup = document.getElementById('input-sub2api-group');
+const sub2ApiGroupPickerRoot = document.getElementById('sub2api-group-picker');
+const btnSub2ApiGroupMenu = document.getElementById('btn-sub2api-group-menu');
+const sub2ApiGroupCurrent = document.getElementById('sub2api-group-current');
+const sub2ApiGroupMenu = document.getElementById('sub2api-group-menu');
+const btnAddSub2ApiGroup = document.getElementById('btn-add-sub2api-group');
+const rowSub2ApiAccountPriority = document.getElementById('row-sub2api-account-priority');
+const inputSub2ApiAccountPriority = document.getElementById('input-sub2api-account-priority');
 const rowSub2ApiDefaultProxy = document.getElementById('row-sub2api-default-proxy');
 const inputSub2ApiDefaultProxy = document.getElementById('input-sub2api-default-proxy');
 const rowIpProxyEnabled = document.getElementById('row-ip-proxy-enabled');
@@ -103,6 +112,9 @@ const ipProxyEnabledStatusDot = document.getElementById('ip-proxy-enabled-status
 const ipProxyEnabledStatusText = document.getElementById('ip-proxy-enabled-status-text');
 const ipProxyEnabledButtons = Array.from(document.querySelectorAll('[data-ip-proxy-enabled]'));
 const rowIpProxyFold = document.getElementById('row-ip-proxy-fold');
+const rowIpProxyPromo = document.getElementById('row-ip-proxy-promo');
+const ipProxyPromo = document.getElementById('ip-proxy-promo');
+const ipProxyPromoText = document.getElementById('ip-proxy-promo-text');
 const rowIpProxyService = document.getElementById('row-ip-proxy-service');
 const selectIpProxyService = document.getElementById('select-ip-proxy-service');
 const btnIpProxyServiceLogin = document.getElementById('btn-ip-proxy-service-login');
@@ -172,10 +184,48 @@ const inputIkonaOniApiKey = document.getElementById('input-ikona-oni-api-key');
 const rowCustomPassword = document.getElementById('row-custom-password');
 const rowPlusMode = document.getElementById('row-plus-mode');
 const inputPlusModeEnabled = document.getElementById('input-plus-mode-enabled');
+const rowPlusPaymentMethod = document.getElementById('row-plus-payment-method');
 const selectPlusPaymentMethod = document.getElementById('select-plus-payment-method');
+const btnGpcCardKeyPurchase = document.getElementById('btn-gpc-card-key-purchase');
+const plusPaymentMethodCaption = document.getElementById('plus-payment-method-caption');
 const rowPayPalAccount = document.getElementById('row-paypal-account');
 const selectPayPalAccount = document.getElementById('select-paypal-account');
+const payPalAccountPickerRoot = document.getElementById('paypal-account-picker');
+const btnPayPalAccountMenu = document.getElementById('btn-paypal-account-menu');
+const payPalAccountCurrent = document.getElementById('paypal-account-current');
+const payPalAccountMenu = document.getElementById('paypal-account-menu');
 const btnAddPayPalAccount = document.getElementById('btn-add-paypal-account');
+const rowGpcHelperApi = document.getElementById('row-gpc-helper-api');
+const inputGpcHelperApi = document.getElementById('input-gpc-helper-api');
+const btnGpcHelperConvertApiKey = document.getElementById('btn-gpc-helper-convert-api-key');
+const rowGpcHelperCardKey = document.getElementById('row-gpc-helper-card-key');
+const inputGpcHelperCardKey = document.getElementById('input-gpc-helper-card-key');
+const btnToggleGpcHelperCardKey = document.getElementById('btn-toggle-gpc-helper-card-key');
+const btnGpcHelperBalance = document.getElementById('btn-gpc-helper-balance');
+const displayGpcHelperBalance = document.getElementById('display-gpc-helper-balance');
+const rowGpcHelperPhoneMode = document.getElementById('row-gpc-helper-phone-mode');
+const selectGpcHelperPhoneMode = document.getElementById('select-gpc-helper-phone-mode');
+const rowGpcHelperCountryCode = document.getElementById('row-gpc-helper-country-code');
+const selectGpcHelperCountryCode = document.getElementById('select-gpc-helper-country-code');
+const rowGpcHelperPhone = document.getElementById('row-gpc-helper-phone');
+const inputGpcHelperPhone = document.getElementById('input-gpc-helper-phone');
+const rowGpcHelperOtpChannel = document.getElementById('row-gpc-helper-otp-channel');
+const selectGpcHelperOtpChannel = document.getElementById('select-gpc-helper-otp-channel');
+const rowGpcHelperLocalSmsEnabled = document.getElementById('row-gpc-helper-local-sms-enabled');
+const inputGpcHelperLocalSmsEnabled = document.getElementById('input-gpc-helper-local-sms-enabled');
+const rowGpcHelperLocalSmsUrl = document.getElementById('row-gpc-helper-local-sms-url');
+const inputGpcHelperLocalSmsUrl = document.getElementById('input-gpc-helper-local-sms-url');
+const rowGpcHelperPin = document.getElementById('row-gpc-helper-pin');
+const inputGpcHelperPin = document.getElementById('input-gpc-helper-pin');
+const btnToggleGpcHelperPin = document.getElementById('btn-toggle-gpc-helper-pin');
+const rowGoPayCountryCode = document.getElementById('row-gopay-country-code');
+const selectGoPayCountryCode = document.getElementById('select-gopay-country-code');
+const rowGoPayPhone = document.getElementById('row-gopay-phone');
+const inputGoPayPhone = document.getElementById('input-gopay-phone');
+const rowGoPayOtp = document.getElementById('row-gopay-otp');
+const inputGoPayOtp = document.getElementById('input-gopay-otp');
+const rowGoPayPin = document.getElementById('row-gopay-pin');
+const inputGoPayPin = document.getElementById('input-gopay-pin');
 const selectMailProvider = document.getElementById('select-mail-provider');
 const btnMailLogin = document.getElementById('btn-mail-login');
 const rowCustomMailProviderPool = document.getElementById('row-custom-mail-provider-pool');
@@ -187,6 +237,22 @@ const rowEmailGenerator = document.getElementById('row-email-generator');
 const selectEmailGenerator = document.getElementById('select-email-generator');
 const rowCustomEmailPool = document.getElementById('row-custom-email-pool');
 const inputCustomEmailPool = document.getElementById('input-custom-email-pool');
+const btnCustomEmailPoolRefresh = document.getElementById('btn-custom-email-pool-refresh');
+const btnCustomEmailPoolClearUsed = document.getElementById('btn-custom-email-pool-clear-used');
+const btnCustomEmailPoolDeleteAll = document.getElementById('btn-custom-email-pool-delete-all');
+const inputCustomEmailPoolImport = document.getElementById('input-custom-email-pool-import');
+const btnCustomEmailPoolImport = document.getElementById('btn-custom-email-pool-import');
+const customEmailPoolSummary = document.getElementById('custom-email-pool-summary');
+const inputCustomEmailPoolSearch = document.getElementById('input-custom-email-pool-search');
+const selectCustomEmailPoolFilter = document.getElementById('select-custom-email-pool-filter');
+const checkboxCustomEmailPoolSelectAll = document.getElementById('checkbox-custom-email-pool-select-all');
+const customEmailPoolSelectionSummary = document.getElementById('custom-email-pool-selection-summary');
+const btnCustomEmailPoolBulkUsed = document.getElementById('btn-custom-email-pool-bulk-used');
+const btnCustomEmailPoolBulkUnused = document.getElementById('btn-custom-email-pool-bulk-unused');
+const btnCustomEmailPoolBulkEnable = document.getElementById('btn-custom-email-pool-bulk-enable');
+const btnCustomEmailPoolBulkDisable = document.getElementById('btn-custom-email-pool-bulk-disable');
+const btnCustomEmailPoolBulkDelete = document.getElementById('btn-custom-email-pool-bulk-delete');
+const customEmailPoolList = document.getElementById('custom-email-pool-list');
 const rowTempEmailBaseUrl = document.getElementById('row-temp-email-base-url');
 const inputTempEmailBaseUrl = document.getElementById('input-temp-email-base-url');
 const rowTempEmailAdminAuth = document.getElementById('row-temp-email-admin-auth');
@@ -199,11 +265,26 @@ const rowTempEmailRandomSubdomainToggle = document.getElementById('row-temp-emai
 const inputTempEmailUseRandomSubdomain = document.getElementById('input-temp-email-use-random-subdomain');
 const rowTempEmailDomain = document.getElementById('row-temp-email-domain');
 const selectTempEmailDomain = document.getElementById('select-temp-email-domain');
+const tempEmailDomainPickerRoot = document.getElementById('temp-email-domain-picker');
+const btnTempEmailDomainMenu = document.getElementById('btn-temp-email-domain-menu');
+const tempEmailDomainCurrent = document.getElementById('temp-email-domain-current');
+const tempEmailDomainMenu = document.getElementById('temp-email-domain-menu');
 const inputTempEmailDomain = document.getElementById('input-temp-email-domain');
 const btnTempEmailDomainMode = document.getElementById('btn-temp-email-domain-mode');
 const cloudflareTempEmailSection = document.getElementById('cloudflare-temp-email-section');
 const btnCloudflareTempEmailUsageGuide = document.getElementById('btn-cloudflare-temp-email-usage-guide');
 const btnCloudflareTempEmailGithub = document.getElementById('btn-cloudflare-temp-email-github');
+const cloudMailSection = document.getElementById('cloud-mail-section');
+const rowCloudMailBaseUrl = document.getElementById('row-cloud-mail-base-url');
+const rowCloudMailAdminEmail = document.getElementById('row-cloud-mail-admin-email');
+const rowCloudMailAdminPassword = document.getElementById('row-cloud-mail-admin-password');
+const rowCloudMailReceiveMailbox = document.getElementById('row-cloud-mail-receive-mailbox');
+const rowCloudMailDomain = document.getElementById('row-cloud-mail-domain');
+const inputCloudMailBaseUrl = document.getElementById('input-cloud-mail-base-url');
+const inputCloudMailAdminEmail = document.getElementById('input-cloud-mail-admin-email');
+const inputCloudMailAdminPassword = document.getElementById('input-cloud-mail-admin-password');
+const inputCloudMailReceiveMailbox = document.getElementById('input-cloud-mail-receive-mailbox');
+const inputCloudMailDomain = document.getElementById('input-cloud-mail-domain');
 const hotmailSection = document.getElementById('hotmail-section');
 const mail2925Section = document.getElementById('mail2925-section');
 const luckmailSection = document.getElementById('luckmail-section');
@@ -243,6 +324,8 @@ const inputHotmailClientId = document.getElementById('input-hotmail-client-id');
 const inputHotmailPassword = document.getElementById('input-hotmail-password');
 const inputHotmailRefreshToken = document.getElementById('input-hotmail-refresh-token');
 const inputHotmailImport = document.getElementById('input-hotmail-import');
+const inputHotmailSearch = document.getElementById('input-hotmail-search');
+const selectHotmailFilter = document.getElementById('select-hotmail-filter');
 const btnAddHotmailAccount = document.getElementById('btn-add-hotmail-account');
 const btnImportHotmailAccounts = document.getElementById('btn-import-hotmail-accounts');
 const btnToggleHotmailForm = document.getElementById('btn-toggle-hotmail-form');
@@ -256,6 +339,8 @@ const hotmailAccountsList = document.getElementById('hotmail-accounts-list');
 const inputMail2925Email = document.getElementById('input-mail2925-email');
 const inputMail2925Password = document.getElementById('input-mail2925-password');
 const inputMail2925Import = document.getElementById('input-mail2925-import');
+const inputMail2925Search = document.getElementById('input-mail2925-search');
+const selectMail2925Filter = document.getElementById('select-mail2925-filter');
 const btnAddMail2925Account = document.getElementById('btn-add-mail2925-account');
 const btnToggleMail2925Form = document.getElementById('btn-toggle-mail2925-form');
 const btnImportMail2925Accounts = document.getElementById('btn-import-mail2925-accounts');
@@ -294,30 +379,39 @@ const rowInbucketMailbox = document.getElementById('row-inbucket-mailbox');
 const inputInbucketMailbox = document.getElementById('input-inbucket-mailbox');
 const rowCfDomain = document.getElementById('row-cf-domain');
 const selectCfDomain = document.getElementById('select-cf-domain');
+const cfDomainPickerRoot = document.getElementById('cf-domain-picker');
+const btnCfDomainMenu = document.getElementById('btn-cf-domain-menu');
+const cfDomainCurrent = document.getElementById('cf-domain-current');
+const cfDomainMenu = document.getElementById('cf-domain-menu');
 const inputCfDomain = document.getElementById('input-cf-domain');
 const btnCfDomainMode = document.getElementById('btn-cf-domain-mode');
 const inputRunCount = document.getElementById('input-run-count');
 const inputAutoSkipFailures = document.getElementById('input-auto-skip-failures');
 const inputAutoSkipFailuresThreadIntervalMinutes = document.getElementById('input-auto-skip-failures-thread-interval-minutes');
+const inputStep6CookieCleanupEnabled = document.getElementById('input-step6-cookie-cleanup-enabled');
 const inputAutoDelayEnabled = document.getElementById('input-auto-delay-enabled');
 const inputAutoDelayMinutes = document.getElementById('input-auto-delay-minutes');
 const inputAutoStepDelaySeconds = document.getElementById('input-auto-step-delay-seconds');
+const inputOperationDelayEnabled = document.getElementById('input-operation-delay-enabled');
 const inputOAuthFlowTimeoutEnabled = document.getElementById('input-oauth-flow-timeout-enabled');
 const inputVerificationResendCount = document.getElementById('input-verification-resend-count');
 const rowPhoneVerificationEnabled = document.getElementById('row-phone-verification-enabled');
 const btnTogglePhoneVerificationSection = document.getElementById('btn-toggle-phone-verification-section');
 const rowPhoneVerificationFold = document.getElementById('row-phone-verification-fold');
 const inputPhoneVerificationEnabled = document.getElementById('input-phone-verification-enabled');
-const rowPhoneSmsProvider = document.getElementById('row-phone-sms-provider');
+const rowSignupMethod = document.getElementById('row-signup-method');
+const rowSignupPhone = document.getElementById('row-signup-phone');
+const signupMethodButtons = Array.from(document.querySelectorAll('[data-signup-method]'));
 const selectPhoneSmsProvider = document.getElementById('select-phone-sms-provider');
-const rowPhoneSmsProviderOrder = document.getElementById('row-phone-sms-provider-order');
-const rowPhoneSmsProviderOrderActions = document.getElementById('row-phone-sms-provider-order-actions');
 const rowHeroSmsPlatform = document.getElementById('row-hero-sms-platform');
 const rowHeroSmsCountry = document.getElementById('row-hero-sms-country');
 const rowHeroSmsCountryFallback = document.getElementById('row-hero-sms-country-fallback');
 const rowHeroSmsAcquirePriority = document.getElementById('row-hero-sms-acquire-priority');
 const rowHeroSmsApiKey = document.getElementById('row-hero-sms-api-key');
 const rowHeroSmsMaxPrice = document.getElementById('row-hero-sms-max-price');
+const rowPhoneSmsProvider = document.getElementById('row-phone-sms-provider');
+const rowPhoneSmsProviderOrder = document.getElementById('row-phone-sms-provider-order');
+const rowPhoneSmsProviderOrderActions = document.getElementById('row-phone-sms-provider-order-actions');
 const rowFiveSimApiKey = document.getElementById('row-five-sim-api-key');
 const rowFiveSimCountry = document.getElementById('row-five-sim-country');
 const rowFiveSimCountryFallback = document.getElementById('row-five-sim-country-fallback');
@@ -340,6 +434,9 @@ const rowPhoneCodeWaitSeconds = document.getElementById('row-phone-code-wait-sec
 const rowPhoneCodeTimeoutWindows = document.getElementById('row-phone-code-timeout-windows');
 const rowPhoneCodePollIntervalSeconds = document.getElementById('row-phone-code-poll-interval-seconds');
 const rowPhoneCodePollMaxRounds = document.getElementById('row-phone-code-poll-max-rounds');
+const rowFreePhoneReuseEnabled = document.getElementById('row-free-phone-reuse-enabled');
+const rowFreePhoneReuseAutoEnabled = document.getElementById('row-free-phone-reuse-auto-enabled');
+const rowFreeReusablePhone = document.getElementById('row-free-reusable-phone');
 const inputHeroSmsApiKey = document.getElementById('input-hero-sms-api-key');
 const btnToggleHeroSmsApiKey = document.getElementById('btn-toggle-hero-sms-api-key');
 const inputFiveSimApiKey = document.getElementById('input-five-sim-api-key');
@@ -357,6 +454,9 @@ const inputPhoneCodeTimeoutWindows = document.getElementById('input-phone-code-t
 const inputPhoneCodePollIntervalSeconds = document.getElementById('input-phone-code-poll-interval-seconds');
 const inputPhoneCodePollMaxRounds = document.getElementById('input-phone-code-poll-max-rounds');
 const inputHeroSmsReuseEnabled = document.getElementById('input-hero-sms-reuse-enabled');
+const inputFreePhoneReuseEnabled = document.getElementById('input-free-phone-reuse-enabled');
+const inputFreePhoneReuseAutoEnabled = document.getElementById('input-free-phone-reuse-auto-enabled');
+const inputFreeReusablePhone = document.getElementById('input-free-reusable-phone');
 const selectHeroSmsCountry = document.getElementById('select-hero-sms-country');
 const selectHeroSmsCountryFallback = document.getElementById('select-hero-sms-country-fallback');
 const selectHeroSmsAcquirePriority = document.getElementById('select-hero-sms-acquire-priority');
@@ -381,15 +481,21 @@ const btnPhoneSmsProviderOrderMenu = document.getElementById('btn-phone-sms-prov
 const phoneSmsProviderOrderMenu = document.getElementById('phone-sms-provider-order-menu');
 const btnPhoneSmsProviderOrderReset = document.getElementById('btn-phone-sms-provider-order-reset');
 const btnHeroSmsPricePreview = document.getElementById('btn-hero-sms-price-preview');
+const btnPhoneSmsBalance = document.getElementById('btn-phone-sms-balance');
 const displayHeroSmsPlatform = document.getElementById('display-hero-sms-platform');
 const displayHeroSmsCurrentNumber = document.getElementById('display-hero-sms-current-number');
 const displayHeroSmsCurrentCountdown = document.getElementById('display-hero-sms-current-countdown');
 const displayHeroSmsPriceTiers = document.getElementById('display-hero-sms-price-tiers');
+const displayPhoneSmsBalance = document.getElementById('display-phone-sms-balance');
 const displayHeroSmsCurrentCode = document.getElementById('display-hero-sms-current-code');
+const displayFreeReusablePhoneCountry = document.getElementById('display-free-reusable-phone-country');
+const displayFreeReusablePhone = document.getElementById('display-free-reusable-phone');
 const displayHeroSmsCountryFallbackOrder = document.getElementById('display-hero-sms-country-fallback-order');
 const displayFiveSimCountryFallbackOrder = document.getElementById('display-five-sim-country-fallback-order');
 const displayNexSmsCountryFallbackOrder = document.getElementById('display-nex-sms-country-fallback-order');
 const displayPhoneSmsProviderOrder = document.getElementById('display-phone-sms-provider-order');
+const btnSaveFreeReusablePhone = document.getElementById('btn-save-free-reusable-phone');
+const btnClearFreeReusablePhone = document.getElementById('btn-clear-free-reusable-phone');
 const rowAccountRunHistoryHelperBaseUrl = document.getElementById('row-account-run-history-helper-base-url');
 const inputAccountRunHistoryHelperBaseUrl = document.getElementById('input-account-run-history-helper-base-url');
 const autoStartModal = document.getElementById('auto-start-modal');
@@ -413,10 +519,23 @@ const btnAutoStartRestart = document.getElementById('btn-auto-start-restart');
 const btnAutoStartContinue = document.getElementById('btn-auto-start-continue');
 const autoHintText = document.querySelector('.auto-hint');
 const stepsList = document.querySelector('.steps-list');
+const PLUS_PAYMENT_METHOD_PAYPAL = 'paypal';
+const PLUS_PAYMENT_METHOD_GOPAY = 'gopay';
+const PLUS_PAYMENT_METHOD_GPC_HELPER = 'gpc-helper';
+const DEFAULT_GPC_HELPER_API_URL = 'https://gpc.qlhazycoder.top';
+const GPC_HELPER_PORTAL_URL = 'https://gpc.qlhazycoder.top/';
+const GPC_HELPER_PHONE_MODE_AUTO = 'auto';
+const GPC_HELPER_PHONE_MODE_MANUAL = 'manual';
+const DEFAULT_PLUS_PAYMENT_METHOD = PLUS_PAYMENT_METHOD_PAYPAL;
+const SIGNUP_METHOD_EMAIL = 'email';
+const SIGNUP_METHOD_PHONE = 'phone';
+const DEFAULT_SIGNUP_METHOD = SIGNUP_METHOD_EMAIL;
 let currentPlusModeEnabled = false;
-let currentPlusPaymentMethod = 'paypal';
+let currentPlusPaymentMethod = DEFAULT_PLUS_PAYMENT_METHOD;
+let currentSignupMethod = DEFAULT_SIGNUP_METHOD;
 let currentPanelMode = 'cpa';
 let currentCodex2ApiLoginOnlyMode = false;
+let lastConfirmedOperationDelayEnabled = true;
 let heroSmsCountrySelectionOrder = [];
 let phoneSmsProviderOrderSelection = [];
 let heroSmsCountryMenuSearchKeyword = '';
@@ -436,7 +555,8 @@ let stepDefinitions = getStepDefinitionsForMode(
   currentPanelMode,
   currentCodex2ApiLoginOnlyMode,
   false,
-  currentPlusPaymentMethod
+  currentPlusPaymentMethod,
+  { signupMethod: currentSignupMethod }
 );
 let STEP_IDS = stepDefinitions.map((step) => Number(step.id)).filter(Number.isFinite);
 let STEP_DEFAULT_STATUSES = Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending']));
@@ -470,6 +590,7 @@ const PHONE_CODE_POLL_MAX_ROUNDS_MAX = 120;
 const DEFAULT_PHONE_CODE_POLL_MAX_ROUNDS = 4;
 const PHONE_SMS_PROVIDER_HERO = 'hero-sms';
 const PHONE_SMS_PROVIDER_FIVE_SIM = '5sim';
+const PHONE_SMS_PROVIDER_HERO_SMS = PHONE_SMS_PROVIDER_HERO;
 const PHONE_SMS_PROVIDER_NEXSMS = 'nexsms';
 const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO;
 const DEFAULT_PHONE_SMS_PROVIDER_ORDER = Object.freeze([
@@ -488,26 +609,112 @@ const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
 const HERO_SMS_ACQUIRE_PRIORITY_PRICE = 'price';
 const HERO_SMS_ACQUIRE_PRIORITY_PRICE_HIGH = 'price_high';
 const DEFAULT_HERO_SMS_ACQUIRE_PRIORITY = HERO_SMS_ACQUIRE_PRIORITY_COUNTRY;
-const HERO_SMS_FALLBACK_COUNTRY_ITEMS = Object.freeze([
+const HERO_SMS_SUPPORTED_COUNTRY_ITEMS = Object.freeze([
+  { id: 6, chn: '印度尼西亚', eng: 'Indonesia' },
   { id: 52, chn: '泰国', eng: 'Thailand' },
   { id: 187, chn: '美国（物理)', eng: 'USA' },
   { id: 16, chn: '英国', eng: 'United Kingdom' },
   { id: 151, chn: '日本', eng: 'Japan' },
   { id: 43, chn: '德国', eng: 'Germany' },
   { id: 73, chn: '法国', eng: 'France' },
+  { id: 10, chn: '越南', eng: 'Vietnam' },
 ]);
-const FIVE_SIM_FALLBACK_COUNTRY_ITEMS = Object.freeze([
-  { code: 'thailand', iso: 'TH', text_en: 'Thailand' },
-  { code: 'england', iso: 'GB', text_en: 'United Kingdom' },
-  { code: 'usa', iso: 'US', text_en: 'United States' },
-  { code: 'japan', iso: 'JP', text_en: 'Japan' },
-  { code: 'germany', iso: 'DE', text_en: 'Germany' },
-]);
-const NEX_SMS_FALLBACK_COUNTRY_ITEMS = Object.freeze([
-  { id: 1, name: 'Ukraine' },
-  { id: 6, name: 'Indonesia' },
-  { id: 7, name: 'Malaysia' },
-]);
+const HERO_SMS_SUPPORTED_COUNTRY_ID_SET = new Set(HERO_SMS_SUPPORTED_COUNTRY_ITEMS.map((item) => String(item.id)));
+const HERO_SMS_FALLBACK_COUNTRY_ITEMS = HERO_SMS_SUPPORTED_COUNTRY_ITEMS;
+const FIVE_SIM_COUNTRY_CN_BY_ID = Object.freeze({
+  afghanistan: '阿富汗',
+  albania: '阿尔巴尼亚',
+  algeria: '阿尔及利亚',
+  angola: '安哥拉',
+  argentina: '阿根廷',
+  armenia: '亚美尼亚',
+  australia: '澳大利亚',
+  austria: '奥地利',
+  azerbaijan: '阿塞拜疆',
+  bahamas: '巴哈马',
+  bahrain: '巴林',
+  bangladesh: '孟加拉国',
+  belarus: '白俄罗斯',
+  belgium: '比利时',
+  bolivia: '玻利维亚',
+  bosnia: '波黑',
+  brazil: '巴西',
+  bulgaria: '保加利亚',
+  cambodia: '柬埔寨',
+  cameroon: '喀麦隆',
+  canada: '加拿大',
+  chile: '智利',
+  china: '中国',
+  colombia: '哥伦比亚',
+  croatia: '克罗地亚',
+  cyprus: '塞浦路斯',
+  czech: '捷克',
+  denmark: '丹麦',
+  egypt: '埃及',
+  england: '英国',
+  estonia: '爱沙尼亚',
+  ethiopia: '埃塞俄比亚',
+  finland: '芬兰',
+  france: '法国',
+  georgia: '格鲁吉亚',
+  germany: '德国',
+  ghana: '加纳',
+  greece: '希腊',
+  hongkong: '中国香港',
+  hungary: '匈牙利',
+  india: '印度',
+  indonesia: '印度尼西亚',
+  ireland: '爱尔兰',
+  israel: '以色列',
+  italy: '意大利',
+  japan: '日本',
+  jordan: '约旦',
+  kazakhstan: '哈萨克斯坦',
+  kenya: '肯尼亚',
+  kyrgyzstan: '吉尔吉斯斯坦',
+  laos: '老挝',
+  latvia: '拉脱维亚',
+  lithuania: '立陶宛',
+  malaysia: '马来西亚',
+  mexico: '墨西哥',
+  moldova: '摩尔多瓦',
+  morocco: '摩洛哥',
+  myanmar: '缅甸',
+  nepal: '尼泊尔',
+  netherlands: '荷兰',
+  newzealand: '新西兰',
+  nigeria: '尼日利亚',
+  norway: '挪威',
+  pakistan: '巴基斯坦',
+  paraguay: '巴拉圭',
+  peru: '秘鲁',
+  philippines: '菲律宾',
+  poland: '波兰',
+  portugal: '葡萄牙',
+  romania: '罗马尼亚',
+  russia: '俄罗斯',
+  saudiarabia: '沙特阿拉伯',
+  serbia: '塞尔维亚',
+  singapore: '新加坡',
+  slovakia: '斯洛伐克',
+  slovenia: '斯洛文尼亚',
+  southafrica: '南非',
+  spain: '西班牙',
+  srilanka: '斯里兰卡',
+  sweden: '瑞典',
+  switzerland: '瑞士',
+  taiwan: '中国台湾',
+  tajikistan: '塔吉克斯坦',
+  tanzania: '坦桑尼亚',
+  thailand: '泰国',
+  turkey: '土耳其',
+  ukraine: '乌克兰',
+  uruguay: '乌拉圭',
+  usa: '美国',
+  uzbekistan: '乌兹别克斯坦',
+  venezuela: '委内瑞拉',
+  vietnam: '越南',
+});
 const HERO_SMS_COUNTRY_CODE_ALIAS_OVERRIDES = Object.freeze({
   'bahamas': ['BS'],
   'bolivia': ['BO'],
@@ -554,19 +761,48 @@ const DEFAULT_MAIL_2925_MODE = MAIL_2925_MODE_PROVIDE;
 const NEW_USER_GUIDE_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-new-user-guide-prompt-dismissed';
 const AUTO_SKIP_FAILURES_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-skip-failures-prompt-dismissed';
 const AUTO_RUN_FALLBACK_RISK_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-run-fallback-risk-prompt-dismissed';
-const AUTO_RUN_PLUS_RISK_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-auto-run-plus-risk-prompt-dismissed';
-const PLUS_CONTRIBUTION_PROMPT_LEDGER_STORAGE_KEY = 'multipage-plus-contribution-prompt-ledger';
+const CPA_PHONE_SIGNUP_PROMPT_DISMISSED_STORAGE_KEY = 'multipage-cpa-phone-signup-prompt-dismissed';
+const CPA_PHONE_SIGNUP_WARNING_MESSAGE = 'CPA 未适配手机号注册模式，认证成功后无法使用。请使用 SUB2API，或者认证成功后重新登录一遍进行解决。';
 const PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY = 'multipage-phone-verification-section-expanded';
+let phoneVerificationSectionExpanded = false;
 
-function normalizePlusPaymentMethod(value = '') {
-  return String(value || '').trim().toLowerCase() === 'gopay' ? 'gopay' : 'paypal';
+function readPhoneVerificationSectionExpanded() {
+  try {
+    return window.localStorage?.getItem(PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY) === '1';
+  } catch (err) {
+    return false;
+  }
 }
 
-function getSelectedPlusPaymentMethod() {
-  if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
-    return normalizePlusPaymentMethod(selectPlusPaymentMethod.value);
+function persistPhoneVerificationSectionExpanded(expanded) {
+  try {
+    if (expanded) {
+      window.localStorage?.setItem(PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY, '1');
+    } else {
+      window.localStorage?.removeItem(PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY);
+    }
+  } catch (err) {
+    // Ignore storage errors; the current in-memory state is enough for this session.
   }
-  return normalizePlusPaymentMethod(latestState?.plusPaymentMethod || currentPlusPaymentMethod);
+}
+
+function setPhoneVerificationSectionExpanded(expanded) {
+  phoneVerificationSectionExpanded = Boolean(expanded);
+  persistPhoneVerificationSectionExpanded(phoneVerificationSectionExpanded);
+  if (typeof updatePhoneVerificationSettingsUI === 'function') {
+    updatePhoneVerificationSettingsUI();
+  }
+}
+
+function togglePhoneVerificationSectionExpanded() {
+  setPhoneVerificationSectionExpanded(!phoneVerificationSectionExpanded);
+}
+
+function initPhoneVerificationSectionExpandedState() {
+  phoneVerificationSectionExpanded = readPhoneVerificationSectionExpanded();
+  if (typeof updatePhoneVerificationSettingsUI === 'function') {
+    updatePhoneVerificationSettingsUI();
+  }
 }
 
 function getSelectedPanelMode() {
@@ -580,24 +816,34 @@ function getSelectedPanelMode() {
   return 'cpa';
 }
 
-function getStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = 'paypal') {
+function getStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = DEFAULT_PLUS_PAYMENT_METHOD, options = {}) {
   let resolvedPanelMode = panelMode;
   let resolvedCodex2ApiLoginOnlyMode = codex2apiLoginOnlyMode;
   let resolvedPlusModeEnabled = plusModeEnabled;
   let resolvedPlusPaymentMethod = plusPaymentMethod;
+  let resolvedOptions = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
   let usedLegacySignature = false;
 
   if (typeof panelMode === 'boolean') {
     resolvedPanelMode = 'cpa';
     resolvedCodex2ApiLoginOnlyMode = false;
     resolvedPlusModeEnabled = panelMode;
-    resolvedPlusPaymentMethod = codex2apiLoginOnlyMode;
+    if (codex2apiLoginOnlyMode && typeof codex2apiLoginOnlyMode === 'object' && !Array.isArray(codex2apiLoginOnlyMode)) {
+      resolvedOptions = codex2apiLoginOnlyMode;
+      resolvedPlusPaymentMethod = resolvedOptions.plusPaymentMethod || currentPlusPaymentMethod || DEFAULT_PLUS_PAYMENT_METHOD;
+    } else {
+      resolvedPlusPaymentMethod = codex2apiLoginOnlyMode || currentPlusPaymentMethod || DEFAULT_PLUS_PAYMENT_METHOD;
+      resolvedOptions = plusModeEnabled && typeof plusModeEnabled === 'object' && !Array.isArray(plusModeEnabled)
+        ? plusModeEnabled
+        : {};
+    }
     usedLegacySignature = true;
   }
 
   const stepOptions = {
     plusModeEnabled: Boolean(resolvedPlusModeEnabled),
     plusPaymentMethod: normalizePlusPaymentMethod(resolvedPlusPaymentMethod),
+    signupMethod: normalizeSignupMethod(resolvedOptions.signupMethod || currentSignupMethod || DEFAULT_SIGNUP_METHOD),
   };
   if (!usedLegacySignature) {
     stepOptions.panelMode = String(resolvedPanelMode || '').trim().toLowerCase();
@@ -613,43 +859,55 @@ function getStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = f
     });
 }
 
-function rebuildStepDefinitionState(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = 'paypal') {
+function getStepIdByKeyForCurrentMode(stepKey = '') {
+  const normalizedKey = String(stepKey || '').trim();
+  if (!normalizedKey) {
+    return 0;
+  }
+  const match = (stepDefinitions || []).find((step) => String(step?.key || '') === normalizedKey);
+  return Number(match?.id) || 0;
+}
+
+function rebuildStepDefinitionState(panelMode = 'cpa', codex2apiLoginOnlyMode = false, plusModeEnabled = false, plusPaymentMethod = DEFAULT_PLUS_PAYMENT_METHOD, options = {}) {
   let resolvedPanelMode = panelMode;
   let resolvedCodex2ApiLoginOnlyMode = codex2apiLoginOnlyMode;
   let resolvedPlusModeEnabled = plusModeEnabled;
   let resolvedPlusPaymentMethod = plusPaymentMethod;
-  let usedLegacySignature = false;
+  let resolvedOptions = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 
   if (typeof panelMode === 'boolean') {
     resolvedPanelMode = 'cpa';
     resolvedCodex2ApiLoginOnlyMode = false;
     resolvedPlusModeEnabled = panelMode;
-    resolvedPlusPaymentMethod = codex2apiLoginOnlyMode;
-    usedLegacySignature = true;
+    if (codex2apiLoginOnlyMode && typeof codex2apiLoginOnlyMode === 'object' && !Array.isArray(codex2apiLoginOnlyMode)) {
+      resolvedOptions = codex2apiLoginOnlyMode;
+      resolvedPlusPaymentMethod = resolvedOptions.plusPaymentMethod || currentPlusPaymentMethod || DEFAULT_PLUS_PAYMENT_METHOD;
+    } else {
+      resolvedPlusPaymentMethod = codex2apiLoginOnlyMode || currentPlusPaymentMethod || DEFAULT_PLUS_PAYMENT_METHOD;
+      resolvedOptions = plusModeEnabled && typeof plusModeEnabled === 'object' && !Array.isArray(plusModeEnabled)
+        ? plusModeEnabled
+        : {};
+    }
   }
 
   currentPanelMode = String(resolvedPanelMode || '').trim().toLowerCase() || 'cpa';
   currentCodex2ApiLoginOnlyMode = Boolean(resolvedCodex2ApiLoginOnlyMode);
   currentPlusModeEnabled = Boolean(resolvedPlusModeEnabled);
   currentPlusPaymentMethod = normalizePlusPaymentMethod(resolvedPlusPaymentMethod);
-  stepDefinitions = usedLegacySignature
-    ? getStepDefinitionsForMode(currentPlusModeEnabled, currentPlusPaymentMethod)
-    : getStepDefinitionsForMode(
-      currentPanelMode,
-      currentCodex2ApiLoginOnlyMode,
-      currentPlusModeEnabled,
-      currentPlusPaymentMethod
-    );
+  currentSignupMethod = normalizeSignupMethod(resolvedOptions.signupMethod || currentSignupMethod || DEFAULT_SIGNUP_METHOD);
+  stepDefinitions = getStepDefinitionsForMode(
+    currentPanelMode,
+    currentCodex2ApiLoginOnlyMode,
+    currentPlusModeEnabled,
+    currentPlusPaymentMethod,
+    { signupMethod: currentSignupMethod }
+  );
   STEP_IDS = stepDefinitions.map((step) => Number(step.id)).filter(Number.isFinite);
   STEP_DEFAULT_STATUSES = Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending']));
   SKIPPABLE_STEPS = new Set(STEP_IDS);
 }
 const CONTRIBUTION_CONTENT_PROMPT_DISMISSED_VERSION_STORAGE_KEY = 'multipage-contribution-content-prompt-dismissed-version';
 const AUTO_RUN_FALLBACK_RISK_WARNING_MIN_RUNS = 3;
-const AUTO_RUN_PLUS_RISK_WARNING_MAX_SAFE_RUNS = 3;
-const PLUS_CONTRIBUTION_PROMPT_THRESHOLD = 5;
-const PLUS_CONTRIBUTION_ACCOUNT_CREDIT = 5;
-const PLUS_CONTRIBUTION_DONATION_CREDIT = 20;
 const HOTMAIL_SERVICE_MODE_REMOTE = 'remote';
 const HOTMAIL_SERVICE_MODE_LOCAL = 'local';
 const ICLOUD_PROVIDER = 'icloud';
@@ -668,6 +926,23 @@ const CONTRIBUTION_UPLOAD_URL = 'https://apikey.qzz.io/';
 const DEFAULT_PHONE_VERIFICATION_ENABLED = false;
 const DEFAULT_HERO_SMS_COUNTRY_ID = 52;
 const DEFAULT_HERO_SMS_COUNTRY_LABEL = 'Thailand';
+const DEFAULT_FIVE_SIM_COUNTRY_ID = 'vietnam';
+const DEFAULT_FIVE_SIM_COUNTRY_LABEL = '越南 (Vietnam)';
+const FIVE_SIM_SUPPORTED_COUNTRY_ITEMS = Object.freeze([
+  { id: 'indonesia', chn: '印度尼西亚', eng: 'Indonesia', searchText: 'indonesia 印度尼西亚 印尼 Indonesia ID +62' },
+  { id: 'thailand', chn: '泰国', eng: 'Thailand', searchText: 'thailand 泰国 Thailand TH +66' },
+  { id: 'england', chn: '英国', eng: 'England', searchText: 'england 英国 England UK GB United Kingdom +44' },
+  { id: 'usa', chn: '美国', eng: 'United States', searchText: 'usa 美国 United States US +1' },
+  { id: 'japan', chn: '日本', eng: 'Japan', searchText: 'japan 日本 Japan JP +81' },
+  { id: 'germany', chn: '德国', eng: 'Germany', searchText: 'germany 德国 Germany DE +49' },
+  { id: 'vietnam', chn: '越南', eng: 'Vietnam', searchText: 'vietnam 越南 Vietnam VN +84' },
+]);
+const FIVE_SIM_SUPPORTED_COUNTRY_ID_SET = new Set(FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.map((item) => item.id));
+const NEX_SMS_FALLBACK_COUNTRY_ITEMS = Object.freeze([
+  { id: 1, label: 'Ukraine (#1)', searchText: 'Ukraine 1 UA' },
+  { id: 6, label: 'Indonesia (#6)', searchText: 'Indonesia 6 ID' },
+  { id: 7, label: 'Malaysia (#7)', searchText: 'Malaysia 7 MY' },
+]);
 const DEFAULT_IP_PROXY_SERVICE = '711proxy';
 const SUPPORTED_IP_PROXY_SERVICES = ['711proxy', 'lumiproxy', 'iproyal', 'omegaproxy'];
 const IP_PROXY_ENABLED_SERVICES = ['711proxy'];
@@ -926,10 +1201,15 @@ let currentAutoRun = {
   countdownTitle: '',
   countdownNote: '',
 };
+let pendingAutoRunStartTotalRuns = 0;
+let pendingAutoRunStartExpiresAt = 0;
 let settingsDirty = false;
 let settingsSaveInFlight = false;
 let settingsAutoSaveTimer = null;
 let settingsSaveRevision = 0;
+let signupPhoneInputDirty = false;
+let signupPhoneInputFocused = false;
+let signupPhoneInputPersistPromise = null;
 let cloudflareDomainEditMode = false;
 let cloudflareTempEmailDomainEditMode = false;
 let modalChoiceResolver = null;
@@ -943,44 +1223,124 @@ let configActionInFlight = false;
 let currentReleaseSnapshot = null;
 let currentContributionContentSnapshot = null;
 let contributionContentSnapshotRequestInFlight = null;
-let phoneVerificationSectionExpanded = true;
 
-function readPhoneVerificationSectionExpanded() {
-  try {
-    return globalThis.localStorage?.getItem(PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY) !== '0';
-  } catch (err) {
-    return true;
+const DEFAULT_SUB2API_GROUP_OPTIONS = ['codex', 'openai-plus'];
+const editableListPickerModule = window.SidepanelEditableListPicker || {};
+const normalizeEditableListValues = editableListPickerModule.normalizeEditableListValues
+  || ((...sources) => {
+    const values = [];
+    const seen = new Set();
+    const append = (value) => {
+      const items = Array.isArray(value)
+        ? value
+        : String(value || '').split(/[\r\n,，、]+/);
+      items.forEach((item) => {
+        const normalized = String(item || '').trim();
+        const key = normalized.toLowerCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          values.push(normalized);
+        }
+      });
+    };
+    sources.forEach(append);
+    return values;
+  });
+const createEditableListPicker = editableListPickerModule.createEditableListPicker
+  || (() => ({
+    close() { },
+    render() { },
+    setOpen() { },
+    setSelection() { },
+    setVisible() { },
+  }));
+const closeEditableListPickers = editableListPickerModule.closeEditableListPickers || (() => { });
+const isClickInsideEditableListPicker = editableListPickerModule.isClickInsideEditableListPicker || (() => false);
+
+function normalizeSub2ApiGroupOptions(...sources) {
+  return normalizeEditableListValues(...sources);
+}
+
+function normalizeSub2ApiAccountPriorityValue(value) {
+  const rawValue = String(value ?? '').trim();
+  const numeric = Number(rawValue);
+  if (!rawValue || !Number.isSafeInteger(numeric) || numeric < 1) {
+    return 1;
   }
+  return numeric;
 }
 
-function persistPhoneVerificationSectionExpanded(expanded) {
-  try {
-    globalThis.localStorage?.setItem(
-      PHONE_VERIFICATION_SECTION_EXPANDED_STORAGE_KEY,
-      expanded ? '1' : '0'
-    );
-  } catch (err) {
-    // Ignore storage errors; in-memory state is sufficient for current session.
-  }
+function getSelectedSub2ApiGroupName() {
+  return String(inputSub2ApiGroup?.value || '').trim()
+    || DEFAULT_SUB2API_GROUP_OPTIONS[0];
 }
 
-function setPhoneVerificationSectionExpanded(expanded) {
-  phoneVerificationSectionExpanded = Boolean(expanded);
-  persistPhoneVerificationSectionExpanded(phoneVerificationSectionExpanded);
-  updatePhoneVerificationSettingsUI();
+function getSub2ApiGroupOptionsState(state = latestState) {
+  const options = normalizeSub2ApiGroupOptions(
+    state?.sub2apiGroupNames,
+    state?.sub2apiGroupName
+  );
+  return options.length ? options : [...DEFAULT_SUB2API_GROUP_OPTIONS];
 }
 
-function togglePhoneVerificationSectionExpanded() {
-  if (!inputPhoneVerificationEnabled?.checked) {
+const sub2ApiGroupPicker = createEditableListPicker({
+  root: sub2ApiGroupPickerRoot,
+  input: inputSub2ApiGroup,
+  trigger: btnSub2ApiGroupMenu,
+  current: sub2ApiGroupCurrent,
+  menu: sub2ApiGroupMenu,
+  fallbackItems: DEFAULT_SUB2API_GROUP_OPTIONS,
+  minItems: 1,
+  itemLabel: '分组',
+  onDelete: handleDeleteSub2ApiGroup,
+  onDeleteError: (error) => showToast(error?.message || '删除 SUB2API 分组失败。', 'error'),
+});
+
+const cfDomainPicker = createEditableListPicker({
+  root: cfDomainPickerRoot,
+  input: selectCfDomain,
+  trigger: btnCfDomainMenu,
+  current: cfDomainCurrent,
+  menu: cfDomainMenu,
+  emptyLabel: '请先添加域名',
+  itemLabel: '域名',
+  normalizeItems: normalizeCloudflareDomains,
+  normalizeValue: normalizeCloudflareDomainValue,
+  onDelete: handleDeleteCloudflareDomain,
+  onDeleteError: (error) => showToast(error?.message || '删除 Cloudflare 域名失败。', 'error'),
+});
+
+const tempEmailDomainPicker = createEditableListPicker({
+  root: tempEmailDomainPickerRoot,
+  input: selectTempEmailDomain,
+  trigger: btnTempEmailDomainMenu,
+  current: tempEmailDomainCurrent,
+  menu: tempEmailDomainMenu,
+  emptyLabel: '请先添加域名',
+  itemLabel: '域名',
+  normalizeItems: normalizeCloudflareTempEmailDomains,
+  normalizeValue: normalizeCloudflareTempEmailDomainValue,
+  onDelete: handleDeleteCloudflareTempEmailDomain,
+  onDeleteError: (error) => showToast(error?.message || '删除 Cloudflare Temp Email 域名失败。', 'error'),
+});
+
+function renderSub2ApiGroupOptions(state = latestState, selectedValue = '') {
+  if (!inputSub2ApiGroup) {
     return;
   }
-  setPhoneVerificationSectionExpanded(!phoneVerificationSectionExpanded);
-}
 
-function initPhoneVerificationSectionExpandedState() {
-  phoneVerificationSectionExpanded = readPhoneVerificationSectionExpanded();
-  updatePhoneVerificationSettingsUI();
+  const selected = String(selectedValue || state?.sub2apiGroupName || '').trim();
+  const options = getSub2ApiGroupOptionsState({
+    ...(state || {}),
+    sub2apiGroupName: selected || state?.sub2apiGroupName,
+  });
+  if (selected && !options.some((name) => name.toLowerCase() === selected.toLowerCase())) {
+    options.unshift(selected);
+  }
+
+  sub2ApiGroupPicker.render(options, selected || options[0] || DEFAULT_SUB2API_GROUP_OPTIONS[0]);
 }
+let customEmailPoolEntriesState = [];
 
 const EYE_OPEN_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_CLOSED_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a21.77 21.77 0 0 1 5.06-6.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a21.86 21.86 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>';
@@ -1556,190 +1916,71 @@ function setAutoRunFallbackRiskPromptDismissed(dismissed) {
   setPromptDismissed(AUTO_RUN_FALLBACK_RISK_PROMPT_DISMISSED_STORAGE_KEY, dismissed);
 }
 
-function isAutoRunPlusRiskPromptDismissed() {
-  return isPromptDismissed(AUTO_RUN_PLUS_RISK_PROMPT_DISMISSED_STORAGE_KEY);
+function isCpaPhoneSignupPromptDismissed() {
+  return isPromptDismissed(CPA_PHONE_SIGNUP_PROMPT_DISMISSED_STORAGE_KEY);
 }
 
-function setAutoRunPlusRiskPromptDismissed(dismissed) {
-  setPromptDismissed(AUTO_RUN_PLUS_RISK_PROMPT_DISMISSED_STORAGE_KEY, dismissed);
+function setCpaPhoneSignupPromptDismissed(dismissed) {
+  setPromptDismissed(CPA_PHONE_SIGNUP_PROMPT_DISMISSED_STORAGE_KEY, dismissed);
 }
 
 function shouldWarnAutoRunFallbackRisk(totalRuns, autoRunSkipFailures) {
   return totalRuns >= AUTO_RUN_FALLBACK_RISK_WARNING_MIN_RUNS;
 }
 
-function shouldWarnPlusAutoRunRisk(totalRuns, plusModeEnabled) {
-  return Boolean(plusModeEnabled)
-    && Math.floor(Number(totalRuns) || 0) > AUTO_RUN_PLUS_RISK_WARNING_MAX_SAFE_RUNS;
-}
-
-function normalizePlusContributionPromptNumber(value) {
-  const number = Math.floor(Number(value) || 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function normalizePlusContributionPromptLedger(value = {}) {
-  const source = value && typeof value === 'object' ? value : {};
-  return {
-    promptBaseline: normalizePlusContributionPromptNumber(source.promptBaseline),
-    donationCredit: Math.max(0, normalizePlusContributionPromptNumber(source.donationCredit)),
-  };
-}
-
-function getPlusContributionPromptLedger() {
-  try {
-    return normalizePlusContributionPromptLedger(
-      JSON.parse(localStorage.getItem(PLUS_CONTRIBUTION_PROMPT_LEDGER_STORAGE_KEY) || '{}')
-    );
-  } catch {
-    return normalizePlusContributionPromptLedger();
-  }
-}
-
-function setPlusContributionPromptLedger(ledger) {
-  localStorage.setItem(
-    PLUS_CONTRIBUTION_PROMPT_LEDGER_STORAGE_KEY,
-    JSON.stringify(normalizePlusContributionPromptLedger(ledger))
+function shouldWarnCpaPhoneSignup(signupMethod = null, panelMode = null) {
+  const resolvedSignupMethod = normalizeSignupMethod(
+    signupMethod ?? (
+      typeof getSelectedSignupMethod === 'function'
+        ? getSelectedSignupMethod()
+        : DEFAULT_SIGNUP_METHOD
+    )
   );
+  const resolvedPanelMode = normalizePanelMode(
+    panelMode ?? (
+      typeof getSelectedPanelMode === 'function'
+        ? getSelectedPanelMode()
+        : 'cpa'
+    )
+  );
+
+  return resolvedSignupMethod === SIGNUP_METHOD_PHONE
+    && resolvedPanelMode === 'cpa'
+    && !isCpaPhoneSignupPromptDismissed();
 }
 
-function isSuccessfulPlusAccountRecord(record = {}) {
-  return record?.finalStatus === 'success' && Boolean(record.plusModeEnabled);
-}
-
-function getPlusContributionPromptTotals(records = []) {
-  return (Array.isArray(records) ? records : []).reduce((totals, record) => {
-    if (!isSuccessfulPlusAccountRecord(record)) {
-      return totals;
-    }
-    if (record.contributionMode) {
-      totals.contributionSuccess += 1;
-    } else {
-      totals.plusSuccess += 1;
-    }
-    return totals;
-  }, {
-    plusSuccess: 0,
-    contributionSuccess: 0,
+async function openCpaPhoneSignupWarningModal() {
+  const result = await openConfirmModalWithOption({
+    title: 'CPA 手机号注册提醒',
+    message: CPA_PHONE_SIGNUP_WARNING_MESSAGE,
+    confirmLabel: '继续',
+    optionLabel: '不再提醒',
   });
-}
 
-function getPlusContributionPromptProgress(records = [], ledger = getPlusContributionPromptLedger()) {
-  const totals = getPlusContributionPromptTotals(records);
-  const normalizedLedger = normalizePlusContributionPromptLedger(ledger);
-  const credit = (totals.contributionSuccess * PLUS_CONTRIBUTION_ACCOUNT_CREDIT)
-    + normalizedLedger.donationCredit;
-  const netCount = totals.plusSuccess - credit;
-  const sinceLastPrompt = netCount - normalizedLedger.promptBaseline;
   return {
-    ...totals,
-    credit,
-    netCount,
-    sinceLastPrompt,
-    shouldPrompt: sinceLastPrompt >= PLUS_CONTRIBUTION_PROMPT_THRESHOLD,
+    confirmed: result.confirmed,
+    dismissPrompt: result.optionChecked,
   };
 }
 
-function shouldShowPlusContributionPrompt(records = [], plusModeEnabled = false, ledger = getPlusContributionPromptLedger()) {
-  return Boolean(plusModeEnabled)
-    && getPlusContributionPromptProgress(records, ledger).shouldPrompt;
-}
+async function confirmCpaPhoneSignupIfNeeded(options = {}) {
+  const signupMethod = Object.prototype.hasOwnProperty.call(options, 'signupMethod')
+    ? options.signupMethod
+    : null;
+  const panelMode = Object.prototype.hasOwnProperty.call(options, 'panelMode')
+    ? options.panelMode
+    : null;
 
-function markPlusContributionPromptShown(records = [], ledger = getPlusContributionPromptLedger()) {
-  const progress = getPlusContributionPromptProgress(records, ledger);
-  const nextLedger = {
-    ...normalizePlusContributionPromptLedger(ledger),
-    promptBaseline: progress.netCount,
-  };
-  setPlusContributionPromptLedger(nextLedger);
-  return nextLedger;
-}
-
-function addPlusContributionPromptCredit(credit, ledger = getPlusContributionPromptLedger()) {
-  const normalizedLedger = normalizePlusContributionPromptLedger(ledger);
-  const nextLedger = {
-    ...normalizedLedger,
-    donationCredit: normalizedLedger.donationCredit + Math.max(0, normalizePlusContributionPromptNumber(credit)),
-  };
-  setPlusContributionPromptLedger(nextLedger);
-  return nextLedger;
-}
-
-function getPlusContributionSupportImageUrl() {
-  if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-    return chrome.runtime.getURL('docs/images/微信.png');
-  }
-  return '../docs/images/微信.png';
-}
-
-function buildPlusContributionSupportPromptHtml() {
-  const imageUrl = getPlusContributionSupportImageUrl();
-  return [
-    '<span class="plus-contribution-prompt-copy">您觉得这个 Plus 功能怎么样？您的账户数量应该已经够个人使用啦。</span>',
-    '<span class="plus-contribution-prompt-copy">可以打开贡献给作者贡献几个账号，以便于让作者开发更好的功能出来吗？或者打赏一下作者？</span>',
-    `<img class="plus-contribution-prompt-image" src="${escapeHtml(imageUrl)}" alt="微信打赏二维码" />`,
-  ].join('');
-}
-
-function openPlusContributionSupportModal() {
-  return openActionModal({
-    title: 'Plus 功能使用反馈',
-    messageHtml: buildPlusContributionSupportPromptHtml(),
-    actions: [
-      { id: null, label: '取消', variant: 'btn-ghost' },
-      { id: 'contribute', label: '去贡献账号', variant: 'btn-outline' },
-      { id: 'donated', label: '已打赏', variant: 'btn-primary' },
-    ],
-  });
-}
-
-async function enterContributionModeFromPlusPrompt() {
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-    return null;
-  }
-
-  const response = await chrome.runtime.sendMessage({
-    type: 'SET_CONTRIBUTION_MODE',
-    source: 'sidepanel',
-    payload: { enabled: true },
-  });
-
-  if (response?.error) {
-    throw new Error(response.error);
-  }
-  if (response?.state && typeof applySettingsState === 'function') {
-    applySettingsState(response.state);
-  }
-  if (typeof renderContributionMode === 'function') {
-    renderContributionMode();
-  }
-  return response?.state || null;
-}
-
-async function maybeShowPlusContributionPromptBeforeAutoRun(plusModeEnabled) {
-  const records = Array.isArray(latestState?.accountRunHistory) ? latestState.accountRunHistory : [];
-  if (!shouldShowPlusContributionPrompt(records, plusModeEnabled)) {
+  if (!shouldWarnCpaPhoneSignup(signupMethod, panelMode)) {
     return true;
   }
 
-  const choice = await openPlusContributionSupportModal();
-  const ledger = markPlusContributionPromptShown(records);
-  if (choice === 'donated') {
-    addPlusContributionPromptCredit(PLUS_CONTRIBUTION_DONATION_CREDIT, ledger);
-    showToast('感谢打赏支持，已延后下一次 Plus 提醒。', 'success', 2200);
-    return true;
+  const result = await openCpaPhoneSignupWarningModal();
+  if (result.dismissPrompt) {
+    setCpaPhoneSignupPromptDismissed(true);
   }
-  if (choice === 'contribute') {
-    openExternalUrl(getContributionPortalUrl());
-    try {
-      await enterContributionModeFromPlusPrompt();
-      showToast('已进入贡献模式，并打开贡献页面。', 'info', 2200);
-    } catch (error) {
-      showToast(`贡献模式开启失败：${error.message}`, 'error', 2600);
-    }
-    return false;
-  }
-  return true;
+
+  return result.confirmed;
 }
 
 async function openAutoSkipFailuresConfirmModal() {
@@ -1760,19 +2001,6 @@ async function openAutoRunFallbackRiskConfirmModal(totalRuns) {
     title: '自动运行风险提醒',
     message: `当前轮数已经不适合单节点情况，请确保已经配置并打开节点轮询功能（若没有配置，请点击贡献/使用按钮，根据网页中使用教程进行配置），避免连续使用一个节点注册，导致出现手机号验证。`,
     confirmLabel: '继续',
-  });
-
-  return {
-    confirmed: result.confirmed,
-    dismissPrompt: result.optionChecked,
-  };
-}
-
-async function openPlusAutoRunRiskConfirmModal(totalRuns) {
-  const result = await openConfirmModalWithOption({
-    title: 'Plus 自动轮数提醒',
-    message: `Plus 模式下当前设置为 ${totalRuns} 轮。轮数过多可能造成 PayPal 或账号快速封号。建议够用就好：我注册了几个使用，没多注册，完全足够使用，并且没有封号。这个模式下只要可以注册成功就能使用，所以不要贪杯哦。`,
-    confirmLabel: '我知道了，继续',
   });
 
   return {
@@ -1907,6 +2135,234 @@ function syncLatestState(nextState) {
   renderAccountRecords(latestState);
 }
 
+let accountRunHistoryRefreshTimer = null;
+
+function scheduleAccountRunHistoryRefresh(delayMs = 150) {
+  if (accountRunHistoryRefreshTimer) {
+    clearTimeout(accountRunHistoryRefreshTimer);
+  }
+  accountRunHistoryRefreshTimer = setTimeout(() => {
+    accountRunHistoryRefreshTimer = null;
+    chrome.runtime.sendMessage({ type: 'GET_STATE', source: 'sidepanel' }).then(state => {
+      syncLatestState(state);
+      syncAutoRunState(state);
+      updateStatusDisplay(latestState);
+      updateButtonStates();
+    }).catch(() => { });
+  }, Math.max(0, Number(delayMs) || 0));
+}
+
+function normalizeOperationDelayEnabled(value) {
+  return typeof value === 'boolean' ? value : true;
+}
+
+function appendOperationDelayLog(enabled, level = 'info', message = '') {
+  appendLog({
+    timestamp: Date.now(),
+    level,
+    message: message || (enabled
+      ? '操作间延迟已开启：页面输入、选择、点击、提交、继续、授权后等待 2 秒。'
+      : '操作间延迟已关闭：页面操作将连续执行。'),
+  });
+}
+
+function applyOperationDelayState(state = latestState, options = {}) {
+  const enabled = options.restoreFailed ? true : normalizeOperationDelayEnabled(state?.operationDelayEnabled);
+  lastConfirmedOperationDelayEnabled = enabled;
+  if (inputOperationDelayEnabled) inputOperationDelayEnabled.checked = enabled;
+  if (typeof syncLatestState === 'function') {
+    syncLatestState({ operationDelayEnabled: enabled });
+  }
+  if (options.restoreFailed) {
+    appendOperationDelayLog(true, 'warn', '操作间延迟设置读取失败，已回退为默认开启。');
+  }
+}
+
+async function persistOperationDelayToggle() {
+  const nextEnabled = normalizeOperationDelayEnabled(inputOperationDelayEnabled?.checked);
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'SAVE_SETTING',
+      source: 'sidepanel',
+      payload: { operationDelayEnabled: nextEnabled },
+    });
+    if (response?.error) throw new Error(response.error);
+    const confirmed = normalizeOperationDelayEnabled(response?.state?.operationDelayEnabled ?? nextEnabled);
+    lastConfirmedOperationDelayEnabled = confirmed;
+    if (inputOperationDelayEnabled) inputOperationDelayEnabled.checked = confirmed;
+    syncLatestState({ operationDelayEnabled: confirmed });
+    appendOperationDelayLog(confirmed);
+  } catch (error) {
+    if (inputOperationDelayEnabled) inputOperationDelayEnabled.checked = lastConfirmedOperationDelayEnabled;
+    appendOperationDelayLog(lastConfirmedOperationDelayEnabled, 'error', `操作间延迟设置保存失败，已恢复为上一次确认的状态：${error.message}`);
+    throw error;
+  }
+}
+
+function normalizePlusPaymentMethod(value = '') {
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.normalizePlusPaymentMethod) {
+    return rootScope.GoPayUtils.normalizePlusPaymentMethod(value);
+  }
+  const gopayValue = typeof PLUS_PAYMENT_METHOD_GOPAY !== 'undefined' ? PLUS_PAYMENT_METHOD_GOPAY : 'gopay';
+  const gpcValue = typeof PLUS_PAYMENT_METHOD_GPC_HELPER !== 'undefined' ? PLUS_PAYMENT_METHOD_GPC_HELPER : 'gpc-helper';
+  const paypalValue = typeof PLUS_PAYMENT_METHOD_PAYPAL !== 'undefined' ? PLUS_PAYMENT_METHOD_PAYPAL : 'paypal';
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === gpcValue) {
+    return gpcValue;
+  }
+  return normalized === gopayValue ? gopayValue : paypalValue;
+}
+
+function getSelectedPlusPaymentMethod(state = latestState) {
+  const defaultMethod = typeof DEFAULT_PLUS_PAYMENT_METHOD !== 'undefined' ? DEFAULT_PLUS_PAYMENT_METHOD : 'paypal';
+  if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod?.value) {
+    return normalizePlusPaymentMethod(selectPlusPaymentMethod.value);
+  }
+  return normalizePlusPaymentMethod(state?.plusPaymentMethod || currentPlusPaymentMethod || defaultMethod);
+}
+
+function normalizeGpcHelperPhoneModeValue(value = '') {
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.normalizeGpcHelperPhoneMode) {
+    return rootScope.GoPayUtils.normalizeGpcHelperPhoneMode(value);
+  }
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === GPC_HELPER_PHONE_MODE_AUTO || normalized === 'builtin'
+    ? GPC_HELPER_PHONE_MODE_AUTO
+    : GPC_HELPER_PHONE_MODE_MANUAL;
+}
+
+function getGpcHelperAutoModeEnabled(state = latestState) {
+  return Boolean(state?.gopayHelperAutoModeEnabled);
+}
+
+function normalizeGpcAutoModePermissionValue(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (['true', '1', 'yes', 'y', 'on', 'enabled', 'enable'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n', 'off', 'disabled', 'disable'].includes(normalized)) {
+    return false;
+  }
+  return null;
+}
+
+function getGpcAutoModePermissionFromPayload(payload = {}) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+  for (const key of ['auto_mode_enabled', 'autoModeEnabled', 'auto_enabled', 'autoEnabled']) {
+    if (payload[key] !== undefined) {
+      return normalizeGpcAutoModePermissionValue(payload[key]);
+    }
+  }
+  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return getGpcAutoModePermissionFromPayload(payload.data);
+  }
+  return null;
+}
+
+function shouldPreserveSelectedGpcAutoMode(state = latestState) {
+  const payloadPermission = getGpcAutoModePermissionFromPayload(state?.gopayHelperBalancePayload);
+  return normalizeGpcHelperPhoneModeValue(state?.gopayHelperPhoneMode) === GPC_HELPER_PHONE_MODE_AUTO
+    && (Boolean(state?.gopayHelperAutoModeEnabled) || payloadPermission === true);
+}
+
+function hasGpcAutoModePermissionField(payload = {}) {
+  return getGpcAutoModePermissionFromPayload(payload) !== null;
+}
+
+function isGpcAutoModePermissionDenied(state = latestState) {
+  const payloadPermission = getGpcAutoModePermissionFromPayload(state?.gopayHelperBalancePayload);
+  return payloadPermission === false;
+}
+
+function normalizeGpcRemainingUsesValue(value) {
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.normalizeGpcRemainingUses) {
+    return rootScope.GoPayUtils.normalizeGpcRemainingUses(value);
+  }
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return null;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : null;
+}
+
+function getGpcBalanceRemainingUsesFromResponse(response = {}) {
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.getGpcBalanceRemainingUses) {
+    const remaining = rootScope.GoPayUtils.getGpcBalanceRemainingUses(response?.data || response?.payload || response);
+    if (remaining !== null && remaining !== undefined) {
+      return remaining;
+    }
+  }
+  return normalizeGpcRemainingUsesValue(
+    response?.remainingUses
+    ?? response?.data?.remaining_uses
+    ?? response?.data?.remainingUses
+    ?? response?.payload?.data?.remaining_uses
+    ?? response?.payload?.remaining_uses
+    ?? response?.payload?.remainingUses
+  );
+}
+
+function getGpcAutoModeEnabledFromResponse(response = {}) {
+  if (typeof response?.autoModeEnabled === 'boolean') {
+    return response.autoModeEnabled;
+  }
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.isGpcAutoModeEnabled) {
+    return rootScope.GoPayUtils.isGpcAutoModeEnabled(response?.data || response?.payload || response);
+  }
+  return Boolean(
+    response?.data?.auto_mode_enabled
+    ?? response?.data?.autoModeEnabled
+    ?? response?.payload?.data?.auto_mode_enabled
+    ?? response?.payload?.auto_mode_enabled
+    ?? response?.payload?.autoModeEnabled
+  );
+}
+
+function normalizeGpcOtpChannelValue(value = '') {
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  if (rootScope.GoPayUtils?.normalizeGpcOtpChannel) {
+    return rootScope.GoPayUtils.normalizeGpcOtpChannel(value);
+  }
+  return String(value || '').trim().toLowerCase() === 'sms' ? 'sms' : 'whatsapp';
+}
+
+function normalizeGpcLocalSmsHelperBaseUrlValue(value = '') {
+  const fallback = 'http://127.0.0.1:18767';
+  const rawValue = String(value || fallback).trim();
+  try {
+    const parsed = new URL(rawValue);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return fallback;
+    }
+    const endpointPath = parsed.pathname.replace(/\/+$/g, '') || '/';
+    if (['/otp', '/latest-otp', '/health'].includes(endpointPath)) {
+      parsed.pathname = '';
+      parsed.search = '';
+      parsed.hash = '';
+    }
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return fallback;
+  }
+}
+
 function hasOwnStateValue(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
 }
@@ -1918,6 +2374,34 @@ function readAutoRunStateValue(source, keys, fallback) {
     }
   }
   return fallback;
+}
+
+function normalizePendingAutoRunStartRunCount(value) {
+  const numeric = Math.floor(Number(value) || 0);
+  return numeric > 0 ? numeric : 0;
+}
+
+function registerPendingAutoRunStartRunCount(totalRuns) {
+  pendingAutoRunStartTotalRuns = normalizePendingAutoRunStartRunCount(totalRuns);
+  pendingAutoRunStartExpiresAt = pendingAutoRunStartTotalRuns > 0
+    ? Date.now() + 30000
+    : 0;
+}
+
+function clearPendingAutoRunStartRunCount() {
+  pendingAutoRunStartTotalRuns = 0;
+  pendingAutoRunStartExpiresAt = 0;
+}
+
+function getPendingAutoRunStartRunCount() {
+  if (pendingAutoRunStartTotalRuns > 0 && pendingAutoRunStartExpiresAt > 0 && Date.now() > pendingAutoRunStartExpiresAt) {
+    clearPendingAutoRunStartRunCount();
+  }
+  return pendingAutoRunStartTotalRuns;
+}
+
+function getAutoRunSourceTotalRuns(source = {}) {
+  return normalizePendingAutoRunStartRunCount(readAutoRunStateValue(source, ['autoRunTotalRuns', 'totalRuns'], 0));
 }
 
 function syncAutoRunState(source = {}) {
@@ -1972,6 +2456,33 @@ function isAutoRunWaitingStepPhase() {
 
 function isAutoRunScheduledPhase() {
   return currentAutoRun.phase === 'scheduled';
+}
+
+function isAutoRunSourceSyncPhase(phase) {
+  return ['scheduled', 'running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(phase);
+}
+
+function shouldSyncRunCountFromAutoRunSource(source = {}) {
+  const phase = source.autoRunPhase ?? source.phase ?? currentAutoRun.phase;
+  const autoRunning = source.autoRunning !== undefined
+    ? Boolean(source.autoRunning)
+    : isAutoRunSourceSyncPhase(phase);
+  const shouldSync = autoRunning || isAutoRunSourceSyncPhase(phase);
+  if (!shouldSync) {
+    return false;
+  }
+
+  const pendingTotalRuns = getPendingAutoRunStartRunCount();
+  if (pendingTotalRuns > 0) {
+    const sourceTotalRuns = getAutoRunSourceTotalRuns(source);
+    if (sourceTotalRuns > 0 && sourceTotalRuns !== pendingTotalRuns) {
+      return false;
+    }
+    if (sourceTotalRuns === pendingTotalRuns) {
+      clearPendingAutoRunStartRunCount();
+    }
+  }
+  return true;
 }
 
 function getAutoRunLabel(payload = currentAutoRun) {
@@ -2056,6 +2567,85 @@ function normalizeCustomEmailPoolEntries(value = '') {
     .filter((item) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item));
 }
 
+function normalizeCustomEmailPoolEntryEmail(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function createCustomEmailPoolEntryId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `custom-pool-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeCustomEmailPoolEntryObjects(value = []) {
+  const source = Array.isArray(value) ? value : [];
+  const seenEmails = new Set();
+  const entries = [];
+
+  for (const rawEntry of source) {
+    const asObject = rawEntry && typeof rawEntry === 'object'
+      ? rawEntry
+      : { email: rawEntry };
+    const email = normalizeCustomEmailPoolEntryEmail(asObject.email || '');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      continue;
+    }
+    if (seenEmails.has(email)) {
+      continue;
+    }
+    seenEmails.add(email);
+    entries.push({
+      id: String(asObject.id || createCustomEmailPoolEntryId()),
+      email,
+      enabled: asObject.enabled !== undefined ? Boolean(asObject.enabled) : true,
+      used: Boolean(asObject.used),
+      note: String(asObject.note || '').trim(),
+      lastUsedAt: Number.isFinite(Number(asObject.lastUsedAt)) ? Number(asObject.lastUsedAt) : 0,
+    });
+  }
+
+  return entries;
+}
+
+function getNormalizedCustomEmailPoolEntriesState() {
+  const entries = (typeof customEmailPoolEntriesState !== 'undefined' && Array.isArray(customEmailPoolEntriesState))
+    ? customEmailPoolEntriesState
+    : [];
+  return normalizeCustomEmailPoolEntryObjects(entries);
+}
+
+function getActiveCustomEmailPoolEmails(entries = getNormalizedCustomEmailPoolEntriesState()) {
+  return normalizeCustomEmailPoolEntryObjects(entries)
+    .filter((entry) => entry.enabled && !entry.used)
+    .map((entry) => entry.email);
+}
+
+function setCustomEmailPoolEntriesState(entries = [], options = {}) {
+  const { syncInput = true } = options;
+  customEmailPoolEntriesState = normalizeCustomEmailPoolEntryObjects(entries);
+  if (syncInput && inputCustomEmailPool) {
+    inputCustomEmailPool.value = getActiveCustomEmailPoolEmails(customEmailPoolEntriesState).join('\n');
+  }
+}
+
+function restoreCustomEmailPoolEntriesFromState(state = {}) {
+  const rawEntries = Array.isArray(state?.customEmailPoolEntries)
+    ? state.customEmailPoolEntries
+    : [];
+  if (rawEntries.length > 0) {
+    return normalizeCustomEmailPoolEntryObjects(rawEntries);
+  }
+  return normalizeCustomEmailPoolEntries(state?.customEmailPool).map((email) => ({
+    id: createCustomEmailPoolEntryId(),
+    email,
+    enabled: true,
+    used: false,
+    note: '',
+    lastUsedAt: 0,
+  }));
+}
+
 function usesCustomEmailPoolGenerator(provider = selectMailProvider.value) {
   return !isCustomMailProvider(provider)
     && !isLuckmailProvider(provider)
@@ -2071,6 +2661,12 @@ function usesCustomMailProviderPool(provider = selectMailProvider.value) {
 }
 
 function getCustomEmailPoolSize() {
+  if (typeof customEmailPoolEntriesState !== 'undefined' && Array.isArray(customEmailPoolEntriesState)) {
+    const activeEntries = getActiveCustomEmailPoolEmails(customEmailPoolEntriesState);
+    if (activeEntries.length > 0 || customEmailPoolEntriesState.length > 0) {
+      return activeEntries.length;
+    }
+  }
   return normalizeCustomEmailPoolEntries(inputCustomEmailPool?.value).length;
 }
 
@@ -2161,7 +2757,7 @@ function getLockedRunCountFromEmailPool(provider = selectMailProvider.value) {
   return 0;
 }
 
-function shouldLockRunCountToEmailPool(provider = selectMailProvider.value) {
+function shouldLockRunCountToEmailPool(provider = (typeof selectMailProvider !== 'undefined' ? selectMailProvider?.value : undefined)) {
   return getLockedRunCountFromEmailPool(provider) > 0;
 }
 
@@ -2373,6 +2969,18 @@ function normalizeCloudflareTempEmailDomains(values = []) {
   return domains;
 }
 
+function normalizeCloudMailBaseUrlValue(value = '') {
+  return normalizeCloudflareTempEmailBaseUrlValue(value);
+}
+
+function normalizeCloudMailReceiveMailboxValue(value = '') {
+  return normalizeCloudflareTempEmailReceiveMailboxValue(value);
+}
+
+function normalizeCloudMailDomainValue(value = '') {
+  return normalizeCloudflareDomainValue(value);
+}
+
 function getCloudflareDomainsFromState() {
   const domains = normalizeCloudflareDomains(latestState?.cloudflareDomains || []);
   const activeDomain = normalizeCloudflareDomainValue(latestState?.cloudflareDomain || '');
@@ -2395,58 +3003,20 @@ function renderCloudflareDomainOptions(preferredDomain = '') {
   const preferred = normalizeCloudflareDomainValue(preferredDomain);
   const { domains, activeDomain } = getCloudflareDomainsFromState();
   const selected = preferred || activeDomain;
-
-  selectCfDomain.innerHTML = '';
-  if (domains.length === 0) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = '请先添加域名';
-    selectCfDomain.appendChild(option);
-    selectCfDomain.disabled = true;
-    selectCfDomain.value = '';
-    return;
-  }
-
-  for (const domain of domains) {
-    const option = document.createElement('option');
-    option.value = domain;
-    option.textContent = domain;
-    selectCfDomain.appendChild(option);
-  }
-  selectCfDomain.disabled = false;
-  selectCfDomain.value = domains.includes(selected) ? selected : domains[0];
+  cfDomainPicker.render(domains, domains.includes(selected) ? selected : domains[0] || '');
 }
 
 function renderCloudflareTempEmailDomainOptions(preferredDomain = '') {
   const preferred = normalizeCloudflareTempEmailDomainValue(preferredDomain);
   const { domains, activeDomain } = getCloudflareTempEmailDomainsFromState();
   const selected = preferred || activeDomain;
-
-  selectTempEmailDomain.innerHTML = '';
-  if (domains.length === 0) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = '请先添加域名';
-    selectTempEmailDomain.appendChild(option);
-    selectTempEmailDomain.disabled = true;
-    selectTempEmailDomain.value = '';
-    return;
-  }
-
-  for (const domain of domains) {
-    const option = document.createElement('option');
-    option.value = domain;
-    option.textContent = domain;
-    selectTempEmailDomain.appendChild(option);
-  }
-  selectTempEmailDomain.disabled = false;
-  selectTempEmailDomain.value = domains.includes(selected) ? selected : domains[0];
+  tempEmailDomainPicker.render(domains, domains.includes(selected) ? selected : domains[0] || '');
 }
 
 function setCloudflareDomainEditMode(editing, options = {}) {
   const { clearInput = false } = options;
   cloudflareDomainEditMode = Boolean(editing);
-  selectCfDomain.style.display = cloudflareDomainEditMode ? 'none' : '';
+  cfDomainPicker.setVisible(!cloudflareDomainEditMode);
   inputCfDomain.style.display = cloudflareDomainEditMode ? '' : 'none';
   btnCfDomainMode.textContent = cloudflareDomainEditMode ? '保存' : '添加';
   if (cloudflareDomainEditMode) {
@@ -2462,7 +3032,7 @@ function setCloudflareDomainEditMode(editing, options = {}) {
 function setCloudflareTempEmailDomainEditMode(editing, options = {}) {
   const { clearInput = false } = options;
   cloudflareTempEmailDomainEditMode = Boolean(editing);
-  selectTempEmailDomain.style.display = cloudflareTempEmailDomainEditMode ? 'none' : '';
+  tempEmailDomainPicker.setVisible(!cloudflareTempEmailDomainEditMode);
   inputTempEmailDomain.style.display = cloudflareTempEmailDomainEditMode ? '' : 'none';
   btnTempEmailDomainMode.textContent = cloudflareTempEmailDomainEditMode ? '保存' : '添加';
   if (cloudflareTempEmailDomainEditMode) {
@@ -2487,7 +3057,28 @@ function applyCloudflareTempEmailSettingsState(state = {}) {
   setCloudflareTempEmailDomainEditMode(false, { clearInput: true });
 }
 
+function applyCloudMailSettingsState(state = {}) {
+  if (inputCloudMailBaseUrl) {
+    inputCloudMailBaseUrl.value = state?.cloudMailBaseUrl || '';
+  }
+  if (inputCloudMailAdminEmail) {
+    inputCloudMailAdminEmail.value = state?.cloudMailAdminEmail || '';
+  }
+  if (inputCloudMailAdminPassword) {
+    inputCloudMailAdminPassword.value = state?.cloudMailAdminPassword || '';
+  }
+  if (inputCloudMailReceiveMailbox) {
+    inputCloudMailReceiveMailbox.value = state?.cloudMailReceiveMailbox || '';
+  }
+  if (inputCloudMailDomain) {
+    inputCloudMailDomain.value = state?.cloudMailDomain || '';
+  }
+}
+
 function collectSettingsPayload() {
+  const defaultGpcHelperApiUrl = typeof DEFAULT_GPC_HELPER_API_URL !== 'undefined'
+    ? DEFAULT_GPC_HELPER_API_URL
+    : 'https://gpc.qlhazycoder.top';
   const { domains, activeDomain } = getCloudflareDomainsFromState();
   const selectedCloudflareDomain = normalizeCloudflareDomainValue(
     !cloudflareDomainEditMode ? selectCfDomain.value : activeDomain
@@ -2496,6 +3087,15 @@ function collectSettingsPayload() {
   const selectedCloudflareTempEmailDomain = normalizeCloudflareTempEmailDomainValue(
     !cloudflareTempEmailDomainEditMode ? selectTempEmailDomain.value : tempEmailActiveDomain
   ) || tempEmailActiveDomain;
+  const normalizeCloudMailBaseUrlInput = typeof normalizeCloudMailBaseUrlValue === 'function'
+    ? normalizeCloudMailBaseUrlValue
+    : normalizeCloudflareTempEmailBaseUrlValue;
+  const normalizeCloudMailReceiveMailboxInput = typeof normalizeCloudMailReceiveMailboxValue === 'function'
+    ? normalizeCloudMailReceiveMailboxValue
+    : normalizeCloudflareTempEmailReceiveMailboxValue;
+  const normalizeCloudMailDomainInput = typeof normalizeCloudMailDomainValue === 'function'
+    ? normalizeCloudMailDomainValue
+    : normalizeCloudflareTempEmailDomainValue;
   const contributionModeEnabled = Boolean(latestState?.contributionMode);
   const icloudFetchModeRawValue = typeof selectIcloudFetchMode !== 'undefined'
     ? String(selectIcloudFetchMode?.value || '')
@@ -2585,6 +3185,36 @@ function collectSettingsPayload() {
       .map((line) => line.trim())
       .filter(Boolean)
       .join('\n'));
+  const normalizeGpcOtpChannelSafe = typeof normalizeGpcOtpChannelValue === 'function'
+    ? normalizeGpcOtpChannelValue
+    : ((value = '') => {
+      const rootScope = typeof window !== 'undefined' ? window : globalThis;
+      if (rootScope.GoPayUtils?.normalizeGpcOtpChannel) {
+        return rootScope.GoPayUtils.normalizeGpcOtpChannel(value);
+      }
+      return String(value || '').trim().toLowerCase() === 'sms' ? 'sms' : 'whatsapp';
+    });
+  const normalizeGpcLocalSmsHelperBaseUrlSafe = typeof normalizeGpcLocalSmsHelperBaseUrlValue === 'function'
+    ? normalizeGpcLocalSmsHelperBaseUrlValue
+    : ((value = '') => {
+      const fallback = 'http://127.0.0.1:18767';
+      const rawValue = String(value || fallback).trim();
+      try {
+        const parsed = new URL(rawValue);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          return fallback;
+        }
+        const endpointPath = parsed.pathname.replace(/\/+$/g, '') || '/';
+        if (['/otp', '/latest-otp', '/health'].includes(endpointPath)) {
+          parsed.pathname = '';
+          parsed.search = '';
+          parsed.hash = '';
+        }
+        return parsed.toString().replace(/\/$/, '');
+      } catch {
+        return fallback;
+      }
+    });
   const getSelectedIpProxyEnabledSafe = typeof getSelectedIpProxyEnabled === 'function'
     ? getSelectedIpProxyEnabled
     : (() => false);
@@ -2723,162 +3353,26 @@ function collectSettingsPayload() {
   const mail2925UseAccountPool = typeof inputMail2925UseAccountPool !== 'undefined'
     ? Boolean(inputMail2925UseAccountPool?.checked)
     : Boolean(latestState?.mail2925UseAccountPool);
-  const normalizePhoneSmsProviderSafe = typeof normalizePhoneSmsProviderValue === 'function'
-    ? normalizePhoneSmsProviderValue
-    : ((value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      if (normalized === '5sim') return '5sim';
-      if (normalized === 'nexsms') return 'nexsms';
-      return 'hero-sms';
-    });
-  const normalizePhoneSmsProviderOrderSafe = typeof normalizePhoneSmsProviderOrderValue === 'function'
-    ? normalizePhoneSmsProviderOrderValue
-    : ((value = [], fallbackOrder = ['hero-sms', '5sim', 'nexsms']) => {
-      const source = Array.isArray(value)
-        ? value
-        : String(value || '')
-          .split(/[\r\n,，;；|/]+/)
-          .map((entry) => String(entry || '').trim())
-          .filter(Boolean);
-      const normalized = [];
-      const seen = new Set();
-      source.forEach((entry) => {
-        const provider = normalizePhoneSmsProviderSafe(entry);
-        if (seen.has(provider)) {
-          return;
-        }
-        seen.add(provider);
-        normalized.push(provider);
-      });
-      if (normalized.length) {
-        return normalized.slice(0, 3);
-      }
-      const fallbackNormalized = [];
-      (Array.isArray(fallbackOrder) ? fallbackOrder : ['hero-sms', '5sim', 'nexsms']).forEach((entry) => {
-        const provider = normalizePhoneSmsProviderSafe(entry);
-        if (!provider || fallbackNormalized.includes(provider)) {
-          return;
-        }
-        fallbackNormalized.push(provider);
-      });
-      return fallbackNormalized.slice(0, 3);
-    });
-  const normalizeFiveSimCountryOrderSafe = typeof normalizeFiveSimCountryOrderValue === 'function'
-    ? normalizeFiveSimCountryOrderValue
-    : ((value = []) => {
-      const source = Array.isArray(value)
-        ? value
-        : String(value || '')
-          .split(/[\r\n,，;；]+/)
-          .map((entry) => String(entry || '').trim())
-          .filter(Boolean);
-      const normalized = Array.from(new Set(source
-        .map((entry) => String(entry || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, ''))
-        .filter(Boolean)));
-      return normalized.length ? normalized.slice(0, 10) : [];
-    });
-  const normalizeFiveSimOperatorSafe = typeof normalizeFiveSimOperatorValue === 'function'
-    ? normalizeFiveSimOperatorValue
-    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'any');
-  const normalizeFiveSimProductSafe = typeof normalizeFiveSimProductValue === 'function'
-    ? normalizeFiveSimProductValue
-    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'openai');
-  const normalizeNexSmsCountryOrderSafe = typeof normalizeNexSmsCountryOrderValue === 'function'
-    ? normalizeNexSmsCountryOrderValue
-    : ((value = []) => {
-      const source = Array.isArray(value)
-        ? value
-        : String(value || '')
-          .split(/[\r\n,，;；]+/)
-          .map((entry) => String(entry || '').trim())
-          .filter(Boolean);
-      const normalized = [];
-      const seen = new Set();
-      source.forEach((entry) => {
-        const parsed = Math.floor(Number(entry && typeof entry === 'object' ? (entry.id || entry.countryId || entry.country) : entry));
-        if (!Number.isFinite(parsed) || parsed < 0 || seen.has(parsed)) {
-          return;
-        }
-        seen.add(parsed);
-        normalized.push(parsed);
-      });
-      return normalized.length ? normalized.slice(0, 10) : [];
-    });
-  const normalizeNexSmsServiceCodeSafe = typeof normalizeNexSmsServiceCodeValue === 'function'
-    ? normalizeNexSmsServiceCodeValue
-    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'ot');
-  const fiveSimProviderValue = typeof PHONE_SMS_PROVIDER_FIVE_SIM !== 'undefined'
-    ? PHONE_SMS_PROVIDER_FIVE_SIM
-    : '5sim';
-  const heroProviderValue = typeof PHONE_SMS_PROVIDER_HERO !== 'undefined'
-    ? PHONE_SMS_PROVIDER_HERO
-    : 'hero-sms';
-  const nexSmsProviderValue = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined'
-    ? PHONE_SMS_PROVIDER_NEXSMS
-    : 'nexsms';
-  const phoneSmsProviderValue = normalizePhoneSmsProviderSafe(
-    (typeof getSelectedPhoneSmsProvider === 'function'
-      ? getSelectedPhoneSmsProvider()
-      : (latestState?.phoneSmsProvider || heroProviderValue))
-  );
-  const persistedProviderOrder = (
-    typeof getSelectedPhoneSmsProviderOrder === 'function'
-      ? getSelectedPhoneSmsProviderOrder()
-      : normalizePhoneSmsProviderOrderSafe(
-        Array.isArray(latestState?.phoneSmsProviderOrder)
-          ? latestState.phoneSmsProviderOrder
-          : []
-      )
-  );
-  const phoneSmsProviderOrderValue = persistedProviderOrder.length
-    ? normalizePhoneSmsProviderOrderSafe(persistedProviderOrder, [])
-    : [];
-  const heroSmsApiKeyValue = typeof inputHeroSmsApiKey !== 'undefined' && inputHeroSmsApiKey
+  const phoneSmsProviderValue = typeof selectPhoneSmsProvider !== 'undefined' && selectPhoneSmsProvider
+    ? normalizePhoneSmsProvider(selectPhoneSmsProvider.value)
+    : normalizePhoneSmsProvider(latestState?.phoneSmsProvider);
+  const phoneSmsProviderOrderValue = typeof getSelectedPhoneSmsProviderOrder === 'function'
+    ? getSelectedPhoneSmsProviderOrder()
+    : (typeof normalizePhoneSmsProviderOrderValue === 'function'
+      ? normalizePhoneSmsProviderOrderValue(latestState?.phoneSmsProviderOrder || [], [])
+      : []);
+  const currentPhoneSmsApiKeyValue = typeof inputHeroSmsApiKey !== 'undefined' && inputHeroSmsApiKey
     ? (inputHeroSmsApiKey.value || '')
     : '';
+  const heroSmsApiKeyValue = phoneSmsProviderValue === PHONE_SMS_PROVIDER_HERO_SMS
+    ? currentPhoneSmsApiKeyValue
+    : String(latestState?.heroSmsApiKey || '');
   const fiveSimApiKeyValue = typeof inputFiveSimApiKey !== 'undefined' && inputFiveSimApiKey
-    ? String(inputFiveSimApiKey.value || '').trim()
-    : String(latestState?.fiveSimApiKey || '').trim();
-  const fiveSimCountryOrderValue = (
-    typeof getSelectedFiveSimCountries === 'function'
-  )
-    ? normalizeFiveSimCountryOrderSafe(
-      getSelectedFiveSimCountries().map((country) => country.code || country.id)
-    )
-    : normalizeFiveSimCountryOrderSafe(
-      Array.isArray(latestState?.fiveSimCountryOrder)
-        ? latestState.fiveSimCountryOrder
-        : []
-    );
-  const fiveSimOperatorValue = typeof inputFiveSimOperator !== 'undefined' && inputFiveSimOperator
-    ? normalizeFiveSimOperatorSafe(inputFiveSimOperator.value)
-    : normalizeFiveSimOperatorSafe(
-      latestState?.fiveSimOperator || (typeof DEFAULT_FIVE_SIM_OPERATOR !== 'undefined' ? DEFAULT_FIVE_SIM_OPERATOR : 'any')
-    );
-  const fiveSimProductValue = typeof inputFiveSimProduct !== 'undefined' && inputFiveSimProduct
-    ? normalizeFiveSimProductSafe(inputFiveSimProduct.value)
-    : normalizeFiveSimProductSafe(
-      latestState?.fiveSimProduct || (typeof DEFAULT_FIVE_SIM_PRODUCT !== 'undefined' ? DEFAULT_FIVE_SIM_PRODUCT : 'openai')
-    );
+    ? String(inputFiveSimApiKey.value || '')
+    : String(latestState?.fiveSimApiKey || '');
   const nexSmsApiKeyValue = typeof inputNexSmsApiKey !== 'undefined' && inputNexSmsApiKey
-    ? String(inputNexSmsApiKey.value || '').trim()
-    : String(latestState?.nexSmsApiKey || '').trim();
-  const nexSmsCountryOrderValue = (
-    typeof getSelectedNexSmsCountries === 'function'
-  )
-    ? normalizeNexSmsCountryOrderSafe(
-      getSelectedNexSmsCountries().map((country) => country.id)
-    )
-    : normalizeNexSmsCountryOrderSafe(
-      Array.isArray(latestState?.nexSmsCountryOrder)
-        ? latestState.nexSmsCountryOrder
-        : []
-    );
-  const nexSmsServiceCodeValue = typeof inputNexSmsServiceCode !== 'undefined' && inputNexSmsServiceCode
-    ? normalizeNexSmsServiceCodeSafe(inputNexSmsServiceCode.value)
-    : normalizeNexSmsServiceCodeSafe(
-      latestState?.nexSmsServiceCode || (typeof DEFAULT_NEX_SMS_SERVICE_CODE !== 'undefined' ? DEFAULT_NEX_SMS_SERVICE_CODE : 'ot')
-    );
+    ? String(inputNexSmsApiKey.value || '')
+    : String(latestState?.nexSmsApiKey || '');
   const defaultHeroSmsReuseEnabled = typeof DEFAULT_HERO_SMS_REUSE_ENABLED !== 'undefined'
     ? DEFAULT_HERO_SMS_REUSE_ENABLED
     : true;
@@ -2897,18 +3391,77 @@ function collectSettingsPayload() {
   const heroSmsReuseEnabledValue = typeof inputHeroSmsReuseEnabled !== 'undefined' && inputHeroSmsReuseEnabled
     ? normalizeHeroSmsReuseEnabledValue(inputHeroSmsReuseEnabled.checked)
     : defaultHeroSmsReuseEnabled;
+  const freePhoneReuseEnabledValue = typeof inputFreePhoneReuseEnabled !== 'undefined' && inputFreePhoneReuseEnabled
+    ? Boolean(inputFreePhoneReuseEnabled.checked)
+    : Boolean(latestState?.freePhoneReuseEnabled);
+  const freePhoneReuseAutoEnabledValue = typeof inputFreePhoneReuseAutoEnabled !== 'undefined' && inputFreePhoneReuseAutoEnabled
+    ? Boolean(inputFreePhoneReuseAutoEnabled.checked)
+    : Boolean(latestState?.freePhoneReuseAutoEnabled);
   const defaultHeroSmsAcquirePriority = typeof DEFAULT_HERO_SMS_ACQUIRE_PRIORITY !== 'undefined'
     ? DEFAULT_HERO_SMS_ACQUIRE_PRIORITY
     : (typeof HERO_SMS_ACQUIRE_PRIORITY_COUNTRY !== 'undefined' ? HERO_SMS_ACQUIRE_PRIORITY_COUNTRY : 'country');
   const heroSmsAcquirePriorityValue = typeof selectHeroSmsAcquirePriority !== 'undefined' && selectHeroSmsAcquirePriority
     ? normalizeHeroSmsAcquirePriority(selectHeroSmsAcquirePriority.value)
-    : defaultHeroSmsAcquirePriority;
-  const heroSmsMaxPriceValue = typeof inputHeroSmsMaxPrice !== 'undefined' && inputHeroSmsMaxPrice
-    ? normalizeHeroSmsMaxPriceValue(inputHeroSmsMaxPrice.value)
+    : normalizeHeroSmsAcquirePriority(
+      typeof DEFAULT_HERO_SMS_ACQUIRE_PRIORITY !== 'undefined'
+        ? DEFAULT_HERO_SMS_ACQUIRE_PRIORITY
+        : 'country'
+    );
+  const currentPhoneSmsMaxPriceValue = typeof inputHeroSmsMaxPrice !== 'undefined' && inputHeroSmsMaxPrice
+    ? normalizePhoneSmsMaxPriceValue(inputHeroSmsMaxPrice.value, phoneSmsProviderValue)
     : '';
+  const heroSmsMaxPriceValue = phoneSmsProviderValue === PHONE_SMS_PROVIDER_HERO_SMS
+    ? currentPhoneSmsMaxPriceValue
+    : normalizeHeroSmsMaxPriceValue(latestState?.heroSmsMaxPrice || '');
+  const fiveSimMaxPriceValue = phoneSmsProviderValue === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? currentPhoneSmsMaxPriceValue
+    : normalizeFiveSimMaxPriceValue(latestState?.fiveSimMaxPrice || '');
+  const defaultFiveSimProduct = typeof DEFAULT_FIVE_SIM_PRODUCT !== 'undefined'
+    ? DEFAULT_FIVE_SIM_PRODUCT
+    : 'openai';
+  const defaultNexSmsServiceCode = typeof DEFAULT_NEX_SMS_SERVICE_CODE !== 'undefined'
+    ? DEFAULT_NEX_SMS_SERVICE_CODE
+    : 'ot';
+  const normalizeFiveSimProductForPayload = typeof normalizeFiveSimProductValue === 'function'
+    ? normalizeFiveSimProductValue
+    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultFiveSimProduct);
+  const normalizeNexSmsServiceCodeForPayload = typeof normalizeNexSmsServiceCodeValue === 'function'
+    ? normalizeNexSmsServiceCodeValue
+    : ((value = '') => String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultNexSmsServiceCode);
+  const normalizeFiveSimCountryOrderForPayload = typeof normalizeFiveSimCountryOrderValue === 'function'
+    ? normalizeFiveSimCountryOrderValue
+    : ((value = []) => (Array.isArray(value) ? value : [])
+      .map((entry) => normalizeFiveSimCountryId(entry, ''))
+      .filter(Boolean));
+  const normalizeNexSmsCountryIdForPayload = typeof normalizeNexSmsCountryIdValue === 'function'
+    ? normalizeNexSmsCountryIdValue
+    : ((value, fallback = -1) => {
+      const normalized = Math.floor(Number(value));
+      return Number.isFinite(normalized) && normalized >= 0 ? normalized : fallback;
+    });
+  const normalizeNexSmsCountryOrderForPayload = typeof normalizeNexSmsCountryOrderValue === 'function'
+    ? normalizeNexSmsCountryOrderValue
+    : ((value = []) => (Array.isArray(value) ? value : [])
+      .map((entry) => normalizeNexSmsCountryIdForPayload(entry, -1))
+      .filter((entry) => entry >= 0));
+  const phoneSmsProviderNexsms = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined'
+    ? PHONE_SMS_PROVIDER_NEXSMS
+    : 'nexsms';
+  const defaultNexSmsCountryOrder = typeof DEFAULT_NEX_SMS_COUNTRY_ORDER !== 'undefined'
+    ? DEFAULT_NEX_SMS_COUNTRY_ORDER
+    : [1];
+  const fiveSimOperatorValue = typeof inputFiveSimOperator !== 'undefined' && inputFiveSimOperator
+    ? normalizeFiveSimOperator(inputFiveSimOperator.value || latestState?.fiveSimOperator)
+    : normalizeFiveSimOperator(latestState?.fiveSimOperator);
+  const fiveSimProductValue = typeof inputFiveSimProduct !== 'undefined' && inputFiveSimProduct
+    ? normalizeFiveSimProductForPayload(inputFiveSimProduct.value || latestState?.fiveSimProduct)
+    : normalizeFiveSimProductForPayload(latestState?.fiveSimProduct || defaultFiveSimProduct);
+  const nexSmsServiceCodeValue = typeof inputNexSmsServiceCode !== 'undefined' && inputNexSmsServiceCode
+    ? normalizeNexSmsServiceCodeForPayload(inputNexSmsServiceCode.value || latestState?.nexSmsServiceCode)
+    : normalizeNexSmsServiceCodeForPayload(latestState?.nexSmsServiceCode || defaultNexSmsServiceCode);
   const heroSmsPreferredPriceValue = typeof inputHeroSmsPreferredPrice !== 'undefined' && inputHeroSmsPreferredPrice
     ? normalizeHeroSmsMaxPriceValue(inputHeroSmsPreferredPrice.value)
-    : '';
+    : normalizeHeroSmsMaxPriceValue(latestState?.heroSmsPreferredPrice || '');
   const phonePreferredActivationValue = typeof getSelectedPhonePreferredActivation === 'function'
     ? getSelectedPhonePreferredActivation()
     : null;
@@ -2942,38 +3495,137 @@ function collectSettingsPayload() {
       latestState?.phoneCodePollMaxRounds
     )
     : defaultPhoneCodePollMaxRounds;
-  const heroSmsCountry = phoneSmsProviderValue === heroProviderValue
-    ? (typeof getSelectedHeroSmsCountryOption === 'function'
-      ? getSelectedHeroSmsCountryOption()
-      : {
-        id: 0,
-        label: '未设置',
-      })
+  const selectedPhoneSmsCountry = phoneSmsProviderValue === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? ((typeof getSelectedFiveSimCountries === 'function' ? getSelectedFiveSimCountries()[0] : null)
+      || { id: DEFAULT_FIVE_SIM_COUNTRY_ID, code: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL })
+    : (phoneSmsProviderValue === phoneSmsProviderNexsms
+      ? ((typeof getSelectedNexSmsCountries === 'function' ? getSelectedNexSmsCountries()[0] : null)
+        || { id: defaultNexSmsCountryOrder[0], label: `Country #${defaultNexSmsCountryOrder[0]}` })
+      : (typeof getSelectedHeroSmsCountryOption === 'function'
+        ? getSelectedHeroSmsCountryOption()
+        : {
+          id: typeof DEFAULT_HERO_SMS_COUNTRY_ID !== 'undefined' ? DEFAULT_HERO_SMS_COUNTRY_ID : 52,
+          label: typeof DEFAULT_HERO_SMS_COUNTRY_LABEL !== 'undefined' ? DEFAULT_HERO_SMS_COUNTRY_LABEL : 'Thailand',
+        }));
+  const heroSmsCountry = phoneSmsProviderValue === PHONE_SMS_PROVIDER_HERO_SMS
+    ? selectedPhoneSmsCountry
     : {
-      id: normalizeHeroSmsCountryId(latestState?.heroSmsCountryId, 0),
+      id: normalizeHeroSmsCountryId(latestState?.heroSmsCountryId),
       label: normalizeHeroSmsCountryLabel(latestState?.heroSmsCountryLabel),
     };
-  const heroSmsCountryFallback = phoneSmsProviderValue === heroProviderValue
-    ? (typeof syncHeroSmsFallbackSelectionOrderFromSelect === 'function'
-      ? syncHeroSmsFallbackSelectionOrderFromSelect()
-        .filter((country) => Number(country.id) !== Number(heroSmsCountry.id))
-      : [])
-    : normalizeHeroSmsCountryFallbackList(
-      Array.isArray(latestState?.heroSmsCountryFallback) ? latestState.heroSmsCountryFallback : []
-    );
+  const fiveSimCountry = phoneSmsProviderValue === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? selectedPhoneSmsCountry
+    : {
+      id: normalizeFiveSimCountryId(latestState?.fiveSimCountryId),
+      label: normalizeFiveSimCountryLabel(latestState?.fiveSimCountryLabel),
+    };
+  const normalizedCustomEmailPool = typeof getActiveCustomEmailPoolEmails === 'function'
+    ? getActiveCustomEmailPoolEmails()
+    : (typeof normalizeCustomEmailPoolEntries === 'function'
+      ? normalizeCustomEmailPoolEntries(inputCustomEmailPool?.value)
+      : []);
+  const normalizedCustomEmailPoolEntries = typeof getNormalizedCustomEmailPoolEntriesState === 'function'
+    ? getNormalizedCustomEmailPoolEntriesState()
+    : [];
+  const selectedPhoneSmsCountryFallback = typeof syncHeroSmsFallbackSelectionOrderFromSelect === 'function'
+    ? syncHeroSmsFallbackSelectionOrderFromSelect()
+      .filter((country) => String(country.id) !== String(selectedPhoneSmsCountry.id))
+    : [];
+  const fiveSimCountryOrderValue = typeof getSelectedFiveSimCountries === 'function'
+    ? getSelectedFiveSimCountries()
+      .map((country) => normalizeFiveSimCountryCode(country.code || country.id, ''))
+      .filter(Boolean)
+    : normalizeFiveSimCountryOrderForPayload(latestState?.fiveSimCountryOrder || []);
+  const nexSmsCountryOrderValue = typeof getSelectedNexSmsCountries === 'function'
+    ? getSelectedNexSmsCountries()
+      .map((country) => normalizeNexSmsCountryIdForPayload(country.id, -1))
+      .filter((countryId) => countryId >= 0)
+    : normalizeNexSmsCountryOrderForPayload(latestState?.nexSmsCountryOrder || []);
+  const heroSmsCountryFallback = phoneSmsProviderValue === PHONE_SMS_PROVIDER_HERO_SMS
+    ? selectedPhoneSmsCountryFallback
+    : normalizeHeroSmsCountryFallbackList(latestState?.heroSmsCountryFallback || []);
+  const fiveSimCountryFallback = phoneSmsProviderValue === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? selectedPhoneSmsCountryFallback
+    : normalizeFiveSimCountryFallbackList(latestState?.fiveSimCountryFallback || []);
   const payPalAccounts = typeof getPayPalAccounts === 'function'
     ? getPayPalAccounts(latestState)
     : (Array.isArray(latestState?.paypalAccounts) ? latestState.paypalAccounts : []);
   const currentPayPalAccount = typeof getCurrentPayPalAccount === 'function'
     ? getCurrentPayPalAccount(latestState)
     : payPalAccounts.find((account) => account?.id === String(latestState?.currentPayPalAccountId || '').trim()) || null;
+  const selectedSignupMethod = typeof getSelectedSignupMethod === 'function'
+    ? getSelectedSignupMethod()
+    : (
+      (typeof normalizeSignupMethod === 'function'
+        ? normalizeSignupMethod(latestState?.signupMethod)
+        : (String(latestState?.signupMethod || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email'))
+    );
   const plusPaymentMethod = typeof getSelectedPlusPaymentMethod === 'function'
     ? getSelectedPlusPaymentMethod()
-    : (String(
-      (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod
+    : normalizePlusPaymentMethod(
+      typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod
         ? selectPlusPaymentMethod.value
-        : latestState?.plusPaymentMethod) || ''
-    ).trim().toLowerCase() === 'gopay' ? 'gopay' : 'paypal');
+        : latestState?.plusPaymentMethod
+    );
+  const normalizeGpcHelperPhoneModeSafe = typeof normalizeGpcHelperPhoneModeValue === 'function'
+    ? normalizeGpcHelperPhoneModeValue
+    : ((value = '') => String(value || '').trim().toLowerCase() === 'auto' || String(value || '').trim().toLowerCase() === 'builtin' ? 'auto' : 'manual');
+  const selectedGpcPhoneMode = normalizeGpcHelperPhoneModeSafe(
+    typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode
+      ? selectGpcHelperPhoneMode.value
+      : (latestState?.gopayHelperPhoneMode || 'manual')
+  );
+  const preserveSelectedGpcAutoMode = typeof shouldPreserveSelectedGpcAutoMode === 'function'
+    ? shouldPreserveSelectedGpcAutoMode(latestState)
+    : false;
+  const effectiveGpcPhoneMode = (!preserveSelectedGpcAutoMode && typeof isGpcAutoModePermissionDenied === 'function' && isGpcAutoModePermissionDenied(latestState))
+    ? 'manual'
+    : selectedGpcPhoneMode;
+  const selectedGpcOtpChannel = normalizeGpcOtpChannelSafe(
+    typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel
+      ? selectGpcHelperOtpChannel.value
+      : (latestState?.gopayHelperOtpChannel || 'whatsapp')
+  );
+  const selectedGpcLocalSmsHelperEnabled = effectiveGpcPhoneMode === 'auto' ? false : Boolean(
+    typeof inputGpcHelperLocalSmsEnabled !== 'undefined' && inputGpcHelperLocalSmsEnabled
+      ? inputGpcHelperLocalSmsEnabled.checked
+      : latestState?.gopayHelperLocalSmsHelperEnabled
+  );
+  const selectedSub2ApiGroupName = String(inputSub2ApiGroup.value || '').trim();
+  const sub2apiGroupNames = [];
+  const seenSub2ApiGroupNames = new Set();
+  const appendSub2ApiGroupNames = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(appendSub2ApiGroupNames);
+      return;
+    }
+    String(value || '')
+      .split(/[\r\n,，、]+/)
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .forEach((name) => {
+        const key = name.toLowerCase();
+        if (!key || seenSub2ApiGroupNames.has(key)) {
+          return;
+        }
+        seenSub2ApiGroupNames.add(key);
+        sub2apiGroupNames.push(name);
+      });
+  };
+  [
+    latestState?.sub2apiGroupNames,
+    latestState?.sub2apiGroupName,
+    selectedSub2ApiGroupName,
+  ].forEach(appendSub2ApiGroupNames);
+  if (sub2apiGroupNames.length === 0) {
+    appendSub2ApiGroupNames(['codex', 'openai-plus']);
+  }
+  const sub2apiAccountPriorityNormalizer = typeof normalizeSub2ApiAccountPriorityValue === 'function'
+    ? normalizeSub2ApiAccountPriorityValue
+    : ((value) => {
+      const numeric = Number(String(value ?? '').trim());
+      return Number.isSafeInteger(numeric) && numeric >= 1 ? numeric : 1;
+    });
   const fallbackLoginCodeProvider = typeof TEMPMAIL_PUBLIC_PROVIDER !== 'undefined'
     ? TEMPMAIL_PUBLIC_PROVIDER
     : 'tempmail-public';
@@ -2997,7 +3649,13 @@ function collectSettingsPayload() {
     sub2apiUrl: inputSub2ApiUrl.value.trim(),
     sub2apiEmail: inputSub2ApiEmail.value.trim(),
     sub2apiPassword: inputSub2ApiPassword.value,
-    sub2apiGroupName: inputSub2ApiGroup.value.trim(),
+    sub2apiGroupName: selectedSub2ApiGroupName,
+    sub2apiGroupNames,
+    sub2apiAccountPriority: sub2apiAccountPriorityNormalizer(
+      typeof inputSub2ApiAccountPriority !== 'undefined' && inputSub2ApiAccountPriority
+        ? inputSub2ApiAccountPriority.value
+        : latestState?.sub2apiAccountPriority
+    ),
     sub2apiDefaultProxyName: inputSub2ApiDefaultProxy.value.trim(),
     ipProxyEnabled: getSelectedIpProxyEnabledSafe(),
     ipProxyService: selectedIpProxyService,
@@ -3044,6 +3702,56 @@ function collectSettingsPayload() {
     paypalPassword: String(currentPayPalAccount?.password || latestState?.paypalPassword || ''),
     currentPayPalAccountId: String(latestState?.currentPayPalAccountId || '').trim(),
     paypalAccounts: payPalAccounts,
+    gopayCountryCode: window.GoPayUtils?.normalizeGoPayCountryCode
+      ? window.GoPayUtils.normalizeGoPayCountryCode(typeof selectGoPayCountryCode !== 'undefined' && selectGoPayCountryCode ? selectGoPayCountryCode.value : latestState?.gopayCountryCode)
+      : (typeof selectGoPayCountryCode !== 'undefined' && selectGoPayCountryCode
+        ? String(selectGoPayCountryCode.value || '+86').trim()
+        : String(latestState?.gopayCountryCode || '+86').trim()),
+    gopayPhone: window.GoPayUtils?.normalizeGoPayPhone
+      ? window.GoPayUtils.normalizeGoPayPhone(typeof inputGoPayPhone !== 'undefined' && inputGoPayPhone ? inputGoPayPhone.value : latestState?.gopayPhone)
+      : (typeof inputGoPayPhone !== 'undefined' && inputGoPayPhone
+        ? String(inputGoPayPhone.value || '').trim()
+        : String(latestState?.gopayPhone || '').trim()),
+    gopayOtp: window.GoPayUtils?.normalizeGoPayOtp
+      ? window.GoPayUtils.normalizeGoPayOtp(typeof inputGoPayOtp !== 'undefined' && inputGoPayOtp ? inputGoPayOtp.value : latestState?.gopayOtp)
+      : (typeof inputGoPayOtp !== 'undefined' && inputGoPayOtp
+        ? String(inputGoPayOtp.value || '').trim().replace(/[^\d]/g, '')
+        : String(latestState?.gopayOtp || '').trim().replace(/[^\d]/g, '')),
+    gopayPin: window.GoPayUtils?.normalizeGoPayPin
+      ? window.GoPayUtils.normalizeGoPayPin(typeof inputGoPayPin !== 'undefined' && inputGoPayPin ? inputGoPayPin.value : latestState?.gopayPin)
+      : (typeof inputGoPayPin !== 'undefined' && inputGoPayPin
+        ? String(inputGoPayPin.value || '')
+        : String(latestState?.gopayPin || '')),
+    gopayHelperApiUrl: window.GoPayUtils?.normalizeGpcHelperBaseUrl
+      ? window.GoPayUtils.normalizeGpcHelperBaseUrl(defaultGpcHelperApiUrl)
+      : String(defaultGpcHelperApiUrl).trim().replace(/\/+$/g, ''),
+    gopayHelperApiKey: typeof inputGpcHelperCardKey !== 'undefined' && inputGpcHelperCardKey
+      ? String(inputGpcHelperCardKey.value || '').trim()
+      : String(latestState?.gopayHelperApiKey || latestState?.gopayHelperCardKey || '').trim(),
+    gopayHelperCardKey: '',
+    gopayHelperPhoneMode: effectiveGpcPhoneMode,
+    gopayHelperCountryCode: window.GoPayUtils?.normalizeGoPayCountryCode
+      ? window.GoPayUtils.normalizeGoPayCountryCode(typeof selectGpcHelperCountryCode !== 'undefined' && selectGpcHelperCountryCode ? selectGpcHelperCountryCode.value : latestState?.gopayHelperCountryCode)
+      : (typeof selectGpcHelperCountryCode !== 'undefined' && selectGpcHelperCountryCode
+        ? String(selectGpcHelperCountryCode.value || '+86').trim()
+        : String(latestState?.gopayHelperCountryCode || '+86').trim()),
+    gopayHelperPhoneNumber: window.GoPayUtils?.normalizeGoPayPhone
+      ? window.GoPayUtils.normalizeGoPayPhone(typeof inputGpcHelperPhone !== 'undefined' && inputGpcHelperPhone ? inputGpcHelperPhone.value : latestState?.gopayHelperPhoneNumber)
+      : (typeof inputGpcHelperPhone !== 'undefined' && inputGpcHelperPhone
+        ? String(inputGpcHelperPhone.value || '').trim()
+        : String(latestState?.gopayHelperPhoneNumber || '').trim()),
+    gopayHelperPin: window.GoPayUtils?.normalizeGoPayPin
+      ? window.GoPayUtils.normalizeGoPayPin(typeof inputGpcHelperPin !== 'undefined' && inputGpcHelperPin ? inputGpcHelperPin.value : latestState?.gopayHelperPin)
+      : (typeof inputGpcHelperPin !== 'undefined' && inputGpcHelperPin
+        ? String(inputGpcHelperPin.value || '')
+        : String(latestState?.gopayHelperPin || '')),
+    gopayHelperOtpChannel: selectedGpcOtpChannel,
+    gopayHelperLocalSmsHelperEnabled: selectedGpcLocalSmsHelperEnabled,
+    gopayHelperLocalSmsHelperUrl: normalizeGpcLocalSmsHelperBaseUrlSafe(
+      typeof inputGpcHelperLocalSmsUrl !== 'undefined' && inputGpcHelperLocalSmsUrl
+        ? inputGpcHelperLocalSmsUrl.value
+        : (latestState?.gopayHelperLocalSmsHelperUrl || '')
+    ),
     ...(contributionModeEnabled ? {} : {
       customPassword: inputPassword.value,
     }),
@@ -3055,9 +3763,8 @@ function collectSettingsPayload() {
     customMailProviderPool: typeof normalizeCustomEmailPoolEntries === 'function'
       ? normalizeCustomEmailPoolEntries(inputCustomMailProviderPool?.value)
       : [],
-    customEmailPool: typeof normalizeCustomEmailPoolEntries === 'function'
-      ? normalizeCustomEmailPoolEntries(inputCustomEmailPool?.value)
-      : [],
+    customEmailPool: normalizedCustomEmailPool,
+    customEmailPoolEntries: normalizedCustomEmailPoolEntries,
     autoDeleteUsedIcloudAlias: checkboxAutoDeleteIcloud?.checked,
     icloudHostPreference: selectIcloudHostPreference?.value || 'auto',
     icloudTargetMailboxType: normalizedIcloudTargetMailboxType,
@@ -3088,8 +3795,16 @@ function collectSettingsPayload() {
     cloudflareTempEmailUseRandomSubdomain: Boolean(inputTempEmailUseRandomSubdomain?.checked),
     cloudflareTempEmailDomain: selectedCloudflareTempEmailDomain,
     cloudflareTempEmailDomains: tempEmailDomains,
+    cloudMailBaseUrl: normalizeCloudMailBaseUrlInput((typeof inputCloudMailBaseUrl !== 'undefined' && inputCloudMailBaseUrl) ? inputCloudMailBaseUrl.value : ''),
+    cloudMailAdminEmail: ((typeof inputCloudMailAdminEmail !== 'undefined' && inputCloudMailAdminEmail) ? inputCloudMailAdminEmail.value : '').trim(),
+    cloudMailAdminPassword: (typeof inputCloudMailAdminPassword !== 'undefined' && inputCloudMailAdminPassword) ? inputCloudMailAdminPassword.value : '',
+    cloudMailReceiveMailbox: normalizeCloudMailReceiveMailboxInput((typeof inputCloudMailReceiveMailbox !== 'undefined' && inputCloudMailReceiveMailbox) ? inputCloudMailReceiveMailbox.value : ''),
+    cloudMailDomain: normalizeCloudMailDomainInput((typeof inputCloudMailDomain !== 'undefined' && inputCloudMailDomain) ? inputCloudMailDomain.value : ''),
     autoRunSkipFailures: inputAutoSkipFailures.checked,
     autoRunFallbackThreadIntervalMinutes: normalizeAutoRunThreadIntervalMinutes(inputAutoSkipFailuresThreadIntervalMinutes.value),
+    step6CookieCleanupEnabled: typeof inputStep6CookieCleanupEnabled !== 'undefined' && inputStep6CookieCleanupEnabled
+      ? Boolean(inputStep6CookieCleanupEnabled.checked)
+      : false,
     autoRunDelayEnabled: inputAutoDelayEnabled.checked,
     autoRunDelayMinutes: normalizeAutoDelayMinutes(inputAutoDelayMinutes.value),
     autoStepDelaySeconds: normalizeAutoStepDelaySeconds(inputAutoStepDelaySeconds.value),
@@ -3097,6 +3812,7 @@ function collectSettingsPayload() {
       ? Boolean(inputOAuthFlowTimeoutEnabled.checked)
       : true,
     phoneVerificationEnabled: Boolean(inputPhoneVerificationEnabled?.checked),
+    signupMethod: selectedSignupMethod,
     phoneSmsProvider: phoneSmsProviderValue,
     phoneSmsProviderOrder: phoneSmsProviderOrderValue,
     verificationResendCount: normalizeVerificationResendCount(
@@ -3112,6 +3828,8 @@ function collectSettingsPayload() {
     nexSmsCountryOrder: nexSmsCountryOrderValue,
     nexSmsServiceCode: nexSmsServiceCodeValue,
     heroSmsReuseEnabled: heroSmsReuseEnabledValue,
+    freePhoneReuseEnabled: freePhoneReuseEnabledValue,
+    freePhoneReuseAutoEnabled: freePhoneReuseAutoEnabledValue,
     heroSmsAcquirePriority: heroSmsAcquirePriorityValue,
     heroSmsMaxPrice: heroSmsMaxPriceValue,
     heroSmsPreferredPrice: heroSmsPreferredPriceValue,
@@ -3124,6 +3842,10 @@ function collectSettingsPayload() {
     heroSmsCountryId: heroSmsCountry.id,
     heroSmsCountryLabel: heroSmsCountry.label,
     heroSmsCountryFallback,
+    fiveSimCountryId: fiveSimCountry.id,
+    fiveSimCountryLabel: fiveSimCountry.label,
+    fiveSimCountryFallback,
+    fiveSimMaxPrice: fiveSimMaxPriceValue,
   };
 }
 
@@ -3172,16 +3894,180 @@ function normalizeAccountRunHistoryHelperBaseUrlValue(value = '') {
   }
 }
 
+
+function normalizePhoneSmsProvider(value = '') {
+  if (typeof window !== 'undefined' && window.PhoneSmsProviderRegistry?.normalizeProviderId) {
+    return window.PhoneSmsProviderRegistry.normalizeProviderId(value);
+  }
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? PHONE_SMS_PROVIDER_FIVE_SIM
+    : PHONE_SMS_PROVIDER_HERO_SMS;
+}
+
+function setPhoneSmsProviderSelectValue(provider) {
+  const normalizedProvider = normalizePhoneSmsProvider(provider);
+  if (selectPhoneSmsProvider) {
+    selectPhoneSmsProvider.value = normalizedProvider;
+    if (selectPhoneSmsProvider.dataset) {
+      selectPhoneSmsProvider.dataset.activeProvider = normalizedProvider;
+    }
+  }
+  return normalizedProvider;
+}
+
+function getLastAppliedPhoneSmsProvider() {
+  return normalizePhoneSmsProvider(
+    selectPhoneSmsProvider?.dataset?.activeProvider
+      || latestState?.phoneSmsProvider
+      || selectPhoneSmsProvider?.value
+  );
+}
+
+function getSelectedPhoneSmsProvider() {
+  return normalizePhoneSmsProvider(selectPhoneSmsProvider?.value || latestState?.phoneSmsProvider);
+}
+
+function getPhoneSmsProviderLabel(provider = getSelectedPhoneSmsProvider()) {
+  if (typeof window !== 'undefined' && window.PhoneSmsProviderRegistry?.getProviderLabel) {
+    return window.PhoneSmsProviderRegistry.getProviderLabel(provider);
+  }
+  return normalizePhoneSmsProvider(provider) === PHONE_SMS_PROVIDER_FIVE_SIM ? '5sim' : 'HeroSMS';
+}
+
+function isFiveSimProviderSelected() {
+  return getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_FIVE_SIM;
+}
+
+function normalizePhoneSmsCountryId(value, provider = getSelectedPhoneSmsProvider()) {
+  if (normalizePhoneSmsProvider(provider) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+    return normalizeFiveSimCountryId(value);
+  }
+  return normalizeHeroSmsCountryId(value);
+}
+
+function normalizePhoneSmsCountryLabel(value = '', provider = getSelectedPhoneSmsProvider()) {
+  if (normalizePhoneSmsProvider(provider) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+    return normalizeFiveSimCountryLabel(value);
+  }
+  return normalizeHeroSmsCountryLabel(value);
+}
+
+function normalizePhoneSmsMaxPriceValue(value = '', provider = getSelectedPhoneSmsProvider()) {
+  if (normalizePhoneSmsProvider(provider) === PHONE_SMS_PROVIDER_FIVE_SIM) {
+    return normalizeFiveSimMaxPriceValue(value);
+  }
+  return normalizeHeroSmsMaxPriceValue(value);
+}
+
+function normalizeFiveSimCountryId(value, fallback = DEFAULT_FIVE_SIM_COUNTRY_ID) {
+  const fallbackSource = fallback === undefined || fallback === null ? DEFAULT_FIVE_SIM_COUNTRY_ID : fallback;
+  const normalizedFallback = String(fallbackSource).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '');
+  const rawNormalized = typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.normalizeFiveSimCountryId
+    ? window.PhoneSmsFiveSimProvider.normalizeFiveSimCountryId(value, '')
+    : String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '');
+  const normalized = String(rawNormalized || '').trim().toLowerCase();
+  if (normalized) {
+    return normalized;
+  }
+  if (!normalizedFallback) {
+    return '';
+  }
+  return normalizedFallback || DEFAULT_FIVE_SIM_COUNTRY_ID;
+}
+
+function normalizeFiveSimCountryLabel(value = '', fallback = DEFAULT_FIVE_SIM_COUNTRY_LABEL) {
+  if (typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.normalizeFiveSimCountryLabel) {
+    return window.PhoneSmsFiveSimProvider.normalizeFiveSimCountryLabel(value, fallback);
+  }
+  return String(value || '').trim() || fallback;
+}
+
+function formatFiveSimCountryDisplayLabel(id = '', englishValue = '', fallback = DEFAULT_FIVE_SIM_COUNTRY_LABEL) {
+  if (typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.formatFiveSimCountryLabel) {
+    return window.PhoneSmsFiveSimProvider.formatFiveSimCountryLabel(id, englishValue, fallback);
+  }
+  const countryId = normalizeFiveSimCountryId(id, '');
+  const english = normalizeFiveSimCountryLabel(englishValue || countryId || fallback, fallback);
+  const chinese = FIVE_SIM_COUNTRY_CN_BY_ID[countryId] || '';
+  if (chinese && english) {
+    if (String(english).includes(chinese)) {
+      return english;
+    }
+    if (chinese.toLowerCase() !== english.toLowerCase()) {
+      return `${chinese} (${english})`;
+    }
+  }
+  return chinese || english;
+}
+
+function normalizeFiveSimOperator(value = '', fallback = DEFAULT_FIVE_SIM_OPERATOR) {
+  if (typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.normalizeFiveSimOperator) {
+    return window.PhoneSmsFiveSimProvider.normalizeFiveSimOperator(value || fallback);
+  }
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || fallback;
+}
+
+function normalizeFiveSimMaxPriceValue(value = '') {
+  if (typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.normalizeFiveSimMaxPrice) {
+    return window.PhoneSmsFiveSimProvider.normalizeFiveSimMaxPrice(value);
+  }
+  const rawValue = String(value ?? '').trim();
+  if (!rawValue) {
+    return '';
+  }
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '';
+  }
+  return String(Math.round(numeric * 10000) / 10000);
+}
+
+function normalizeFiveSimCountryFallbackList(value = []) {
+  if (typeof window !== 'undefined' && window.PhoneSmsFiveSimProvider?.normalizeFiveSimCountryFallback) {
+    return window.PhoneSmsFiveSimProvider.normalizeFiveSimCountryFallback(value);
+  }
+  const source = Array.isArray(value)
+    ? value
+    : String(value || '')
+      .split(/[\r\n,，;；]+/)
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  const seen = new Set();
+  const normalized = [];
+
+  source.forEach((entry) => {
+    let id = '';
+    let label = '';
+    if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+      id = normalizeFiveSimCountryId(entry.id ?? entry.countryId ?? entry.slug, '');
+      label = normalizeFiveSimCountryLabel(
+        entry.label ?? entry.countryLabel ?? formatFiveSimCountryDisplayLabel(id, entry.text_en ?? entry.name, id),
+        id
+      );
+    } else {
+      const text = String(entry || '').trim();
+      const structured = text.match(/^([a-z0-9_-]+)\s*(?:[:|/-]\s*(.+))?$/i);
+      id = normalizeFiveSimCountryId(structured?.[1] || text, '');
+      label = String(structured?.[2] || '').trim() || formatFiveSimCountryDisplayLabel(id, id, id);
+    }
+    if (!id || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    normalized.push({ id, label: label || formatFiveSimCountryDisplayLabel(id, id, id) });
+  });
+
+  return normalized;
+}
+
 function normalizeHeroSmsCountryId(value, fallback = DEFAULT_HERO_SMS_COUNTRY_ID) {
   const parsed = Math.floor(Number(value));
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
   const fallbackParsed = Math.floor(Number(fallback));
-  if (Number.isFinite(fallbackParsed) && fallbackParsed > 0) {
-    return fallbackParsed;
-  }
-  return 0;
+  return Number.isFinite(fallbackParsed) && fallbackParsed > 0 ? fallbackParsed : DEFAULT_HERO_SMS_COUNTRY_ID;
 }
 
 function normalizeHeroSmsCountryLabel(value = '') {
@@ -3968,29 +4854,18 @@ function collectHeroSmsPriceEntriesForPreview(payload, entries = []) {
     return entries;
   }
 
-  const directPrice = normalizeHeroSmsPriceForPreview(
-    payload.cost
-    ?? payload.price
-    ?? payload.retail_price
-    ?? payload.retailPrice
-  );
-  if (directPrice !== null) {
-    const stockCandidates = [
-      payload.count,
-      payload.physicalCount,
-      payload.stock,
-      payload.available,
-      payload.quantity,
-      payload.qty,
-      payload.left,
-      payload.free,
-    ]
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value));
-    const hasStockField = stockCandidates.length > 0;
-    const stockCount = hasStockField ? Math.max(...stockCandidates) : 0;
+  const cost = normalizeHeroSmsPriceForPreview(payload.cost ?? payload.price ?? payload.Price);
+  if (cost !== null) {
+    const count = Number(payload.count ?? payload.qty ?? payload.Qty);
+    const physicalCount = Number(payload.physicalCount);
+    const hasCount = Number.isFinite(count);
+    const hasPhysicalCount = Number.isFinite(physicalCount);
+    const stockCount = hasPhysicalCount
+      ? physicalCount
+      : (hasCount ? count : 0);
+    const hasStockField = hasCount || hasPhysicalCount;
     entries.push({
-      cost: directPrice,
+      cost,
       hasStockField,
       stockCount: Number.isFinite(stockCount) ? stockCount : 0,
       inStock: !hasStockField || stockCount > 0,
@@ -4143,6 +5018,20 @@ function collectHeroSmsPriceCandidatesForPreview(payload, candidates = []) {
       candidates.push(entry.cost);
     });
   return candidates;
+}
+
+function formatPhoneSmsPriceEntriesSummary(payload) {
+  const entries = collectHeroSmsPriceEntriesForPreview(payload, [])
+    .filter((entry) => Number.isFinite(Number(entry.cost)) && Number(entry.cost) > 0);
+  const inStockPrices = Array.from(new Set(
+    entries
+      .filter((entry) => entry.inStock)
+      .map((entry) => Math.round(Number(entry.cost) * 10000) / 10000)
+  )).sort((left, right) => left - right);
+  const allPrices = Array.from(new Set(
+    entries.map((entry) => Math.round(Number(entry.cost) * 10000) / 10000)
+  )).sort((left, right) => left - right);
+  return { entries, inStockPrices, allPrices };
 }
 
 function describeHeroSmsPreviewPayload(payload) {
@@ -4326,68 +5215,68 @@ function getSelectedHeroSmsCountryOption() {
   if (selectedCountries.length) {
     return selectedCountries[0];
   }
-  return {
-    id: 0,
-    label: '未设置',
-  };
+  return isFiveSimProviderSelected()
+    ? { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL }
+    : { id: DEFAULT_HERO_SMS_COUNTRY_ID, label: DEFAULT_HERO_SMS_COUNTRY_LABEL };
+}
+
+function getFiveSimCountryOptionLabel(code = '') {
+  const normalizedCode = normalizeFiveSimCountryCode(code, '');
+  if (!normalizedCode) {
+    return '';
+  }
+  const matched = Array.from(selectFiveSimCountry?.options || [])
+    .find((option) => normalizeFiveSimCountryCode(option.value, '') === normalizedCode);
+  if (matched) {
+    return normalizeFiveSimCountryLabel(matched.textContent, normalizedCode);
+  }
+  const fallback = FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.find((item) => item.id === normalizedCode);
+  return fallback ? formatFiveSimCountryDisplayLabel(fallback.id, fallback.eng, fallback.id) : normalizedCode;
+}
+
+function getNexSmsCountryLabelById(id) {
+  const countryId = normalizeNexSmsCountryIdValue(id, -1);
+  if (countryId < 0) {
+    return '';
+  }
+  const matched = Array.from(selectNexSmsCountry?.options || [])
+    .find((option) => normalizeNexSmsCountryIdValue(option.value, -1) === countryId);
+  return normalizeNexSmsCountryLabel(matched?.textContent || '', `Country #${countryId}`);
+}
+
+function getSelectedFiveSimCountries() {
+  return syncFiveSimCountrySelectionOrderFromSelect({
+    enforceMax: true,
+    ensureDefault: false,
+    showLimitToast: false,
+  });
+}
+
+function getSelectedNexSmsCountries() {
+  return syncNexSmsCountrySelectionOrderFromSelect({
+    enforceMax: true,
+    ensureDefault: false,
+    showLimitToast: false,
+  });
 }
 
 function updateHeroSmsPlatformDisplay() {
   if (!displayHeroSmsPlatform) {
     return;
   }
-  const normalizeProvider = typeof normalizePhoneSmsProviderValue === 'function'
-    ? normalizePhoneSmsProviderValue
-    : ((value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      if (normalized === '5sim') return '5sim';
-      if (normalized === 'nexsms') return 'nexsms';
-      return 'hero-sms';
-    });
-  const fiveSimProviderValue = typeof PHONE_SMS_PROVIDER_FIVE_SIM !== 'undefined' ? PHONE_SMS_PROVIDER_FIVE_SIM : '5sim';
-  const nexSmsProviderValue = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined' ? PHONE_SMS_PROVIDER_NEXSMS : 'nexsms';
-  const defaultProviderValue = typeof DEFAULT_PHONE_SMS_PROVIDER !== 'undefined' ? DEFAULT_PHONE_SMS_PROVIDER : 'hero-sms';
-  const providerOrderForDisplay = resolveNormalizedProviderOrderForRuntime(latestState || {});
-  const provider = providerOrderForDisplay[0] || (
-    typeof getSelectedPhoneSmsProvider === 'function'
-      ? getSelectedPhoneSmsProvider()
-      : normalizeProvider(selectPhoneSmsProvider?.value || defaultProviderValue)
-  );
-  if (provider === fiveSimProviderValue) {
-    const defaultProduct = typeof DEFAULT_FIVE_SIM_PRODUCT !== 'undefined' ? DEFAULT_FIVE_SIM_PRODUCT : 'openai';
-    const product = typeof normalizeFiveSimProductValue === 'function'
-      ? normalizeFiveSimProductValue(inputFiveSimProduct?.value || latestState?.fiveSimProduct || defaultProduct)
-      : String(inputFiveSimProduct?.value || latestState?.fiveSimProduct || defaultProduct).trim().toLowerCase();
-    const primaryCountry = (
-      typeof getSelectedFiveSimCountries === 'function'
-        ? getSelectedFiveSimCountries()?.[0]?.label
-        : ''
-    ) || '未设置国家';
-    displayHeroSmsPlatform.textContent = `5sim / ${product} / ${primaryCountry}`;
-    return;
+  const provider = getSelectedPhoneSmsProvider();
+  const selected = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? (getSelectedFiveSimCountries()[0] || { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL })
+    : (provider === PHONE_SMS_PROVIDER_NEXSMS
+      ? (getSelectedNexSmsCountries()[0] || { id: DEFAULT_NEX_SMS_COUNTRY_ORDER[0], label: `Country #${DEFAULT_NEX_SMS_COUNTRY_ORDER[0]}` })
+      : getSelectedHeroSmsCountryOption());
+  const countryText = selected?.label ? ` / ${selected.label}` : '';
+  displayHeroSmsPlatform.textContent = `${getPhoneSmsProviderLabel(provider)} / OpenAI${countryText}`;
+  if (inputHeroSmsApiKey) {
+    inputHeroSmsApiKey.placeholder = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? '请输入 5sim API Key'
+      : (provider === PHONE_SMS_PROVIDER_NEXSMS ? '请输入 NexSMS API Key' : '请输入 HeroSMS API Key');
   }
-  if (provider === nexSmsProviderValue) {
-    const defaultServiceCode = typeof DEFAULT_NEX_SMS_SERVICE_CODE !== 'undefined' ? DEFAULT_NEX_SMS_SERVICE_CODE : 'ot';
-    const serviceCode = typeof normalizeNexSmsServiceCodeValue === 'function'
-      ? normalizeNexSmsServiceCodeValue(inputNexSmsServiceCode?.value || latestState?.nexSmsServiceCode || defaultServiceCode)
-      : String(inputNexSmsServiceCode?.value || latestState?.nexSmsServiceCode || defaultServiceCode).trim().toLowerCase();
-    const primaryCountry = (
-      typeof getSelectedNexSmsCountries === 'function'
-        ? getSelectedNexSmsCountries()?.[0]?.label
-        : ''
-    ) || '未设置国家';
-    displayHeroSmsPlatform.textContent = `NexSMS / ${serviceCode} / ${primaryCountry}`;
-    return;
-  }
-  const heroPrimary = typeof getSelectedHeroSmsCountryOption === 'function'
-    ? getSelectedHeroSmsCountryOption()
-    : null;
-  const heroPrimaryLabel = String(heroPrimary?.label || '').trim();
-  if (heroPrimary && Number(heroPrimary.id) > 0 && heroPrimaryLabel) {
-    displayHeroSmsPlatform.textContent = `HeroSMS / OpenAI / ${heroPrimaryLabel}`;
-    return;
-  }
-  displayHeroSmsPlatform.textContent = 'HeroSMS / OpenAI';
 }
 
 function getHeroSmsCountryLabelById(id) {
@@ -4397,15 +5286,16 @@ function getHeroSmsCountryLabelById(id) {
     return '';
   }
   const matched = Array.from(countrySelect.options).find((option) => option.value === targetId);
-  return normalizeHeroSmsCountryLabel(matched?.textContent || '', `Country #${targetId}`);
+  return String(matched?.textContent || '').trim()
+    || (isFiveSimProviderSelected() ? targetId : `Country #${targetId}`);
 }
 
 function renderHeroSmsCountryFallbackOrder(countries = []) {
   if (!displayHeroSmsCountryFallbackOrder) {
     return;
   }
-  const normalized = normalizeHeroSmsCountryFallbackList(countries);
   displayHeroSmsCountryFallbackOrder.textContent = '';
+  const normalized = isFiveSimProviderSelected() ? normalizeFiveSimCountryFallbackList(countries) : normalizeHeroSmsCountryFallbackList(countries);
   if (!normalized.length) {
     displayHeroSmsCountryFallbackOrder.textContent = '未设置';
     return;
@@ -4495,9 +5385,9 @@ function updateHeroSmsCountryMenuSummary(selectedCountries = []) {
   if (!btnHeroSmsCountryMenu) {
     return;
   }
-  const normalized = normalizeHeroSmsCountryFallbackList(selectedCountries);
+  const normalized = isFiveSimProviderSelected() ? normalizeFiveSimCountryFallbackList(selectedCountries) : normalizeHeroSmsCountryFallbackList(selectedCountries);
   if (!normalized.length) {
-    btnHeroSmsCountryMenu.textContent = `未选择 (0/${HERO_SMS_COUNTRY_SELECTION_MAX})`;
+    btnHeroSmsCountryMenu.textContent = `\u672a\u9009\u62e9 (0/${HERO_SMS_COUNTRY_SELECTION_MAX})`;
     return;
   }
   const labels = normalized.map((country) => country.label);
@@ -4591,22 +5481,21 @@ function syncHeroSmsFallbackSelectionOrderFromSelect(options = {}) {
   const showLimitToast = Boolean(options.showLimitToast);
 
   if (!countrySelect) {
-    heroSmsCountrySelectionOrder = [];
-    renderHeroSmsCountryFallbackOrder([]);
-    renderHeroSmsCountryChoiceButtons();
-    return [];
+    const defaultCountry = isFiveSimProviderSelected()
+      ? { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL }
+      : { id: normalizeHeroSmsCountryId(DEFAULT_HERO_SMS_COUNTRY_ID), label: DEFAULT_HERO_SMS_COUNTRY_LABEL };
+    heroSmsCountrySelectionOrder = [defaultCountry.id];
+    renderHeroSmsCountryFallbackOrder([defaultCountry]);
+    return [defaultCountry];
   }
 
   const selectedIds = Array.from(countrySelect.options)
     .filter((option) => option.selected)
-    .map((option) => {
-      const parsedId = Math.floor(Number(option.value));
-      return Number.isFinite(parsedId) && parsedId > 0 ? parsedId : 0;
-    })
-    .filter((id) => id > 0);
+    .map((option) => normalizePhoneSmsCountryId(option.value, getSelectedPhoneSmsProvider()))
+    .filter(Boolean);
   if (!selectedIds.length && !countrySelect.multiple) {
-    const fallbackId = Math.floor(Number(countrySelect.value));
-    if (Number.isFinite(fallbackId) && fallbackId > 0) {
+    const fallbackId = normalizePhoneSmsCountryId(countrySelect.value, getSelectedPhoneSmsProvider());
+    if (fallbackId) {
       selectedIds.push(fallbackId);
     }
   }
@@ -4620,7 +5509,7 @@ function syncHeroSmsFallbackSelectionOrderFromSelect(options = {}) {
   });
 
   if (ensureDefault && !nextOrder.length) {
-    const defaultId = normalizeHeroSmsCountryId(countrySelect.value || DEFAULT_HERO_SMS_COUNTRY_ID);
+    const defaultId = normalizePhoneSmsCountryId(countrySelect.value || (isFiveSimProviderSelected() ? DEFAULT_FIVE_SIM_COUNTRY_ID : DEFAULT_HERO_SMS_COUNTRY_ID));
     nextOrder = [defaultId];
   }
 
@@ -4649,18 +5538,22 @@ function syncHeroSmsFallbackSelectionOrderFromSelect(options = {}) {
 
 function applyHeroSmsFallbackSelection(countries = [], options = {}) {
   const includePrimary = Boolean(options.includePrimary);
+  const normalizeFallbackForCurrentProvider = isFiveSimProviderSelected()
+    ? normalizeFiveSimCountryFallbackList
+    : normalizeHeroSmsCountryFallbackList;
   const sourceCountries = includePrimary
     ? countries
     : [
       getSelectedHeroSmsCountryOption(),
-      ...normalizeHeroSmsCountryFallbackList(countries),
+      ...normalizeFallbackForCurrentProvider(countries),
     ];
-  const normalized = normalizeHeroSmsCountryFallbackList(sourceCountries)
-    .filter((entry) => Number(entry.id) > 0)
-    .slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
+  const normalized = (isFiveSimProviderSelected()
+    ? normalizeFiveSimCountryFallbackList(sourceCountries)
+    : normalizeHeroSmsCountryFallbackList(sourceCountries)
+  ).slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
   const selectedIds = normalized
-    .map((entry) => Number(entry.id))
-    .filter((id) => Number.isFinite(id) && id > 0);
+    .map((entry) => normalizePhoneSmsCountryId(entry.id, getSelectedPhoneSmsProvider()))
+    .filter(Boolean);
 
   const countrySelect = selectHeroSmsCountry || selectHeroSmsCountryFallback;
   if (countrySelect) {
@@ -4675,6 +5568,35 @@ function applyHeroSmsFallbackSelection(countries = [], options = {}) {
     ensureDefault: false,
     showLimitToast: false,
   });
+}
+
+function removeHeroSmsCountryFromOrder(id) {
+  const provider = getSelectedPhoneSmsProvider();
+  const normalizedId = normalizePhoneSmsCountryId(id, provider);
+  if (!normalizedId) {
+    return [];
+  }
+  heroSmsCountrySelectionOrder = heroSmsCountrySelectionOrder
+    .filter((entry) => String(entry) !== String(normalizedId));
+  [selectHeroSmsCountry, selectHeroSmsCountryFallback].forEach((selectEl) => {
+    if (!selectEl) {
+      return;
+    }
+    Array.from(selectEl.options || []).forEach((option) => {
+      if (String(normalizePhoneSmsCountryId(option.value, provider)) === String(normalizedId)) {
+        option.selected = false;
+      }
+    });
+  });
+  const nextOrder = syncHeroSmsFallbackSelectionOrderFromSelect({
+    enforceMax: true,
+    ensureDefault: false,
+    showLimitToast: false,
+  });
+  updateHeroSmsPlatformDisplay();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+  return nextOrder;
 }
 
 function normalizePhoneActivationState(record = {}) {
@@ -4895,7 +5817,10 @@ function updateHeroSmsRuntimeDisplay(state = {}) {
     const activation = normalizePhoneActivationState(state?.currentPhoneActivation || latestState?.currentPhoneActivation);
     const phoneNumber = String(activation?.phoneNumber || '').trim();
     const activationId = String(activation?.activationId || '').trim();
-    const countryLabel = resolvePhoneActivationCountryLabel(activation);
+    const countryLabel = normalizePhoneSmsCountryLabel(
+      activation?.countryLabel || getHeroSmsCountryLabelById(activation?.countryId || ''),
+      activation?.provider || getSelectedPhoneSmsProvider()
+    );
     displayHeroSmsCurrentNumber.textContent = phoneNumber
       ? `${phoneNumber}${activationId ? ` (#${activationId})` : ''}${countryLabel ? ` / ${countryLabel}` : ''}`
       : '未分配';
@@ -4904,8 +5829,77 @@ function updateHeroSmsRuntimeDisplay(state = {}) {
     const code = String(state?.currentPhoneVerificationCode ?? latestState?.currentPhoneVerificationCode ?? '').trim();
     displayHeroSmsCurrentCode.textContent = code || '未获取';
   }
+  if (displayFreeReusablePhone || displayFreeReusablePhoneCountry || inputFreeReusablePhone) {
+    const activation = state?.freeReusablePhoneActivation ?? latestState?.freeReusablePhoneActivation ?? null;
+    const phoneNumber = String(activation?.phoneNumber || '').trim();
+    const activationId = String(activation?.activationId || '').trim();
+    const successfulUses = Number.isFinite(Number(activation?.successfulUses))
+      ? Number(activation.successfulUses)
+      : null;
+    const maxUses = Number.isFinite(Number(activation?.maxUses))
+      ? Number(activation.maxUses)
+      : null;
+    const countryLabel = normalizePhoneSmsCountryLabel(
+      activation?.countryLabel
+      || getHeroSmsCountryLabelById(activation?.countryId || '')
+      || state?.heroSmsCountryLabel
+      || latestState?.heroSmsCountryLabel
+      || getHeroSmsCountryLabelById(state?.heroSmsCountryId || latestState?.heroSmsCountryId || ''),
+      activation?.provider || getSelectedPhoneSmsProvider()
+    );
+    const usesText = successfulUses !== null || maxUses !== null
+      ? ` / ${successfulUses ?? 0}/${maxUses ?? 3}`
+      : '';
+    if (displayFreeReusablePhone) {
+      displayFreeReusablePhone.textContent = phoneNumber
+        ? `${phoneNumber}${activationId ? ` (#${activationId})` : ''}${usesText}`
+        : '未保存';
+    }
+    if (displayFreeReusablePhoneCountry) {
+      displayFreeReusablePhoneCountry.textContent = phoneNumber
+        ? `地区：${countryLabel || '未保存'}`
+        : '地区：未保存';
+    }
+    if (inputFreeReusablePhone) {
+      inputFreeReusablePhone.value = phoneNumber;
+    }
+  }
   syncPhoneRuntimeCountdown(state);
   renderPhonePreferredActivationOptions(state);
+}
+
+function applyFreeReusablePhoneMutationResult(refreshedState = {}, mutationResult = {}, options = {}) {
+  const { clear = false } = options;
+  const explicitActivation = clear
+    ? null
+    : (
+      mutationResult?.freeReusablePhoneActivation
+      || mutationResult?.state?.freeReusablePhoneActivation
+      || null
+    );
+  const statePatch = {
+    ...(refreshedState || {}),
+    ...(mutationResult?.state || {}),
+    ...(clear || explicitActivation
+      ? { freeReusablePhoneActivation: explicitActivation }
+      : {}),
+  };
+  syncLatestState(statePatch);
+  updateHeroSmsRuntimeDisplay(latestState || statePatch);
+}
+
+async function refreshFreeReusablePhoneStateFallback(mutationResult = {}, options = {}) {
+  if (mutationResult?.state || mutationResult?.freeReusablePhoneActivation || options.clear) {
+    applyFreeReusablePhoneMutationResult(latestState, mutationResult, options);
+    return;
+  }
+  try {
+    const refreshedState = await chrome.runtime.sendMessage({ type: 'GET_STATE', source: 'sidepanel' });
+    applyFreeReusablePhoneMutationResult(refreshedState || latestState, mutationResult, options);
+  } catch (error) {
+    console.warn('Failed to refresh free reusable phone state:', error);
+    applyFreeReusablePhoneMutationResult(latestState, mutationResult, options);
+  }
 }
 
 async function loadHeroSmsCountries() {
@@ -4914,16 +5908,14 @@ async function loadHeroSmsCountries() {
     return;
   }
 
+  const provider = getSelectedPhoneSmsProvider();
   const previousSelectionOrder = [...heroSmsCountrySelectionOrder];
   const previousSelectedIds = previousSelectionOrder.length
     ? previousSelectionOrder
     : Array.from(countrySelect.options)
         .filter((option) => option.selected)
-        .map((option) => {
-          const parsedId = Math.floor(Number(option.value));
-          return Number.isFinite(parsedId) && parsedId > 0 ? parsedId : 0;
-        })
-        .filter((id) => id > 0);
+        .map((option) => normalizePhoneSmsCountryId(option.value, provider))
+        .filter(Boolean);
 
   const applyOptions = (optionItems = [], selectEl) => {
     if (!selectEl) {
@@ -4938,7 +5930,63 @@ async function loadHeroSmsCountries() {
     });
   };
 
-  try {
+  if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch('https://5sim.net/v1/guest/countries', {
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const countriesPayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+      const optionItems = Object.entries(countriesPayload)
+        .map(([slug, entry]) => {
+          const id = normalizeFiveSimCountryId(slug, '');
+          const label = formatFiveSimCountryDisplayLabel(id, entry?.text_en || slug, slug);
+          return {
+            id,
+            label,
+            searchText: [
+              slug,
+              label,
+              entry?.text_en,
+              entry?.text_ru,
+              Object.keys(entry?.iso || {}).join(' '),
+              Object.keys(entry?.prefix || {}).join(' '),
+            ].filter(Boolean).join(' '),
+          };
+        })
+        .filter((entry) => entry.id)
+        .sort((left, right) => String(left.label || '').localeCompare(String(right.label || '')));
+      if (!optionItems.length) {
+        throw new Error('empty country list');
+      }
+      heroSmsCountrySearchTextById.clear();
+      optionItems.forEach((entry) => heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText));
+      applyOptions(optionItems, selectHeroSmsCountry);
+      applyOptions(optionItems, selectHeroSmsCountryFallback);
+    } catch (error) {
+      console.warn('Failed to load 5sim countries:', error);
+      const fallbackItems = FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.map((item) => ({
+        id: item.id,
+        label: formatFiveSimCountryDisplayLabel(item.id, item.eng),
+        searchText: item.searchText,
+      }));
+      applyOptions(fallbackItems, selectHeroSmsCountry);
+      applyOptions(fallbackItems, selectHeroSmsCountryFallback);
+      heroSmsCountrySearchTextById.clear();
+      fallbackItems.forEach((entry) => heroSmsCountrySearchTextById.set(String(entry.id), entry.searchText));
+      if (typeof showToast === 'function') {
+        showToast(`5sim 国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
+      }
+    }
+  } else try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     const response = await fetch('https://hero-sms.com/stubs/handler_api.php?action=getCountries', {
@@ -5009,7 +6057,7 @@ async function loadHeroSmsCountries() {
   const normalizedSelectedIds = previousSelectedIds
     .map((id) => String(id))
     .filter((id) => availableIds.has(id))
-    .map((id) => Number(id));
+    .map((id) => normalizePhoneSmsCountryId(id, provider));
   heroSmsCountrySelectionOrder = normalizedSelectedIds;
   const selectedSet = new Set(normalizedSelectedIds.map((id) => String(id)));
   Array.from(countrySelect.options).forEach((option) => {
@@ -5169,60 +6217,38 @@ function renderFiveSimCountryChoiceButtons() {
   }
 
   options.forEach((option) => {
-    const countryCode = normalizeFiveSimCountryCode(option.value, '');
-    if (!countryCode) {
+    const countryId = normalizeFiveSimCountryId(option.value, '');
+    if (!countryId) {
       return;
     }
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'header-dropdown-item hero-sms-country-menu-item';
-    const active = selectedSet.has(countryCode);
-    const orderIndex = active ? selectedOrder.indexOf(countryCode) + 1 : 0;
-    const label = String(option.textContent || '').trim() || countryCode;
-    item.classList.toggle('is-active', active);
-    const labelText = document.createElement('span');
-    labelText.className = 'hero-sms-country-menu-item-label';
-    labelText.textContent = label;
-    const badge = document.createElement('span');
-    badge.className = 'hero-sms-country-menu-item-badge';
-    badge.textContent = active ? `✓ ${orderIndex}` : '';
-    item.appendChild(labelText);
-    item.appendChild(badge);
-    item.dataset.searchText = `${label} ${countryCode} ${fiveSimCountrySearchTextByCode.get(countryCode) || ''}`;
-    item.addEventListener('click', () => {
-      option.selected = !option.selected;
-      syncFiveSimCountrySelectionOrderFromSelect({
-        enforceMax: true,
-        ensureDefault: false,
-        showLimitToast: true,
-      });
-      markSettingsDirty(true);
-      saveSettings({ silent: true }).catch(() => { });
+    item.className = 'hero-sms-country-menu-item';
+    item.dataset.countryId = countryId;
+    item.dataset.searchText = fiveSimCountrySearchTextByCode.get(countryId)
+      || `${countryId} ${option.textContent || ''}`;
+    const selected = selectedSet.has(countryId);
+    item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    item.textContent = option.textContent || countryId;
+    item.addEventListener('click', (event) => {
+      event.preventDefault();
+      toggleFiveSimCountryInOrder(countryId);
     });
     fiveSimCountryMenu.appendChild(item);
   });
-
   applyFiveSimCountryMenuFilter(fiveSimCountryMenuSearchKeyword);
-  updateFiveSimCountryMenuSummary(
-    selectedOrder.map((code) => ({
-      id: code,
-      code,
-      label: getFiveSimCountryLabelByCode(code),
-    }))
-  );
 }
 
 function syncFiveSimCountrySelectionOrderFromSelect(options = {}) {
-  const countrySelect = selectFiveSimCountry;
   const selectionLimit = Math.max(1, Math.floor(Number(options.maxSelection) || HERO_SMS_COUNTRY_SELECTION_MAX));
   const enforceMax = options.enforceMax !== false;
   const ensureDefault = options.ensureDefault !== false;
   const showLimitToast = Boolean(options.showLimitToast);
-
+  const countrySelect = selectFiveSimCountry;
   if (!countrySelect) {
     fiveSimCountrySelectionOrder = [];
     renderFiveSimCountryFallbackOrder([]);
-    renderFiveSimCountryChoiceButtons();
+    updateFiveSimCountryMenuSummary([]);
     return [];
   }
 
@@ -5231,7 +6257,6 @@ function syncFiveSimCountrySelectionOrderFromSelect(options = {}) {
     .map((option) => normalizeFiveSimCountryCode(option.value, ''))
     .filter(Boolean);
   const selectedSet = new Set(selectedCodes);
-
   let nextOrder = fiveSimCountrySelectionOrder.filter((code) => selectedSet.has(code));
   selectedCodes.forEach((code) => {
     if (!nextOrder.includes(code)) {
@@ -5240,15 +6265,13 @@ function syncFiveSimCountrySelectionOrderFromSelect(options = {}) {
   });
 
   if (ensureDefault && !nextOrder.length) {
-    const defaultCode = normalizeFiveSimCountryCode(countrySelect.value || DEFAULT_FIVE_SIM_COUNTRY_ORDER[0], '');
-    nextOrder = [defaultCode];
+    nextOrder = [normalizeFiveSimCountryCode(countrySelect.value || DEFAULT_FIVE_SIM_COUNTRY_ID)];
   }
-
   if (enforceMax && nextOrder.length > selectionLimit) {
     const droppedCount = nextOrder.length - selectionLimit;
     nextOrder = nextOrder.slice(0, selectionLimit);
     if (showLimitToast && droppedCount > 0 && typeof showToast === 'function') {
-      showToast(`接码国家最多选择 ${selectionLimit} 个，已保留前 ${selectionLimit} 个。`, 'warn', 2200);
+      showToast(`5sim 国家最多选择 ${selectionLimit} 个，已保留前 ${selectionLimit} 个。`, 'warn', 2200);
     }
   }
 
@@ -5256,120 +6279,103 @@ function syncFiveSimCountrySelectionOrderFromSelect(options = {}) {
   Array.from(countrySelect.options || []).forEach((option) => {
     option.selected = nextOrderSet.has(normalizeFiveSimCountryCode(option.value, ''));
   });
-
-  fiveSimCountrySelectionOrder = nextOrder;
+  fiveSimCountrySelectionOrder = [...nextOrder];
   const selectedCountries = fiveSimCountrySelectionOrder.map((code) => ({
     id: code,
     code,
-    label: getFiveSimCountryLabelByCode(code),
+    label: getFiveSimCountryOptionLabel(code),
   }));
   renderFiveSimCountryFallbackOrder(selectedCountries);
+  updateFiveSimCountryMenuSummary(selectedCountries);
   renderFiveSimCountryChoiceButtons();
   return selectedCountries;
 }
 
 function applyFiveSimCountrySelection(countries = [], options = {}) {
-  const includePrimary = Boolean(options.includePrimary);
-  const sourceCountries = includePrimary
-    ? countries
-    : normalizeFiveSimCountryFallbackList(countries);
-  const normalized = normalizeFiveSimCountryFallbackList(sourceCountries)
-    .slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
+  const normalized = normalizeFiveSimCountryFallbackList(countries).slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
   const selectedCodes = normalized
     .map((entry) => normalizeFiveSimCountryCode(entry.code || entry.id, ''))
     .filter(Boolean);
-
+  fiveSimCountrySelectionOrder = [...selectedCodes];
   if (selectFiveSimCountry) {
     const selectedSet = new Set(selectedCodes);
     Array.from(selectFiveSimCountry.options || []).forEach((option) => {
       option.selected = selectedSet.has(normalizeFiveSimCountryCode(option.value, ''));
     });
   }
-  fiveSimCountrySelectionOrder = [...selectedCodes];
   return syncFiveSimCountrySelectionOrderFromSelect({
+    ensureDefault: options.ensureDefault !== false,
     enforceMax: true,
-    ensureDefault: false,
     showLimitToast: false,
   });
 }
 
-function getSelectedFiveSimCountries() {
-  const selectedCountries = syncFiveSimCountrySelectionOrderFromSelect({
-    enforceMax: true,
-    ensureDefault: false,
-    showLimitToast: false,
-  });
-  return selectedCountries;
-}
-
-function removeHeroSmsCountryFromOrder(countryId) {
-  const countrySelect = selectHeroSmsCountry || selectHeroSmsCountryFallback;
-  const normalizedId = String(Math.floor(Number(countryId)) || '');
-  if (!countrySelect || !normalizedId) {
-    return;
-  }
-  const option = Array.from(countrySelect.options || [])
-    .find((item) => String(item.value || '') === normalizedId);
-  if (!option) {
-    return;
-  }
-  option.selected = false;
-  syncHeroSmsFallbackSelectionOrderFromSelect({
-    enforceMax: true,
-    ensureDefault: false,
-    showLimitToast: false,
-  });
-  updateHeroSmsPlatformDisplay();
-  markSettingsDirty(true);
-  saveSettings({ silent: true }).catch(() => { });
-}
-
-function removeFiveSimCountryFromOrder(countryCode = '') {
-  if (!selectFiveSimCountry) {
-    return;
-  }
-  const normalizedCode = normalizeFiveSimCountryCode(countryCode, '');
-  if (!normalizedCode) {
-    return;
+function toggleFiveSimCountryInOrder(code = '') {
+  const normalizedCode = normalizeFiveSimCountryCode(code, '');
+  if (!normalizedCode || !selectFiveSimCountry) {
+    return [];
   }
   const option = Array.from(selectFiveSimCountry.options || [])
-    .find((item) => normalizeFiveSimCountryCode(item.value, '') === normalizedCode);
-  if (!option) {
-    return;
+    .find((entry) => normalizeFiveSimCountryCode(entry.value, '') === normalizedCode);
+  if (option) {
+    option.selected = !option.selected;
   }
-  option.selected = false;
-  syncFiveSimCountrySelectionOrderFromSelect({
+  const nextOrder = syncFiveSimCountrySelectionOrderFromSelect({
+    enforceMax: true,
+    ensureDefault: false,
+    showLimitToast: true,
+  });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+  return nextOrder;
+}
+
+function removeFiveSimCountryFromOrder(code = '') {
+  const normalizedCode = normalizeFiveSimCountryCode(code, '');
+  fiveSimCountrySelectionOrder = fiveSimCountrySelectionOrder.filter((entry) => entry !== normalizedCode);
+  if (selectFiveSimCountry) {
+    Array.from(selectFiveSimCountry.options || []).forEach((option) => {
+      if (normalizeFiveSimCountryCode(option.value, '') === normalizedCode) {
+        option.selected = false;
+      }
+    });
+  }
+  const nextOrder = syncFiveSimCountrySelectionOrderFromSelect({
     enforceMax: true,
     ensureDefault: false,
     showLimitToast: false,
   });
-  updateHeroSmsPlatformDisplay();
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+  return nextOrder;
 }
 
 async function loadFiveSimCountries() {
   if (!selectFiveSimCountry) {
     return;
   }
-
-  const previousSelectionOrder = [...fiveSimCountrySelectionOrder];
-  const previousSelectedCodes = previousSelectionOrder.length
-    ? previousSelectionOrder
-    : Array.from(selectFiveSimCountry.options || [])
-      .filter((option) => option.selected)
-      .map((option) => normalizeFiveSimCountryCode(option.value, ''))
-      .filter(Boolean);
-
-  const applyOptions = (optionItems = []) => {
+  const previousOrder = [...fiveSimCountrySelectionOrder];
+  const applyOptions = (items = []) => {
     selectFiveSimCountry.innerHTML = '';
-    optionItems.forEach((entry) => {
+    fiveSimCountrySearchTextByCode.clear();
+    items.forEach((entry) => {
+      const code = normalizeFiveSimCountryCode(entry.code || entry.id, '');
+      if (!code) {
+        return;
+      }
       const option = document.createElement('option');
-      option.value = String(entry.code);
-      option.textContent = entry.label;
+      option.value = code;
+      option.textContent = entry.label || getFiveSimCountryOptionLabel(code) || code;
       selectFiveSimCountry.appendChild(option);
+      fiveSimCountrySearchTextByCode.set(code, entry.searchText || `${option.textContent} ${code}`);
     });
   };
+  const fallbackItems = FIVE_SIM_SUPPORTED_COUNTRY_ITEMS.map((item) => ({
+    id: item.id,
+    code: item.id,
+    label: formatFiveSimCountryDisplayLabel(item.id, item.eng, item.id),
+    searchText: item.searchText,
+  }));
 
   try {
     const controller = new AbortController();
@@ -5377,82 +6383,23 @@ async function loadFiveSimCountries() {
     const response = await fetch('https://5sim.net/v1/guest/countries', {
       signal: controller.signal,
       cache: 'no-store',
+      headers: { Accept: 'application/json' },
     });
     clearTimeout(timeoutId);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
     const payload = await response.json();
-    const optionItems = parseFiveSimCountriesPayload(payload);
-    if (!optionItems.length) {
-      throw new Error('empty country list');
-    }
-    fiveSimCountrySearchTextByCode.clear();
-    optionItems.forEach((entry) => {
-      fiveSimCountrySearchTextByCode.set(String(entry.code), String(entry.searchText || '').trim());
-    });
-    applyOptions(optionItems);
+    const items = parseFiveSimCountriesPayload(payload);
+    applyOptions(items.length ? items : fallbackItems);
   } catch (error) {
     console.warn('Failed to load 5sim countries:', error);
-    const fallbackItems = FIVE_SIM_FALLBACK_COUNTRY_ITEMS.map((item) => {
-      const code = normalizeFiveSimCountryCode(item.code, '');
-      const option = {
-        code,
-        isoCode: String(item.iso || '').trim().toUpperCase(),
-        text_en: String(item.text_en || code).trim(),
-      };
-      const label = buildFiveSimCountryDisplayLabel(option);
-      return {
-        id: code,
-        code,
-        isoCode: option.isoCode,
-        label,
-        searchText: buildFiveSimCountrySearchText(option, label, code),
-      };
-    }).filter((entry) => entry.code);
-    if (!fallbackItems.some((entry) => entry.code === 'thailand')) {
-      fallbackItems.unshift({
-        id: 'thailand',
-        code: 'thailand',
-        isoCode: 'TH',
-        label: '泰国 (Thailand) [TH]',
-        searchText: '泰国 Thailand TH thailand',
-      });
-    }
-    fiveSimCountrySearchTextByCode.clear();
-    fallbackItems.forEach((entry) => {
-      fiveSimCountrySearchTextByCode.set(String(entry.code), String(entry.searchText || '').trim());
-    });
     applyOptions(fallbackItems);
-    if (typeof showToast === 'function') {
-      showToast(`5sim 国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
-    }
   }
 
-  const availableCodes = new Set(Array.from(selectFiveSimCountry.options || []).map((option) => String(option.value || '').trim()));
-  const normalizedSelectedCodes = previousSelectedCodes
-    .map((code) => normalizeFiveSimCountryCode(code, ''))
-    .filter((code) => availableCodes.has(code));
-  fiveSimCountrySelectionOrder = normalizedSelectedCodes;
-  const selectedSet = new Set(normalizedSelectedCodes);
-  Array.from(selectFiveSimCountry.options || []).forEach((option) => {
-    option.selected = selectedSet.has(normalizeFiveSimCountryCode(option.value, ''));
-  });
-  syncFiveSimCountrySelectionOrderFromSelect({
-    enforceMax: true,
+  applyFiveSimCountrySelection(previousOrder.length ? previousOrder : latestState?.fiveSimCountryOrder || [], {
     ensureDefault: false,
-    showLimitToast: false,
   });
-}
-
-function getNexSmsCountryLabelById(countryId) {
-  const normalizedId = normalizeNexSmsCountryIdValue(countryId, -1);
-  if (normalizedId < 0 || !selectNexSmsCountry) {
-    return '';
-  }
-  const matched = Array.from(selectNexSmsCountry.options || [])
-    .find((option) => normalizeNexSmsCountryIdValue(option.value, -1) === normalizedId);
-  return normalizeNexSmsCountryLabel(matched?.textContent || '', `Country #${normalizedId}`);
 }
 
 function renderNexSmsCountryFallbackOrder(countries = []) {
@@ -5531,7 +6478,6 @@ function applyNexSmsCountryMenuFilter(keyword = '') {
       visibleCount += 1;
     }
   });
-
   let empty = nexSmsCountryMenu.querySelector('.hero-sms-country-menu-empty');
   if (visibleCount === 0) {
     if (!empty) {
@@ -5550,12 +6496,9 @@ function updateNexSmsCountryMenuSummary(selectedCountries = []) {
     return;
   }
   const normalized = normalizeNexSmsCountryFallbackList(selectedCountries);
-  if (!normalized.length) {
-    btnNexSmsCountryMenu.textContent = `未选择 (0/${HERO_SMS_COUNTRY_SELECTION_MAX})`;
-    return;
-  }
-  const labels = normalized.map((country) => country.label);
-  btnNexSmsCountryMenu.textContent = `${labels.join(' / ')} (${normalized.length}/${HERO_SMS_COUNTRY_SELECTION_MAX})`;
+  btnNexSmsCountryMenu.textContent = normalized.length
+    ? `${normalized.map((country) => country.label).join(' / ')} (${normalized.length}/${HERO_SMS_COUNTRY_SELECTION_MAX})`
+    : `未选择 (0/${HERO_SMS_COUNTRY_SELECTION_MAX})`;
 }
 
 function renderNexSmsCountryChoiceButtons() {
@@ -5564,15 +6507,14 @@ function renderNexSmsCountryChoiceButtons() {
   }
   const options = Array.from(selectNexSmsCountry.options || []);
   const selectedOrder = [...nexSmsCountrySelectionOrder];
-  const selectedSet = new Set(selectedOrder.map((id) => String(id)));
-
+  const selectedSet = new Set(selectedOrder);
   nexSmsCountryMenu.innerHTML = '';
   const searchWrap = document.createElement('div');
   searchWrap.className = 'hero-sms-country-menu-search';
   const searchInput = document.createElement('input');
   searchInput.type = 'search';
   searchInput.className = 'data-input mono hero-sms-country-menu-search-input';
-  searchInput.placeholder = '搜索国家（名称/ID）';
+  searchInput.placeholder = '搜索国家 ID';
   searchInput.value = nexSmsCountryMenuSearchKeyword;
   searchInput.addEventListener('input', () => {
     nexSmsCountryMenuSearchKeyword = String(searchInput.value || '').trim();
@@ -5597,55 +6539,32 @@ function renderNexSmsCountryChoiceButtons() {
     }
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'header-dropdown-item hero-sms-country-menu-item';
-    const active = selectedSet.has(String(countryId));
-    const orderIndex = active
-      ? selectedOrder.findIndex((id) => String(id) === String(countryId)) + 1
-      : 0;
-    const label = String(option.textContent || '').trim() || `Country #${countryId}`;
-    item.classList.toggle('is-active', active);
-    const labelText = document.createElement('span');
-    labelText.className = 'hero-sms-country-menu-item-label';
-    labelText.textContent = label;
-    const badge = document.createElement('span');
-    badge.className = 'hero-sms-country-menu-item-badge';
-    badge.textContent = active ? `✓ ${orderIndex}` : '';
-    item.appendChild(labelText);
-    item.appendChild(badge);
-    item.dataset.searchText = `${label} ${countryId} ${nexSmsCountrySearchTextById.get(String(countryId)) || ''}`;
-    item.addEventListener('click', () => {
-      option.selected = !option.selected;
-      syncNexSmsCountrySelectionOrderFromSelect({
-        enforceMax: true,
-        ensureDefault: false,
-        showLimitToast: true,
-      });
-      markSettingsDirty(true);
-      saveSettings({ silent: true }).catch(() => { });
+    item.className = 'hero-sms-country-menu-item';
+    item.dataset.countryId = String(countryId);
+    item.dataset.searchText = nexSmsCountrySearchTextById.get(countryId)
+      || `${countryId} ${option.textContent || ''}`;
+    const selected = selectedSet.has(countryId);
+    item.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    item.textContent = option.textContent || `Country #${countryId}`;
+    item.addEventListener('click', (event) => {
+      event.preventDefault();
+      toggleNexSmsCountryInOrder(countryId);
     });
     nexSmsCountryMenu.appendChild(item);
   });
-
   applyNexSmsCountryMenuFilter(nexSmsCountryMenuSearchKeyword);
-  updateNexSmsCountryMenuSummary(
-    selectedOrder.map((id) => ({
-      id,
-      label: getNexSmsCountryLabelById(id),
-    }))
-  );
 }
 
 function syncNexSmsCountrySelectionOrderFromSelect(options = {}) {
-  const countrySelect = selectNexSmsCountry;
   const selectionLimit = Math.max(1, Math.floor(Number(options.maxSelection) || HERO_SMS_COUNTRY_SELECTION_MAX));
   const enforceMax = options.enforceMax !== false;
   const ensureDefault = options.ensureDefault !== false;
   const showLimitToast = Boolean(options.showLimitToast);
-
+  const countrySelect = selectNexSmsCountry;
   if (!countrySelect) {
     nexSmsCountrySelectionOrder = [];
     renderNexSmsCountryFallbackOrder([]);
-    renderNexSmsCountryChoiceButtons();
+    updateNexSmsCountryMenuSummary([]);
     return [];
   }
 
@@ -5653,301 +6572,120 @@ function syncNexSmsCountrySelectionOrderFromSelect(options = {}) {
     .filter((option) => option.selected)
     .map((option) => normalizeNexSmsCountryIdValue(option.value, -1))
     .filter((id) => id >= 0);
-  const selectedSet = new Set(selectedIds.map((id) => String(id)));
-
-  let nextOrder = nexSmsCountrySelectionOrder.filter((id) => selectedSet.has(String(id)));
+  const selectedSet = new Set(selectedIds);
+  let nextOrder = nexSmsCountrySelectionOrder.filter((id) => selectedSet.has(id));
   selectedIds.forEach((id) => {
-    if (!nextOrder.some((entry) => String(entry) === String(id))) {
+    if (!nextOrder.includes(id)) {
       nextOrder.push(id);
     }
   });
 
   if (ensureDefault && !nextOrder.length) {
-    const fallbackId = normalizeNexSmsCountryIdValue(countrySelect.value || DEFAULT_NEX_SMS_COUNTRY_ORDER[0], -1);
-    nextOrder = [fallbackId];
+    nextOrder = [normalizeNexSmsCountryIdValue(DEFAULT_NEX_SMS_COUNTRY_ORDER[0], 1)];
   }
-
   if (enforceMax && nextOrder.length > selectionLimit) {
     const droppedCount = nextOrder.length - selectionLimit;
     nextOrder = nextOrder.slice(0, selectionLimit);
     if (showLimitToast && droppedCount > 0 && typeof showToast === 'function') {
-      showToast(`接码国家最多选择 ${selectionLimit} 个，已保留前 ${selectionLimit} 个。`, 'warn', 2200);
+      showToast(`NexSMS 国家最多选择 ${selectionLimit} 个，已保留前 ${selectionLimit} 个。`, 'warn', 2200);
     }
   }
 
-  const nextOrderSet = new Set(nextOrder.map((id) => String(id)));
+  const nextOrderSet = new Set(nextOrder);
   Array.from(countrySelect.options || []).forEach((option) => {
-    option.selected = nextOrderSet.has(String(normalizeNexSmsCountryIdValue(option.value, -1)));
+    option.selected = nextOrderSet.has(normalizeNexSmsCountryIdValue(option.value, -1));
   });
-
-  nexSmsCountrySelectionOrder = nextOrder;
+  nexSmsCountrySelectionOrder = [...nextOrder];
   const selectedCountries = nexSmsCountrySelectionOrder.map((id) => ({
     id,
     label: getNexSmsCountryLabelById(id),
   }));
   renderNexSmsCountryFallbackOrder(selectedCountries);
+  updateNexSmsCountryMenuSummary(selectedCountries);
   renderNexSmsCountryChoiceButtons();
   return selectedCountries;
 }
 
 function applyNexSmsCountrySelection(countries = [], options = {}) {
-  const includePrimary = Boolean(options.includePrimary);
-  const sourceCountries = includePrimary
-    ? countries
-    : normalizeNexSmsCountryFallbackList(countries);
-  const normalized = normalizeNexSmsCountryFallbackList(sourceCountries)
-    .slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
+  const normalized = normalizeNexSmsCountryFallbackList(countries).slice(0, HERO_SMS_COUNTRY_SELECTION_MAX);
   const selectedIds = normalized
     .map((entry) => normalizeNexSmsCountryIdValue(entry.id, -1))
     .filter((id) => id >= 0);
-
+  nexSmsCountrySelectionOrder = [...selectedIds];
   if (selectNexSmsCountry) {
-    const selectedSet = new Set(selectedIds.map((id) => String(id)));
+    const selectedSet = new Set(selectedIds);
     Array.from(selectNexSmsCountry.options || []).forEach((option) => {
-      option.selected = selectedSet.has(String(normalizeNexSmsCountryIdValue(option.value, -1)));
+      option.selected = selectedSet.has(normalizeNexSmsCountryIdValue(option.value, -1));
     });
   }
-  nexSmsCountrySelectionOrder = [...selectedIds];
   return syncNexSmsCountrySelectionOrderFromSelect({
+    ensureDefault: options.ensureDefault !== false,
     enforceMax: true,
-    ensureDefault: false,
     showLimitToast: false,
   });
 }
 
-function getSelectedNexSmsCountries() {
-  return syncNexSmsCountrySelectionOrderFromSelect({
-    enforceMax: true,
-    ensureDefault: false,
-    showLimitToast: false,
-  });
-}
-
-function removeNexSmsCountryFromOrder(countryId) {
-  if (!selectNexSmsCountry) {
-    return;
-  }
-  const normalizedId = normalizeNexSmsCountryIdValue(countryId, -1);
-  if (normalizedId < 0) {
-    return;
+function toggleNexSmsCountryInOrder(id = -1) {
+  const countryId = normalizeNexSmsCountryIdValue(id, -1);
+  if (countryId < 0 || !selectNexSmsCountry) {
+    return [];
   }
   const option = Array.from(selectNexSmsCountry.options || [])
-    .find((item) => normalizeNexSmsCountryIdValue(item.value, -1) === normalizedId);
-  if (!option) {
-    return;
+    .find((entry) => normalizeNexSmsCountryIdValue(entry.value, -1) === countryId);
+  if (option) {
+    option.selected = !option.selected;
   }
-  option.selected = false;
-  syncNexSmsCountrySelectionOrderFromSelect({
+  const nextOrder = syncNexSmsCountrySelectionOrderFromSelect({
+    enforceMax: true,
+    ensureDefault: false,
+    showLimitToast: true,
+  });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+  return nextOrder;
+}
+
+function removeNexSmsCountryFromOrder(id = -1) {
+  const countryId = normalizeNexSmsCountryIdValue(id, -1);
+  nexSmsCountrySelectionOrder = nexSmsCountrySelectionOrder.filter((entry) => entry !== countryId);
+  if (selectNexSmsCountry) {
+    Array.from(selectNexSmsCountry.options || []).forEach((option) => {
+      if (normalizeNexSmsCountryIdValue(option.value, -1) === countryId) {
+        option.selected = false;
+      }
+    });
+  }
+  const nextOrder = syncNexSmsCountrySelectionOrderFromSelect({
     enforceMax: true,
     ensureDefault: false,
     showLimitToast: false,
   });
-  updateHeroSmsPlatformDisplay();
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+  return nextOrder;
 }
 
-async function loadNexSmsCountries(options = {}) {
-  const silent = Boolean(options?.silent);
+async function loadNexSmsCountries() {
   if (!selectNexSmsCountry) {
     return;
   }
-  const previousSelectionOrder = [...nexSmsCountrySelectionOrder];
-  const previousSelectedIds = previousSelectionOrder.length
-    ? previousSelectionOrder
-    : Array.from(selectNexSmsCountry.options || [])
-      .filter((option) => option.selected)
-      .map((option) => normalizeNexSmsCountryIdValue(option.value, -1))
-      .filter((id) => id >= 0);
-
-  const applyOptions = (optionItems = []) => {
-    selectNexSmsCountry.innerHTML = '';
-    optionItems.forEach((entry) => {
-      const option = document.createElement('option');
-      option.value = String(entry.id);
-      option.textContent = entry.label;
-      selectNexSmsCountry.appendChild(option);
-    });
-  };
-
-  try {
-    const apiKey = String(inputNexSmsApiKey?.value || latestState?.nexSmsApiKey || '').trim();
-    const url = new URL('/api/countries', 'https://api.nexsms.net');
-    if (apiKey) {
-      url.searchParams.set('apiKey', apiKey);
+  const previousOrder = [...nexSmsCountrySelectionOrder];
+  selectNexSmsCountry.innerHTML = '';
+  nexSmsCountrySearchTextById.clear();
+  NEX_SMS_FALLBACK_COUNTRY_ITEMS.forEach((entry) => {
+    const id = normalizeNexSmsCountryIdValue(entry.id, -1);
+    if (id < 0) {
+      return;
     }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch(url.toString(), {
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    clearTimeout(timeoutId);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const payload = await response.json();
-    const countries = Array.isArray(payload?.data) ? payload.data : [];
-    const optionItems = countries
-      .map((item) => {
-        const id = normalizeNexSmsCountryIdValue(item?.id, -1);
-        const name = String(item?.name || '').trim();
-        if (id < 0 || !name) {
-          return null;
-        }
-        const label = `${name} (#${id})`;
-        return {
-          id,
-          label,
-          searchText: `${name} ${id}`.toLowerCase(),
-        };
-      })
-      .filter(Boolean)
-      .sort((left, right) => left.id - right.id);
-    if (!optionItems.length) {
-      throw new Error('empty country list');
-    }
-    nexSmsCountrySearchTextById.clear();
-    optionItems.forEach((entry) => {
-      nexSmsCountrySearchTextById.set(String(entry.id), String(entry.searchText || '').trim());
-    });
-    applyOptions(optionItems);
-  } catch (error) {
-    console.warn('Failed to load NexSMS countries:', error);
-    const fallbackItems = NEX_SMS_FALLBACK_COUNTRY_ITEMS
-      .map((item) => {
-        const id = normalizeNexSmsCountryIdValue(item.id, -1);
-        const name = String(item.name || '').trim();
-        if (id < 0 || !name) {
-          return null;
-        }
-        return {
-          id,
-          label: `${name} (#${id})`,
-          searchText: `${name} ${id}`.toLowerCase(),
-        };
-      })
-      .filter(Boolean);
-    if (!fallbackItems.some((entry) => entry.id === DEFAULT_NEX_SMS_COUNTRY_ORDER[0])) {
-      fallbackItems.unshift({
-        id: DEFAULT_NEX_SMS_COUNTRY_ORDER[0],
-        label: `Country #${DEFAULT_NEX_SMS_COUNTRY_ORDER[0]}`,
-        searchText: `country ${DEFAULT_NEX_SMS_COUNTRY_ORDER[0]}`,
-      });
-    }
-    nexSmsCountrySearchTextById.clear();
-    fallbackItems.forEach((entry) => {
-      nexSmsCountrySearchTextById.set(String(entry.id), String(entry.searchText || '').trim());
-    });
-    applyOptions(fallbackItems);
-    if (!silent && typeof showToast === 'function') {
-      showToast(`NexSMS 国家列表加载失败：${normalizeHeroSmsFetchErrorMessage(error)}（已切换为内置国家列表）`, 'warn', 2800);
-    }
-  }
-
-  const availableIds = new Set(Array.from(selectNexSmsCountry.options || []).map((option) => String(option.value || '').trim()));
-  const normalizedSelectedIds = previousSelectedIds
-    .map((id) => String(normalizeNexSmsCountryIdValue(id, -1)))
-    .filter((id) => availableIds.has(id))
-    .map((id) => Number(id));
-  nexSmsCountrySelectionOrder = normalizedSelectedIds;
-  const selectedSet = new Set(normalizedSelectedIds.map((id) => String(id)));
-  Array.from(selectNexSmsCountry.options || []).forEach((option) => {
-    option.selected = selectedSet.has(String(normalizeNexSmsCountryIdValue(option.value, -1)));
+    const option = document.createElement('option');
+    option.value = String(id);
+    option.textContent = entry.label || `Country #${id}`;
+    selectNexSmsCountry.appendChild(option);
+    nexSmsCountrySearchTextById.set(id, entry.searchText || `${option.textContent} ${id}`);
   });
-  syncNexSmsCountrySelectionOrderFromSelect({
-    enforceMax: true,
+  applyNexSmsCountrySelection(previousOrder.length ? previousOrder : latestState?.nexSmsCountryOrder || [], {
     ensureDefault: false,
-    showLimitToast: false,
   });
-}
-
-async function previewNexSmsPriceTiers() {
-  if (!displayHeroSmsPriceTiers) {
-    return;
-  }
-  const countryIds = (
-    typeof getSelectedNexSmsCountries === 'function'
-      ? getSelectedNexSmsCountries()
-      : normalizeNexSmsCountryFallbackList(
-        Array.isArray(latestState?.nexSmsCountryOrder) ? latestState.nexSmsCountryOrder : []
-      )
-  )
-    .map((country) => normalizeNexSmsCountryIdValue(country.id, -1))
-    .filter((id) => id >= 0);
-  const serviceCode = normalizeNexSmsServiceCodeValue(
-    inputNexSmsServiceCode?.value || latestState?.nexSmsServiceCode || DEFAULT_NEX_SMS_SERVICE_CODE
-  );
-  const maxPriceText = normalizeHeroSmsMaxPriceValue(inputHeroSmsMaxPrice?.value || '');
-  const maxPrice = maxPriceText ? Number(maxPriceText) : null;
-  const apiKey = String(inputNexSmsApiKey?.value || '').trim();
-
-  displayHeroSmsPriceTiers.textContent = '查询中...';
-  if (rowHeroSmsPriceTiers) {
-    rowHeroSmsPriceTiers.style.display = '';
-  }
-  if (!apiKey) {
-    displayHeroSmsPriceTiers.textContent = '请先填写 NexSMS API Key，再查询价格';
-    return;
-  }
-  if (!countryIds.length) {
-    displayHeroSmsPriceTiers.textContent = '请先选择至少 1 个国家，再查询价格';
-    return;
-  }
-
-  const previews = [];
-  for (const countryId of countryIds) {
-    const countryLabel = getNexSmsCountryLabelById(countryId) || `Country #${countryId}`;
-    try {
-      const url = new URL('/api/getCountryByService', 'https://api.nexsms.net');
-      url.searchParams.set('apiKey', apiKey);
-      url.searchParams.set('serviceCode', serviceCode);
-      url.searchParams.set('countryId', String(countryId));
-      const response = await fetch(url.toString(), { cache: 'no-store' });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || Number(payload?.code) !== 0) {
-        previews.push(`${countryLabel}: ${describeNexSmsPreviewPayload(payload) || `HTTP ${response.status}`}`);
-        continue;
-      }
-      const data = payload?.data || {};
-      const tierEntries = data?.priceMap && typeof data.priceMap === 'object'
-        ? Object.entries(data.priceMap)
-          .map(([price, count]) => {
-            const numericPrice = Number(price);
-            const numericCount = Number(count);
-            if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
-              return null;
-            }
-            return {
-              price: Math.round(numericPrice * 10000) / 10000,
-              count: Number.isFinite(numericCount) ? Math.max(0, Math.floor(numericCount)) : null,
-            };
-          })
-          .filter(Boolean)
-        : [];
-      const availablePrices = tierEntries
-        .filter((entry) => entry.count === null || entry.count > 0)
-        .map((entry) => entry.price);
-      const uniqueSorted = Array.from(new Set(availablePrices)).sort((left, right) => left - right);
-      const fallbackMin = Number(data?.minPrice);
-      const lowest = uniqueSorted.length
-        ? uniqueSorted[0]
-        : (Number.isFinite(fallbackMin) && fallbackMin > 0 ? Math.round(fallbackMin * 10000) / 10000 : null);
-      if (!Number.isFinite(lowest)) {
-        previews.push(`${countryLabel}: 暂无可用号源`);
-        continue;
-      }
-      const tierText = formatPriceTiersForPreview(tierEntries, { maxPrice });
-      if (Number.isFinite(maxPrice) && maxPrice > 0 && lowest > maxPrice) {
-        previews.push(`${countryLabel}: 最低 ${lowest}（高于上限 ${maxPrice}）${tierText ? `；档位：${tierText}` : ''}`);
-      } else {
-        previews.push(`${countryLabel}: 最低 ${lowest}${tierText ? `；档位：${tierText}` : ''}`);
-      }
-    } catch (error) {
-      previews.push(`${countryLabel}: 查询失败（${normalizeHeroSmsFetchErrorMessage(error)}）`);
-    }
-  }
-  displayHeroSmsPriceTiers.textContent = previews.join('\n') || '未获取';
 }
 
 async function buildNexSmsPricePreviewLines(options = {}) {
@@ -6486,6 +7224,60 @@ async function previewHeroSmsPriceTiers() {
   displayHeroSmsPriceTiers.textContent = previews.join('\n') || '未获取';
 }
 
+async function previewPhoneSmsBalance() {
+  if (!displayPhoneSmsBalance) {
+    return;
+  }
+  const provider = getSelectedPhoneSmsProvider();
+  const apiKey = String(inputHeroSmsApiKey?.value || '').trim();
+  if (!apiKey) {
+    displayPhoneSmsBalance.textContent = '请先填写接码 API Key';
+    if (rowHeroSmsPriceTiers) rowHeroSmsPriceTiers.style.display = '';
+    return;
+  }
+  displayPhoneSmsBalance.textContent = '余额查询中...';
+  if (rowHeroSmsPriceTiers) rowHeroSmsPriceTiers.style.display = '';
+  try {
+    const url = provider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? new URL('https://5sim.net/v1/user/profile')
+      : new URL('https://hero-sms.com/stubs/handler_api.php');
+    const requestOptions = {};
+    if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+      requestOptions.headers = {
+        Accept: 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      };
+    } else {
+      url.searchParams.set('action', 'getBalance');
+      url.searchParams.set('api_key', apiKey);
+    }
+    const response = await fetch(url.toString(), requestOptions);
+    const rawText = await response.text();
+    let payload = rawText;
+    try {
+      payload = rawText ? JSON.parse(rawText) : '';
+    } catch {
+      payload = rawText;
+    }
+    if (!response.ok) {
+      displayPhoneSmsBalance.textContent = `余额查询失败：${summarizeHeroSmsPreviewError(payload, response.status)}`;
+      return;
+    }
+    if (provider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+      const balance = Number(payload?.balance);
+      const frozen = Number(payload?.frozen_balance);
+      displayPhoneSmsBalance.textContent = Number.isFinite(balance)
+        ? `5sim 余额 ${formatHeroSmsPriceForPreview(balance) || balance}${Number.isFinite(frozen) ? `，冻结 ${formatHeroSmsPriceForPreview(frozen) || frozen}` : ''}`
+        : `5sim 余额：${describeHeroSmsPreviewPayload(payload) || '未知'}`;
+    } else {
+      const text = describeHeroSmsPreviewPayload(payload).replace(/^ACCESS_BALANCE:/i, '').trim();
+      displayPhoneSmsBalance.textContent = `HeroSMS 余额 ${text || '未知'}`;
+    }
+  } catch (error) {
+    displayPhoneSmsBalance.textContent = `余额查询失败：${normalizeHeroSmsFetchErrorMessage(error)}`;
+  }
+}
+
 function getSelectedLocalCpaStep9Mode() {
   const activeButton = localCpaStep9ModeButtons.find((button) => button.classList.contains('is-active'));
   return normalizeLocalCpaStep9Mode(activeButton?.dataset.localCpaStep9Mode);
@@ -6538,6 +7330,114 @@ function updateAccountRunHistorySettingsUI() {
   rowAccountRunHistoryHelperBaseUrl.style.display = 'none';
 }
 
+function normalizeSignupMethod(value = '') {
+  return String(value || '').trim().toLowerCase() === 'phone'
+    ? 'phone'
+    : 'email';
+}
+
+function normalizePanelMode(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'sub2api' || normalized === 'codex2api') {
+    return normalized;
+  }
+  return 'cpa';
+}
+
+function getSelectedPanelMode() {
+  const selectedValue = typeof selectPanelMode !== 'undefined' && selectPanelMode
+    ? selectPanelMode.value
+    : (typeof latestState !== 'undefined' ? latestState?.panelMode : '');
+  return normalizePanelMode(selectedValue || 'cpa');
+}
+
+function getSelectedSignupMethod() {
+  const activeButton = signupMethodButtons.find((button) => button.classList.contains('is-active'));
+  return normalizeSignupMethod(activeButton?.dataset.signupMethod || latestState?.signupMethod || DEFAULT_SIGNUP_METHOD);
+}
+
+function setSignupMethod(method) {
+  const resolvedMethod = normalizeSignupMethod(method);
+  signupMethodButtons.forEach((button) => {
+    const active = normalizeSignupMethod(button.dataset.signupMethod) === resolvedMethod;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  syncLatestState({ signupMethod: resolvedMethod });
+  return resolvedMethod;
+}
+
+function canSelectPhoneSignupMethod() {
+  const phoneEnabled = Boolean(inputPhoneVerificationEnabled?.checked);
+  const plusModeEnabled = typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
+    ? Boolean(inputPlusModeEnabled.checked)
+    : Boolean(latestState?.plusModeEnabled);
+  const contributionModeEnabled = Boolean(latestState?.contributionMode);
+  return phoneEnabled && !plusModeEnabled && !contributionModeEnabled;
+}
+
+function isSignupMethodSwitchLocked() {
+  return isAutoRunLockedPhase() || isAutoRunPausedPhase() || isAutoRunScheduledPhase();
+}
+
+function updateSignupMethodUI(options = {}) {
+  if (!signupMethodButtons.length) {
+    if (typeof syncSignupPhoneInputFromState === 'function') {
+      syncSignupPhoneInputFromState(latestState);
+    }
+    return;
+  }
+
+  const showSignupMethod = Boolean(inputPhoneVerificationEnabled?.checked);
+  if (rowSignupMethod) {
+    rowSignupMethod.style.display = showSignupMethod ? '' : 'none';
+  }
+
+  let selectedMethod = normalizeSignupMethod(getSelectedSignupMethod());
+  const phoneSelectable = canSelectPhoneSignupMethod();
+  if (!phoneSelectable && selectedMethod === SIGNUP_METHOD_PHONE) {
+    selectedMethod = setSignupMethod(SIGNUP_METHOD_EMAIL);
+    if (options.notify && typeof showToast === 'function') {
+      showToast('已切回邮箱注册', 'info', 1600);
+    }
+  } else {
+    setSignupMethod(selectedMethod);
+  }
+
+  const locked = isSignupMethodSwitchLocked();
+  signupMethodButtons.forEach((button) => {
+    const method = normalizeSignupMethod(button.dataset.signupMethod);
+    const disabled = locked || (method === SIGNUP_METHOD_PHONE && !phoneSelectable);
+    button.disabled = disabled;
+    button.setAttribute('aria-disabled', String(disabled));
+    if (method === SIGNUP_METHOD_PHONE) {
+      if (!Boolean(inputPhoneVerificationEnabled?.checked)) {
+        button.title = '开启接码后可选择手机号注册';
+      } else if (typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled?.checked) {
+        button.title = 'Plus 模式第一版暂不支持手机号注册';
+      } else if (latestState?.contributionMode) {
+        button.title = '贡献模式第一版暂不支持手机号注册';
+      } else if (locked) {
+        button.title = '自动流程运行中不能切换注册方式';
+      } else {
+        button.title = '';
+      }
+    }
+  });
+  syncStepDefinitionsForMode(
+    typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
+      ? Boolean(inputPlusModeEnabled.checked)
+      : Boolean(latestState?.plusModeEnabled),
+    {
+      plusPaymentMethod: getSelectedPlusPaymentMethod(latestState),
+      signupMethod: selectedMethod,
+    }
+  );
+  if (typeof syncSignupPhoneInputFromState === 'function') {
+    syncSignupPhoneInputFromState(latestState);
+  }
+}
+
 function updatePhoneVerificationSettingsUI() {
   const enabled = Boolean(inputPhoneVerificationEnabled?.checked);
   const showSettings = enabled && phoneVerificationSectionExpanded;
@@ -6564,6 +7464,10 @@ function updatePhoneVerificationSettingsUI() {
   if (rowPhoneVerificationEnabled) {
     rowPhoneVerificationEnabled.style.display = '';
   }
+  if (rowHeroSmsPlatform) {
+    rowHeroSmsPlatform.style.display = '';
+  }
+  updateSignupMethodUI();
   if (btnTogglePhoneVerificationSection) {
     btnTogglePhoneVerificationSection.disabled = !enabled;
     btnTogglePhoneVerificationSection.textContent = showSettings ? '收起设置' : '展开设置';
@@ -6576,24 +7480,24 @@ function updatePhoneVerificationSettingsUI() {
     rowPhoneVerificationFold.style.display = showSettings ? '' : 'none';
   }
 
-  if (rowPhoneSmsProvider) {
-    rowPhoneSmsProvider.style.display = showSettings ? '' : 'none';
-  }
-  if (rowPhoneSmsProviderOrder) {
-    rowPhoneSmsProviderOrder.style.display = showSettings ? '' : 'none';
-  }
-  if (rowPhoneSmsProviderOrderActions) {
-    rowPhoneSmsProviderOrderActions.style.display = showSettings ? '' : 'none';
-  }
-  const alwaysRows = [
-    typeof rowHeroSmsPlatform !== 'undefined' ? rowHeroSmsPlatform : null,
+  const phoneVerificationRows = [
+    typeof rowPhoneSmsProvider !== 'undefined' ? rowPhoneSmsProvider : null,
+    typeof rowPhoneSmsProviderOrder !== 'undefined' ? rowPhoneSmsProviderOrder : null,
+    typeof rowPhoneSmsProviderOrderActions !== 'undefined' ? rowPhoneSmsProviderOrderActions : null,
+    typeof rowHeroSmsCountry !== 'undefined' ? rowHeroSmsCountry : null,
+    typeof rowHeroSmsCountryFallback !== 'undefined' ? rowHeroSmsCountryFallback : null,
     typeof rowHeroSmsAcquirePriority !== 'undefined' ? rowHeroSmsAcquirePriority : null,
+    typeof rowHeroSmsApiKey !== 'undefined' ? rowHeroSmsApiKey : null,
+    typeof rowFiveSimApiKey !== 'undefined' ? rowFiveSimApiKey : null,
+    typeof rowFiveSimCountry !== 'undefined' ? rowFiveSimCountry : null,
+    typeof rowFiveSimCountryFallback !== 'undefined' ? rowFiveSimCountryFallback : null,
+    typeof rowFiveSimProduct !== 'undefined' ? rowFiveSimProduct : null,
+    typeof rowNexSmsApiKey !== 'undefined' ? rowNexSmsApiKey : null,
+    typeof rowNexSmsCountry !== 'undefined' ? rowNexSmsCountry : null,
+    typeof rowNexSmsCountryFallback !== 'undefined' ? rowNexSmsCountryFallback : null,
+    typeof rowNexSmsServiceCode !== 'undefined' ? rowNexSmsServiceCode : null,
     typeof rowHeroSmsMaxPrice !== 'undefined' ? rowHeroSmsMaxPrice : null,
-    typeof rowHeroSmsRuntimePair !== 'undefined' ? rowHeroSmsRuntimePair : null,
-    typeof rowHeroSmsCurrentNumber !== 'undefined' ? rowHeroSmsCurrentNumber : null,
-    typeof rowHeroSmsCurrentCountdown !== 'undefined' ? rowHeroSmsCurrentCountdown : null,
-    typeof rowHeroSmsCurrentCode !== 'undefined' ? rowHeroSmsCurrentCode : null,
-    typeof rowHeroSmsPreferredActivation !== 'undefined' ? rowHeroSmsPreferredActivation : null,
+    typeof rowFiveSimOperator !== 'undefined' ? rowFiveSimOperator : null,
     typeof rowPhoneCodeSettingsGroup !== 'undefined' ? rowPhoneCodeSettingsGroup : null,
     typeof rowPhoneVerificationResendCount !== 'undefined' ? rowPhoneVerificationResendCount : null,
     typeof rowPhoneReplacementLimit !== 'undefined' ? rowPhoneReplacementLimit : null,
@@ -6601,77 +7505,190 @@ function updatePhoneVerificationSettingsUI() {
     typeof rowPhoneCodeTimeoutWindows !== 'undefined' ? rowPhoneCodeTimeoutWindows : null,
     typeof rowPhoneCodePollIntervalSeconds !== 'undefined' ? rowPhoneCodePollIntervalSeconds : null,
     typeof rowPhoneCodePollMaxRounds !== 'undefined' ? rowPhoneCodePollMaxRounds : null,
+    typeof rowFreePhoneReuseEnabled !== 'undefined' ? rowFreePhoneReuseEnabled : null,
+    typeof rowFreePhoneReuseAutoEnabled !== 'undefined' ? rowFreePhoneReuseAutoEnabled : null,
   ];
-  alwaysRows.forEach((row) => {
+  phoneVerificationRows.forEach((row) => {
     if (row) {
       row.style.display = showSettings ? '' : 'none';
     }
   });
-  const heroRows = [
-    typeof rowHeroSmsCountry !== 'undefined' ? rowHeroSmsCountry : null,
-    typeof rowHeroSmsCountryFallback !== 'undefined' ? rowHeroSmsCountryFallback : null,
-    typeof rowHeroSmsApiKey !== 'undefined' ? rowHeroSmsApiKey : null,
-  ];
-  heroRows.forEach((row) => {
+  if (rowHeroSmsCountry) rowHeroSmsCountry.style.display = showSettings && heroProvider ? '' : 'none';
+  if (rowHeroSmsCountryFallback) rowHeroSmsCountryFallback.style.display = showSettings && heroProvider ? '' : 'none';
+  if (rowHeroSmsAcquirePriority) rowHeroSmsAcquirePriority.style.display = showSettings && heroProvider ? '' : 'none';
+  if (rowHeroSmsApiKey) rowHeroSmsApiKey.style.display = showSettings && heroProvider ? '' : 'none';
+  if (rowFiveSimApiKey) rowFiveSimApiKey.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  if (rowFiveSimCountry) rowFiveSimCountry.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  if (rowFiveSimCountryFallback) rowFiveSimCountryFallback.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  if (rowFiveSimOperator) rowFiveSimOperator.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  if (rowFiveSimProduct) rowFiveSimProduct.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  if (rowNexSmsApiKey) rowNexSmsApiKey.style.display = showSettings && nexSmsProvider ? '' : 'none';
+  if (rowNexSmsCountry) rowNexSmsCountry.style.display = showSettings && nexSmsProvider ? '' : 'none';
+  if (rowNexSmsCountryFallback) rowNexSmsCountryFallback.style.display = showSettings && nexSmsProvider ? '' : 'none';
+  if (rowNexSmsServiceCode) rowNexSmsServiceCode.style.display = showSettings && nexSmsProvider ? '' : 'none';
+  if (rowFiveSimOperator) {
+    rowFiveSimOperator.style.display = showSettings && fiveSimProvider ? '' : 'none';
+  }
+  if (typeof rowFreePhoneReuseEnabled !== 'undefined' && rowFreePhoneReuseEnabled) {
+    rowFreePhoneReuseEnabled.style.display = showSettings ? '' : 'none';
+  }
+  if (typeof rowFreePhoneReuseAutoEnabled !== 'undefined' && rowFreePhoneReuseAutoEnabled) {
+    rowFreePhoneReuseAutoEnabled.style.display = showSettings ? '' : 'none';
+  }
+  const freePhoneReuseEnabled = Boolean(
+    typeof inputFreePhoneReuseEnabled !== 'undefined' && inputFreePhoneReuseEnabled?.checked
+  );
+  const freePhoneReuseAutoAvailable = showSettings && freePhoneReuseEnabled;
+  if (typeof inputFreePhoneReuseAutoEnabled !== 'undefined' && inputFreePhoneReuseAutoEnabled) {
+    inputFreePhoneReuseAutoEnabled.disabled = !freePhoneReuseAutoAvailable;
+    if (!freePhoneReuseAutoAvailable) {
+      inputFreePhoneReuseAutoEnabled.checked = false;
+    }
+  }
+  setFreePhoneReuseControlsLocked(isAutoRunLockedPhase() || isAutoRunScheduledPhase());
+  if (typeof rowFreePhoneReuseAutoEnabled !== 'undefined' && rowFreePhoneReuseAutoEnabled) {
+    rowFreePhoneReuseAutoEnabled.classList.toggle('is-disabled', !freePhoneReuseAutoAvailable);
+  }
+  const runtimeVisible = enabled;
+  [
+    typeof rowHeroSmsRuntimePair !== 'undefined' ? rowHeroSmsRuntimePair : null,
+    typeof rowHeroSmsCurrentNumber !== 'undefined' ? rowHeroSmsCurrentNumber : null,
+    typeof rowHeroSmsCurrentCountdown !== 'undefined' ? rowHeroSmsCurrentCountdown : null,
+    typeof rowHeroSmsCurrentCode !== 'undefined' ? rowHeroSmsCurrentCode : null,
+    typeof rowFreeReusablePhone !== 'undefined' ? rowFreeReusablePhone : null,
+    typeof rowHeroSmsPreferredActivation !== 'undefined' ? rowHeroSmsPreferredActivation : null,
+  ].forEach((row) => {
     if (row) {
-      row.style.display = (showSettings && heroProvider) ? '' : 'none';
+      row.style.display = runtimeVisible ? '' : 'none';
     }
   });
-  const fiveSimRows = [
-    typeof rowFiveSimApiKey !== 'undefined' ? rowFiveSimApiKey : null,
-    typeof rowFiveSimCountry !== 'undefined' ? rowFiveSimCountry : null,
-    typeof rowFiveSimCountryFallback !== 'undefined' ? rowFiveSimCountryFallback : null,
-    typeof rowFiveSimOperator !== 'undefined' ? rowFiveSimOperator : null,
-    typeof rowFiveSimProduct !== 'undefined' ? rowFiveSimProduct : null,
-  ];
-  fiveSimRows.forEach((row) => {
-    if (row) {
-      row.style.display = (showSettings && fiveSimProvider) ? '' : 'none';
-    }
-  });
-  const nexSmsRows = [
-    typeof rowNexSmsApiKey !== 'undefined' ? rowNexSmsApiKey : null,
-    typeof rowNexSmsCountry !== 'undefined' ? rowNexSmsCountry : null,
-    typeof rowNexSmsCountryFallback !== 'undefined' ? rowNexSmsCountryFallback : null,
-    typeof rowNexSmsServiceCode !== 'undefined' ? rowNexSmsServiceCode : null,
-  ];
-  nexSmsRows.forEach((row) => {
-    if (row) {
-      row.style.display = (showSettings && nexSmsProvider) ? '' : 'none';
-    }
-  });
-  if (
-    showSettings
-    && typeof normalizePhoneSmsProviderOrderValue === 'function'
-    && typeof updatePhoneSmsProviderOrderSummary === 'function'
-  ) {
-    const displayOrder = normalizePhoneSmsProviderOrderValue(
-      Array.isArray(phoneSmsProviderOrderSelection) ? phoneSmsProviderOrderSelection : [],
-      []
-    );
-    updatePhoneSmsProviderOrderSummary(displayOrder);
+  if (typeof syncSignupPhoneInputFromState === 'function') {
+    syncSignupPhoneInputFromState(latestState);
   }
   if (!showSettings && typeof rowHeroSmsPriceTiers !== 'undefined' && rowHeroSmsPriceTiers) {
     rowHeroSmsPriceTiers.style.display = 'none';
   }
+  updateHeroSmsPlatformDisplay();
 }
 
 function updatePlusModeUI() {
+  const paypalValue = typeof PLUS_PAYMENT_METHOD_PAYPAL !== 'undefined' ? PLUS_PAYMENT_METHOD_PAYPAL : 'paypal';
+  const gopayValue = typeof PLUS_PAYMENT_METHOD_GOPAY !== 'undefined' ? PLUS_PAYMENT_METHOD_GOPAY : 'gopay';
+  const gpcValue = typeof PLUS_PAYMENT_METHOD_GPC_HELPER !== 'undefined' ? PLUS_PAYMENT_METHOD_GPC_HELPER : 'gpc-helper';
+  const defaultMethod = typeof DEFAULT_PLUS_PAYMENT_METHOD !== 'undefined' ? DEFAULT_PLUS_PAYMENT_METHOD : paypalValue;
   const enabled = typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
     ? Boolean(inputPlusModeEnabled.checked)
     : false;
-  const paymentMethod = getSelectedPlusPaymentMethod();
+  const method = enabled ? getSelectedPlusPaymentMethod() : defaultMethod;
+  const gpcPhoneMode = normalizeGpcHelperPhoneModeValue(
+    typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode
+      ? selectGpcHelperPhoneMode.value
+      : (latestState?.gopayHelperPhoneMode || 'manual')
+  );
+  const gpcAutoModeDenied = isGpcAutoModePermissionDenied(latestState);
+  const gpcAutoModeEnabled = getGpcHelperAutoModeEnabled(latestState);
+  const preserveSelectedGpcAutoMode = typeof shouldPreserveSelectedGpcAutoMode === 'function'
+    ? shouldPreserveSelectedGpcAutoMode(latestState)
+    : false;
+  const effectiveGpcAutoModeDenied = gpcAutoModeDenied && !preserveSelectedGpcAutoMode;
+  const isGpcAutoMode = !effectiveGpcAutoModeDenied && gpcPhoneMode === GPC_HELPER_PHONE_MODE_AUTO;
+  const gpcOtpChannel = normalizeGpcOtpChannelValue(
+    typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel
+      ? selectGpcHelperOtpChannel.value
+      : (latestState?.gopayHelperOtpChannel || 'whatsapp')
+  );
+  const localSmsEnabled = Boolean(
+    typeof inputGpcHelperLocalSmsEnabled !== 'undefined' && inputGpcHelperLocalSmsEnabled
+      ? inputGpcHelperLocalSmsEnabled.checked
+      : latestState?.gopayHelperLocalSmsHelperEnabled
+  );
+  const selectedMethod = typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod?.value
+    ? normalizePlusPaymentMethod(selectPlusPaymentMethod.value)
+    : method;
+  const gpcRowsVisible = enabled && selectedMethod === gpcValue;
+  const canShowGpcModeSelector = gpcRowsVisible && (gpcAutoModeEnabled || !effectiveGpcAutoModeDenied);
+  const localSmsControlsVisible = gpcRowsVisible && !isGpcAutoMode;
+  const effectiveLocalSmsEnabled = !isGpcAutoMode && localSmsEnabled;
   if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
-    selectPlusPaymentMethod.value = paymentMethod;
-    selectPlusPaymentMethod.style.display = enabled ? '' : 'none';
+    selectPlusPaymentMethod.value = method;
+    if (selectPlusPaymentMethod.style) {
+      selectPlusPaymentMethod.style.display = enabled ? '' : 'none';
+    }
   }
+  if (typeof plusPaymentMethodCaption !== 'undefined' && plusPaymentMethodCaption) {
+    plusPaymentMethodCaption.textContent = method === gpcValue
+      ? `GPC ${isGpcAutoMode ? '自动' : '手动'}订阅链路`
+      : method === gopayValue
+      ? 'GoPay 印尼订阅链路'
+      : 'PayPal 订阅链路';
+  }
+  [
+    typeof rowPlusPaymentMethod !== 'undefined' ? rowPlusPaymentMethod : null,
+  ].forEach((row) => {
+    if (!row) {
+      return;
+    }
+    row.style.display = enabled ? '' : 'none';
+  });
   [
     typeof rowPayPalAccount !== 'undefined' ? rowPayPalAccount : null,
   ].forEach((row) => {
     if (!row) {
       return;
     }
-    row.style.display = enabled && paymentMethod === 'paypal' ? '' : 'none';
+    row.style.display = enabled && selectedMethod === paypalValue ? '' : 'none';
+  });
+  [
+    typeof rowGpcHelperApi !== 'undefined' ? rowGpcHelperApi : null,
+    typeof rowGpcHelperCardKey !== 'undefined' ? rowGpcHelperCardKey : null,
+  ].forEach((row) => {
+    if (!row) {
+      return;
+    }
+    row.style.display = gpcRowsVisible ? '' : 'none';
+  });
+  if (typeof rowGpcHelperPhoneMode !== 'undefined' && rowGpcHelperPhoneMode) {
+    rowGpcHelperPhoneMode.style.display = canShowGpcModeSelector ? '' : 'none';
+  }
+  if (typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode) {
+    selectGpcHelperPhoneMode.value = effectiveGpcAutoModeDenied ? GPC_HELPER_PHONE_MODE_MANUAL : gpcPhoneMode;
+  }
+  [
+    typeof rowGpcHelperCountryCode !== 'undefined' ? rowGpcHelperCountryCode : null,
+    typeof rowGpcHelperPhone !== 'undefined' ? rowGpcHelperPhone : null,
+    typeof rowGpcHelperOtpChannel !== 'undefined' ? rowGpcHelperOtpChannel : null,
+    typeof rowGpcHelperPin !== 'undefined' ? rowGpcHelperPin : null,
+  ].forEach((row) => {
+    if (!row) {
+      return;
+    }
+    row.style.display = gpcRowsVisible && !isGpcAutoMode ? '' : 'none';
+  });
+  if (typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel) {
+    selectGpcHelperOtpChannel.value = gpcOtpChannel;
+  }
+  if (typeof inputGpcHelperLocalSmsEnabled !== 'undefined' && inputGpcHelperLocalSmsEnabled) {
+    inputGpcHelperLocalSmsEnabled.checked = effectiveLocalSmsEnabled;
+  }
+  if (typeof rowGpcHelperLocalSmsEnabled !== 'undefined' && rowGpcHelperLocalSmsEnabled) {
+    rowGpcHelperLocalSmsEnabled.style.display = localSmsControlsVisible ? '' : 'none';
+  }
+  if (typeof rowGpcHelperLocalSmsUrl !== 'undefined' && rowGpcHelperLocalSmsUrl) {
+    rowGpcHelperLocalSmsUrl.style.display = localSmsControlsVisible && effectiveLocalSmsEnabled ? '' : 'none';
+  }
+  if (typeof btnGpcCardKeyPurchase !== 'undefined' && btnGpcCardKeyPurchase) {
+    btnGpcCardKeyPurchase.style.display = gpcRowsVisible ? '' : 'none';
+  }
+  [
+    typeof rowGoPayCountryCode !== 'undefined' ? rowGoPayCountryCode : null,
+    typeof rowGoPayPhone !== 'undefined' ? rowGoPayPhone : null,
+    typeof rowGoPayOtp !== 'undefined' ? rowGoPayOtp : null,
+    typeof rowGoPayPin !== 'undefined' ? rowGoPayPin : null,
+  ].forEach((row) => {
+    if (!row) {
+      return;
+    }
+    row.style.display = enabled && selectedMethod === gopayValue ? '' : 'none';
   });
 }
 
@@ -6680,7 +7697,22 @@ function setSettingsCardLocked(locked) {
     return;
   }
   settingsCard.classList.toggle('is-locked', locked);
-  settingsCard.toggleAttribute('inert', locked);
+  settingsCard.toggleAttribute('inert', false);
+  Array.from(settingsCard.children).forEach((child) => {
+    const keepInteractive = child?.id === 'row-custom-email-pool';
+    child.toggleAttribute('inert', Boolean(locked && !keepInteractive));
+  });
+}
+
+function setFreePhoneReuseControlsLocked(locked) {
+  if (inputFreePhoneReuseEnabled) {
+    inputFreePhoneReuseEnabled.disabled = locked;
+  }
+  if (inputFreePhoneReuseAutoEnabled) {
+    inputFreePhoneReuseAutoEnabled.disabled = locked
+      || !Boolean(inputFreePhoneReuseEnabled?.checked)
+      || !Boolean(inputPhoneVerificationEnabled?.checked && phoneVerificationSectionExpanded);
+  }
 }
 
 async function setRuntimeEmailState(email) {
@@ -6698,6 +7730,383 @@ async function setRuntimeEmailState(email) {
   return normalizedEmail;
 }
 
+function getRuntimeSignupPhoneValue(state = latestState) {
+  const identifierType = String(state?.accountIdentifierType || '').trim().toLowerCase();
+  return String(
+    state?.signupPhoneNumber
+    || (identifierType === 'phone' ? state?.accountIdentifier : '')
+    || ''
+  ).trim();
+}
+
+function shouldExecuteStep3WithSignupPhoneIdentity(state = latestState) {
+  const identifierType = String(state?.accountIdentifierType || '').trim().toLowerCase();
+  const resolvedMethod = normalizeSignupMethod(
+    state?.resolvedSignupMethod
+    || state?.signupMethod
+    || (typeof getSelectedSignupMethod === 'function' ? getSelectedSignupMethod() : DEFAULT_SIGNUP_METHOD)
+  );
+  return identifierType === 'phone'
+    || Boolean(getRuntimeSignupPhoneValue(state))
+    || resolvedMethod === SIGNUP_METHOD_PHONE;
+}
+
+function getSignupPhoneInputValue() {
+  return typeof inputSignupPhone !== 'undefined' && inputSignupPhone
+    ? String(inputSignupPhone.value || '').trim()
+    : '';
+}
+
+function shouldPreserveSignupPhoneInputValue(stateSignupPhone = '') {
+  if (typeof inputSignupPhone === 'undefined' || !inputSignupPhone || !signupPhoneInputDirty) {
+    return false;
+  }
+  if (getSignupPhoneInputValue() === String(stateSignupPhone || '').trim()) {
+    signupPhoneInputDirty = false;
+    return false;
+  }
+  return signupPhoneInputFocused || (typeof document !== 'undefined' && document.activeElement === inputSignupPhone);
+}
+
+function syncSignupPhoneInputFromState(state = latestState) {
+  const signupPhone = getRuntimeSignupPhoneValue(state);
+  if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+    if (!shouldPreserveSignupPhoneInputValue(signupPhone)) {
+      inputSignupPhone.value = signupPhone;
+    }
+  }
+  if (typeof rowSignupPhone !== 'undefined' && rowSignupPhone) {
+    const phoneVerificationEnabled = typeof inputPhoneVerificationEnabled !== 'undefined' && inputPhoneVerificationEnabled
+      ? Boolean(inputPhoneVerificationEnabled.checked)
+      : Boolean(state?.phoneVerificationEnabled || latestState?.phoneVerificationEnabled);
+    const rawSignupMethod = state?.signupMethod || (
+      typeof getSelectedSignupMethod === 'function'
+        ? getSelectedSignupMethod()
+        : 'email'
+    );
+    const selectedMethod = typeof normalizeSignupMethod === 'function'
+      ? normalizeSignupMethod(rawSignupMethod)
+      : (String(rawSignupMethod || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email');
+    rowSignupPhone.style.display = phoneVerificationEnabled
+      && (selectedMethod === 'phone' || Boolean(signupPhone) || Boolean(getSignupPhoneInputValue()) || signupPhoneInputDirty)
+      ? ''
+      : 'none';
+  }
+}
+
+async function setRuntimeSignupPhoneState(phoneNumber) {
+  const normalizedPhone = String(phoneNumber || '').trim() || null;
+  const response = await chrome.runtime.sendMessage({
+    type: 'SET_SIGNUP_PHONE_STATE',
+    source: 'sidepanel',
+    payload: { phoneNumber: normalizedPhone },
+  });
+
+  if (response?.error) {
+    throw new Error(response.error);
+  }
+
+  return normalizedPhone;
+}
+
+async function persistSignupPhoneInputValue(options = {}) {
+  const { final = true, silent = true } = options;
+  if (typeof inputSignupPhone === 'undefined' || !inputSignupPhone) {
+    return getRuntimeSignupPhoneValue(latestState);
+  }
+  if (signupPhoneInputPersistPromise) {
+    return signupPhoneInputPersistPromise;
+  }
+
+  const phoneNumber = getSignupPhoneInputValue();
+  inputSignupPhone.value = phoneNumber;
+  const currentPhone = getRuntimeSignupPhoneValue(latestState);
+  if (!signupPhoneInputDirty && phoneNumber === currentPhone) {
+    return phoneNumber;
+  }
+
+  signupPhoneInputPersistPromise = (async () => {
+    const response = await chrome.runtime.sendMessage({
+      type: final ? 'SAVE_SIGNUP_PHONE' : 'SET_SIGNUP_PHONE_STATE',
+      source: 'sidepanel',
+      payload: { phoneNumber },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+
+    const normalizedPhone = String(response?.phoneNumber || phoneNumber || '').trim();
+    signupPhoneInputDirty = getSignupPhoneInputValue() !== normalizedPhone;
+    syncLatestState({
+      signupPhoneNumber: normalizedPhone,
+      phoneNumber: '',
+      ...(normalizedPhone
+        ? {
+          accountIdentifierType: 'phone',
+          accountIdentifier: normalizedPhone,
+        }
+        : (String(latestState?.accountIdentifierType || '').trim().toLowerCase() === 'phone'
+          ? {
+            accountIdentifierType: null,
+            accountIdentifier: '',
+          }
+          : {})),
+    });
+    syncSignupPhoneInputFromState(latestState);
+    if (!silent) {
+      showToast(normalizedPhone ? '注册手机号已保存。' : '注册手机号已清空。', 'success', 1600);
+    }
+    return normalizedPhone;
+  })();
+
+  try {
+    return await signupPhoneInputPersistPromise;
+  } finally {
+    signupPhoneInputPersistPromise = null;
+  }
+}
+
+async function persistSignupPhoneInputForAction() {
+  if (typeof inputSignupPhone === 'undefined' || !inputSignupPhone) {
+    return;
+  }
+  const phoneNumber = getSignupPhoneInputValue();
+  const currentPhone = getRuntimeSignupPhoneValue(latestState);
+  if (!signupPhoneInputDirty && phoneNumber === currentPhone) {
+    return;
+  }
+  await persistSignupPhoneInputValue({ final: true, silent: true });
+}
+
+function isGpcHelperCheckoutSelected() {
+  const gpcValue = typeof PLUS_PAYMENT_METHOD_GPC_HELPER !== 'undefined' ? PLUS_PAYMENT_METHOD_GPC_HELPER : 'gpc-helper';
+  const plusEnabled = typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
+    ? Boolean(inputPlusModeEnabled.checked)
+    : Boolean(latestState?.plusModeEnabled);
+  return plusEnabled && getSelectedPlusPaymentMethod() === gpcValue;
+}
+
+function getSelectedGpcHelperPhoneMode() {
+  return normalizeGpcHelperPhoneModeValue(
+    typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode
+      ? selectGpcHelperPhoneMode.value
+      : (latestState?.gopayHelperPhoneMode || GPC_HELPER_PHONE_MODE_MANUAL)
+  );
+}
+
+async function showGpcStartBlockedDialog(message) {
+  await openConfirmModal({
+    title: 'GPC 任务无法开启',
+    message,
+    confirmLabel: '知道了',
+  });
+}
+
+async function refreshGpcBalanceForStart() {
+  const response = await chrome.runtime.sendMessage({
+    type: 'REFRESH_GPC_CARD_BALANCE',
+    source: 'sidepanel',
+    payload: {
+      gopayHelperApiUrl: inputGpcHelperApi?.value || DEFAULT_GPC_HELPER_API_URL,
+      gopayHelperApiKey: inputGpcHelperCardKey?.value || latestState?.gopayHelperApiKey || '',
+      reason: 'before_start',
+    },
+  });
+  if (response?.error) {
+    throw new Error(response.error);
+  }
+  const nextState = {
+    gopayHelperBalance: response?.balance || latestState?.gopayHelperBalance || '',
+    gopayHelperBalancePayload: response?.data || response?.payload?.data || response?.payload || latestState?.gopayHelperBalancePayload || null,
+    gopayHelperBalanceUpdatedAt: response?.updatedAt || Date.now(),
+    gopayHelperBalanceError: '',
+    gopayHelperRemainingUses: getGpcBalanceRemainingUsesFromResponse(response) ?? 0,
+    gopayHelperAutoModeEnabled: getGpcAutoModeEnabledFromResponse(response),
+    gopayHelperApiKeyStatus: response?.apiKeyStatus || response?.data?.status || response?.payload?.data?.status || response?.payload?.status || '',
+  };
+  syncLatestState(nextState);
+  if (displayGpcHelperBalance && nextState.gopayHelperBalance) {
+    displayGpcHelperBalance.textContent = nextState.gopayHelperBalance;
+  }
+  updatePlusModeUI();
+  return nextState;
+}
+
+async function ensureGpcApiKeyReadyForStart(options = {}) {
+  if (!isGpcHelperCheckoutSelected()) {
+    return true;
+  }
+  const selectedMode = getSelectedGpcHelperPhoneMode();
+  let balanceState;
+  try {
+    balanceState = await refreshGpcBalanceForStart();
+  } catch (error) {
+    await showGpcStartBlockedDialog(`API Key 余额校验失败：${error?.message || '未知错误'}。请先确认 API Key 是否正确。`);
+    return false;
+  }
+
+  const remainingUses = normalizeGpcRemainingUsesValue(balanceState.gopayHelperRemainingUses);
+  const apiKeyStatus = String(balanceState.gopayHelperApiKeyStatus || '').trim().toLowerCase();
+  if (apiKeyStatus && apiKeyStatus !== 'active') {
+    await showGpcStartBlockedDialog(`当前 GPC API Key 状态为 ${balanceState.gopayHelperApiKeyStatus}，不能开启任务。`);
+    return false;
+  }
+  if (remainingUses !== null && remainingUses <= 0) {
+    await showGpcStartBlockedDialog('当前 GPC API Key 剩余次数不足，不能开启任务。');
+    return false;
+  }
+
+  if (selectedMode === GPC_HELPER_PHONE_MODE_AUTO && isGpcAutoModePermissionDenied(balanceState)) {
+    if (typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode) {
+      selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
+    }
+    syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
+    updatePlusModeUI();
+    await saveSettings({ silent: true, force: true }).catch(() => {});
+    await showGpcStartBlockedDialog('当前 GPC API Key 未开通自动模式，已切回手动模式，不能以自动模式开启任务。');
+    return false;
+  }
+
+  if (options?.notify) {
+    showToast('GPC API Key 余额和权限校验通过。', 'success', 1800);
+  }
+  return true;
+}
+
+async function openPlusManualConfirmationDialog(options = {}) {
+  const method = String(options.method || '').trim().toLowerCase();
+  const gopayValue = typeof PLUS_PAYMENT_METHOD_GOPAY !== 'undefined' ? PLUS_PAYMENT_METHOD_GOPAY : 'gopay';
+  if (method === 'gopay-otp') {
+    if (!sharedFormDialog?.open) {
+      return null;
+    }
+    const result = await sharedFormDialog.open({
+      title: String(options.title || '').trim() || 'GPC OTP 验证',
+      message: String(options.message || '').trim() || '请在WhatsApp里面获取验证码（耐心等待三十秒左右）',
+      fields: [
+        {
+          key: 'otp',
+          label: 'OTP',
+          type: 'text',
+          placeholder: '请输入 OTP 验证码',
+          inputMode: 'numeric',
+          autocomplete: 'one-time-code',
+          required: true,
+          requiredMessage: '请输入 OTP 验证码。',
+          normalize: (value) => String(value || '').trim().replace(/[^\d]/g, ''),
+          validate: (value) => {
+            const normalized = String(value || '').trim().replace(/[^\d]/g, '');
+            if (!normalized) return '请输入 OTP 验证码。';
+            if (!/^\d{6}$/.test(normalized)) return 'OTP 必须是 6 位数字，请检查。';
+            return '';
+          },
+        },
+      ],
+      confirmLabel: '提交 OTP',
+    });
+    return result ? { action: 'confirm', otp: String(result.otp || '').trim().replace(/[^\d]/g, '') } : { action: 'cancel' };
+  }
+  const title = String(options.title || '').trim() || (method === gopayValue ? 'GoPay 订阅确认' : '手动确认');
+  const message = String(options.message || '').trim()
+    || (method === gopayValue
+      ? '请在当前订阅页中手动完成 GoPay 订阅，完成后点击“我已完成订阅”继续。'
+      : '请先在页面中完成当前手动操作，完成后点击确认继续。');
+  return openActionModal({
+    title,
+    message,
+    actions: [
+      { id: 'cancel', label: '取消等待', variant: 'btn-ghost' },
+      { id: 'confirm', label: '我已完成订阅', variant: 'btn-primary' },
+    ],
+    alert: method === gopayValue
+      ? { text: '确认后流程会直接继续到 Plus 模式第 10 步 OAuth 登录。', tone: 'info' }
+      : null,
+  });
+}
+
+async function syncPlusManualConfirmationDialog() {
+  const gopayValue = typeof PLUS_PAYMENT_METHOD_GOPAY !== 'undefined' ? PLUS_PAYMENT_METHOD_GOPAY : 'gopay';
+  const requestId = String(latestState?.plusManualConfirmationRequestId || '').trim();
+  const pending = Boolean(latestState?.plusManualConfirmationPending);
+  if (!pending || !requestId || plusManualConfirmationDialogInFlight || activePlusManualConfirmationRequestId === requestId) {
+    return;
+  }
+
+  const step = Number(latestState?.plusManualConfirmationStep) || 0;
+  const method = String(latestState?.plusManualConfirmationMethod || '').trim().toLowerCase();
+  const title = latestState?.plusManualConfirmationTitle;
+  const message = latestState?.plusManualConfirmationMessage;
+  activePlusManualConfirmationRequestId = requestId;
+  plusManualConfirmationDialogInFlight = true;
+  let shouldReopenDialog = false;
+
+  try {
+    const choice = await openPlusManualConfirmationDialog({
+      method,
+      title,
+      message,
+    });
+    const currentRequestId = String(latestState?.plusManualConfirmationRequestId || '').trim();
+    const stillPending = Boolean(latestState?.plusManualConfirmationPending);
+    if (!stillPending || currentRequestId !== requestId) {
+      return;
+    }
+    if (choice == null) {
+      shouldReopenDialog = true;
+      showToast('当前订阅确认仍在等待中，将重新弹出确认窗口。', 'info', 1800);
+      return;
+    }
+
+    const confirmed = choice === 'confirm' || choice?.action === 'confirm';
+    const response = await chrome.runtime.sendMessage({
+      type: 'RESOLVE_PLUS_MANUAL_CONFIRMATION',
+      source: 'sidepanel',
+      payload: {
+        step,
+        requestId,
+        confirmed,
+        ...(choice?.otp ? { otp: choice.otp } : {}),
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    if (confirmed) {
+      showToast(
+        method === 'gopay-otp'
+          ? 'GPC OTP 已提交，正在继续验证...'
+          : (method === gopayValue ? 'GoPay 订阅已确认，正在继续 OAuth 登录...' : '已确认，流程继续执行中...'),
+        'info',
+        2200
+      );
+    } else {
+      showToast(
+        method === 'gopay-otp'
+          ? '已取消 GPC OTP 输入。'
+          : (method === gopayValue ? '已取消 GoPay 订阅等待。' : '已取消当前手动确认。'),
+        'warn',
+        2200
+      );
+    }
+  } catch (error) {
+    showToast(error?.message || String(error || '未知错误'), 'error');
+  } finally {
+    if (activePlusManualConfirmationRequestId === requestId) {
+      activePlusManualConfirmationRequestId = '';
+    }
+    plusManualConfirmationDialogInFlight = false;
+    if (
+      shouldReopenDialog
+      && latestState?.plusManualConfirmationPending
+      && String(latestState?.plusManualConfirmationRequestId || '').trim() === requestId
+    ) {
+      setTimeout(() => {
+        void syncPlusManualConfirmationDialog();
+      }, 0);
+    }
+  }
+}
+
 async function clearRegistrationEmail(options = {}) {
   const { silent = false } = options;
   if (!inputEmail.value.trim() && !latestState?.email) {
@@ -6712,6 +8121,42 @@ async function clearRegistrationEmail(options = {}) {
   } catch (err) {
     if (!silent) {
       showToast(`清空邮箱失败：${err.message}`, 'error');
+    }
+    throw err;
+  }
+}
+
+async function clearRegistrationSignupPhone(options = {}) {
+  const { silent = false } = options;
+  if (!getRuntimeSignupPhoneValue(latestState)) {
+    if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+      inputSignupPhone.value = '';
+    }
+    signupPhoneInputDirty = false;
+    syncSignupPhoneInputFromState(latestState);
+    return;
+  }
+
+  if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+    inputSignupPhone.value = '';
+  }
+  signupPhoneInputDirty = false;
+  syncLatestState({
+    signupPhoneNumber: '',
+    ...(String(latestState?.accountIdentifierType || '').trim().toLowerCase() === 'phone'
+      ? {
+        accountIdentifierType: null,
+        accountIdentifier: '',
+      }
+      : {}),
+  });
+  syncSignupPhoneInputFromState(latestState);
+
+  try {
+    await setRuntimeSignupPhoneState(null);
+  } catch (err) {
+    if (!silent) {
+      showToast(`清空注册手机号失败：${err.message}`, 'error');
     }
     throw err;
   }
@@ -6791,6 +8236,7 @@ async function saveSettings(options = {}) {
 async function persistCurrentSettingsForAction() {
   clearTimeout(settingsAutoSaveTimer);
   await waitForSettingsSaveIdle();
+  await persistSignupPhoneInputForAction();
   await saveSettings({ silent: true, force: true });
 }
 
@@ -6803,24 +8249,38 @@ function applyAutoRunStatus(payload = currentAutoRun) {
   const settingsCardLocked = scheduled || locked;
 
   setSettingsCardLocked(settingsCardLocked);
+  setFreePhoneReuseControlsLocked(settingsCardLocked);
 
-  const lockedRunCount = getLockedRunCountFromEmailPool();
-  const shouldSyncAutoRunTotalRuns = currentAutoRun.autoRunning
-    || locked
-    || paused
-    || scheduled;
-
-  inputRunCount.disabled = currentAutoRun.autoRunning || lockedRunCount > 0;
+  inputRunCount.disabled = currentAutoRun.autoRunning || (
+    typeof shouldLockRunCountToEmailPool === 'function'
+      ? shouldLockRunCountToEmailPool()
+      : getLockedRunCountFromEmailPool() > 0
+  );
   btnAutoRun.disabled = currentAutoRun.autoRunning;
   btnFetchEmail.disabled = locked
     || isCustomMailProvider()
     || usesCustomEmailPoolGenerator();
   inputEmail.disabled = locked;
+  if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+    inputSignupPhone.disabled = locked;
+  }
+  if (typeof inputSub2ApiAccountPriority !== 'undefined' && inputSub2ApiAccountPriority) {
+    inputSub2ApiAccountPriority.disabled = locked;
+  }
   inputAutoSkipFailures.disabled = scheduled;
 
+  const lockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
+    ? getLockedRunCountFromEmailPool()
+    : 0;
+  const isSyncPhase = typeof isAutoRunSourceSyncPhase === 'function'
+    ? isAutoRunSourceSyncPhase
+    : (phase) => ['scheduled', 'running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(phase);
+  const shouldSyncRunCount = typeof shouldSyncRunCountFromAutoRunSource === 'function'
+    ? shouldSyncRunCountFromAutoRunSource(currentAutoRun)
+    : (currentAutoRun.autoRunning || isSyncPhase(currentAutoRun.phase));
   if (lockedRunCount > 0) {
     inputRunCount.value = String(lockedRunCount);
-  } else if (shouldSyncAutoRunTotalRuns && currentAutoRun.totalRuns > 0) {
+  } else if (shouldSyncRunCount && currentAutoRun.totalRuns > 0) {
     inputRunCount.value = String(currentAutoRun.totalRuns);
   }
 
@@ -6926,24 +8386,28 @@ function syncStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = 
   let resolvedCodex2ApiLoginOnlyMode = codex2apiLoginOnlyMode;
   let resolvedPlusModeEnabled = plusModeEnabled;
   let resolvedPlusPaymentMethod = plusPaymentMethod;
-  let resolvedOptions = options;
-  let usedLegacySignature = false;
+  let resolvedOptions = options && typeof options === 'object' && !Array.isArray(options) ? options : {};
 
   if (typeof panelMode === 'boolean') {
     resolvedPanelMode = 'cpa';
     resolvedCodex2ApiLoginOnlyMode = false;
     resolvedPlusModeEnabled = panelMode;
-    resolvedPlusPaymentMethod = codex2apiLoginOnlyMode;
-    resolvedOptions = (plusModeEnabled && typeof plusModeEnabled === 'object' && !Array.isArray(plusModeEnabled))
-      ? plusModeEnabled
-      : {};
-    usedLegacySignature = true;
+    if (codex2apiLoginOnlyMode && typeof codex2apiLoginOnlyMode === 'object' && !Array.isArray(codex2apiLoginOnlyMode)) {
+      resolvedOptions = codex2apiLoginOnlyMode;
+      resolvedPlusPaymentMethod = resolvedOptions.plusPaymentMethod || getSelectedPlusPaymentMethod(latestState);
+    } else {
+      resolvedPlusPaymentMethod = codex2apiLoginOnlyMode || getSelectedPlusPaymentMethod(latestState);
+      resolvedOptions = plusModeEnabled && typeof plusModeEnabled === 'object' && !Array.isArray(plusModeEnabled)
+        ? plusModeEnabled
+        : {};
+    }
   }
 
   const nextPanelMode = String(resolvedPanelMode || '').trim().toLowerCase() || 'cpa';
   const nextCodex2ApiLoginOnlyMode = Boolean(resolvedCodex2ApiLoginOnlyMode);
   const nextPlusModeEnabled = Boolean(resolvedPlusModeEnabled);
   const nextPlusPaymentMethod = normalizePlusPaymentMethod(resolvedPlusPaymentMethod);
+  const nextSignupMethod = normalizeSignupMethod(resolvedOptions.signupMethod || currentSignupMethod || DEFAULT_SIGNUP_METHOD);
   const activePanelMode = typeof currentPanelMode === 'undefined' ? 'cpa' : currentPanelMode;
   const activeCodex2ApiLoginOnlyMode = typeof currentCodex2ApiLoginOnlyMode === 'undefined'
     ? false
@@ -6954,25 +8418,34 @@ function syncStepDefinitionsForMode(panelMode = 'cpa', codex2apiLoginOnlyMode = 
   const activePlusPaymentMethod = typeof currentPlusPaymentMethod === 'undefined'
     ? 'paypal'
     : currentPlusPaymentMethod;
+  const rootScope = typeof window !== 'undefined' ? window : globalThis;
+  const currentPaymentStep = stepDefinitions.find((step) => step.key === 'paypal-approve');
+  const nextPaymentTitle = rootScope.MultiPageStepDefinitions?.getPlusPaymentStepTitle?.({
+    panelMode: nextPanelMode,
+    codex2apiLoginOnlyMode: nextCodex2ApiLoginOnlyMode,
+    plusModeEnabled: nextPlusModeEnabled,
+    plusPaymentMethod: nextPlusPaymentMethod,
+    signupMethod: nextSignupMethod,
+  });
+  const paymentTitleChanged = Boolean(nextPlusModeEnabled && currentPaymentStep && nextPaymentTitle && currentPaymentStep.title !== nextPaymentTitle);
   const shouldRender = Boolean(resolvedOptions?.render)
     || nextPanelMode !== activePanelMode
     || nextCodex2ApiLoginOnlyMode !== activeCodex2ApiLoginOnlyMode
     || nextPlusModeEnabled !== activePlusModeEnabled
-    || nextPlusPaymentMethod !== activePlusPaymentMethod;
+    || nextPlusPaymentMethod !== activePlusPaymentMethod
+    || nextSignupMethod !== currentSignupMethod
+    || paymentTitleChanged;
   if (!shouldRender) {
     return;
   }
 
-  if (usedLegacySignature) {
-    rebuildStepDefinitionState(nextPlusModeEnabled, nextPlusPaymentMethod);
-  } else {
-    rebuildStepDefinitionState(
-      nextPanelMode,
-      nextCodex2ApiLoginOnlyMode,
-      nextPlusModeEnabled,
-      nextPlusPaymentMethod
-    );
-  }
+  rebuildStepDefinitionState(
+    nextPanelMode,
+    nextCodex2ApiLoginOnlyMode,
+    nextPlusModeEnabled,
+    nextPlusPaymentMethod,
+    { signupMethod: nextSignupMethod }
+  );
   renderStepsList();
 }
 
@@ -6986,7 +8459,8 @@ function applySettingsState(state) {
       state?.panelMode,
       Boolean(state?.codex2apiLoginOnlyMode),
       Boolean(state?.plusModeEnabled),
-      state?.plusPaymentMethod
+      state?.plusPaymentMethod,
+      { signupMethod: state?.signupMethod }
     );
   }
   const fallbackIpProxyService = '711proxy';
@@ -7036,10 +8510,16 @@ function applySettingsState(state) {
     return Math.max(1, Math.min(1440, numeric));
   };
   syncLatestState(state);
+  if (typeof applyOperationDelayState === 'function') {
+    applyOperationDelayState(state);
+  }
   syncAutoRunState(state);
   renderStepStatuses(latestState);
 
   inputEmail.value = state?.email || '';
+  if (typeof syncSignupPhoneInputFromState === 'function') {
+    syncSignupPhoneInputFromState(state);
+  }
   syncPasswordField(state || {});
   if (typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled) {
     inputPlusModeEnabled.checked = Boolean(state?.plusModeEnabled);
@@ -7047,14 +8527,89 @@ function applySettingsState(state) {
   if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
     selectPlusPaymentMethod.value = normalizePlusPaymentMethod(state?.plusPaymentMethod);
   }
+  if (typeof inputGpcHelperApi !== 'undefined' && inputGpcHelperApi) {
+    const defaultGpcHelperApiUrl = typeof DEFAULT_GPC_HELPER_API_URL !== 'undefined'
+      ? DEFAULT_GPC_HELPER_API_URL
+      : 'https://gpc.qlhazycoder.top';
+    inputGpcHelperApi.value = `${defaultGpcHelperApiUrl.replace(/\/+$/g, '')}/`;
+  }
+  if (typeof inputGpcHelperCardKey !== 'undefined' && inputGpcHelperCardKey) {
+    inputGpcHelperCardKey.value = state?.gopayHelperApiKey || state?.gopayHelperCardKey || '';
+  }
+  if (typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode) {
+    selectGpcHelperPhoneMode.value = normalizeGpcHelperPhoneModeValue(state?.gopayHelperPhoneMode || 'manual');
+  }
+  if (typeof selectGpcHelperCountryCode !== 'undefined' && selectGpcHelperCountryCode) {
+    const normalizedCountryCode = window.GoPayUtils?.normalizeGoPayCountryCode
+      ? window.GoPayUtils.normalizeGoPayCountryCode(state?.gopayHelperCountryCode)
+      : String(state?.gopayHelperCountryCode || '+86').trim();
+    const hasOption = Array.from(selectGpcHelperCountryCode.options || [])
+      .some((option) => option.value === normalizedCountryCode);
+    if (!hasOption && normalizedCountryCode) {
+      const option = document.createElement('option');
+      option.value = normalizedCountryCode;
+      option.textContent = `自定义 ${normalizedCountryCode}`;
+      selectGpcHelperCountryCode.appendChild(option);
+    }
+    selectGpcHelperCountryCode.value = normalizedCountryCode || '+86';
+  }
+  if (typeof inputGpcHelperPhone !== 'undefined' && inputGpcHelperPhone) {
+    inputGpcHelperPhone.value = state?.gopayHelperPhoneNumber || '';
+  }
+  if (typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel) {
+    selectGpcHelperOtpChannel.value = normalizeGpcOtpChannelValue(state?.gopayHelperOtpChannel || 'whatsapp');
+  }
+  if (typeof inputGpcHelperLocalSmsEnabled !== 'undefined' && inputGpcHelperLocalSmsEnabled) {
+    inputGpcHelperLocalSmsEnabled.checked = Boolean(state?.gopayHelperLocalSmsHelperEnabled);
+  }
+  if (typeof inputGpcHelperLocalSmsUrl !== 'undefined' && inputGpcHelperLocalSmsUrl) {
+    inputGpcHelperLocalSmsUrl.value = normalizeGpcLocalSmsHelperBaseUrlValue(state?.gopayHelperLocalSmsHelperUrl || '');
+  }
+  if (typeof inputGpcHelperPin !== 'undefined' && inputGpcHelperPin) {
+    inputGpcHelperPin.value = state?.gopayHelperPin || '';
+  }
+  if (typeof displayGpcHelperBalance !== 'undefined' && displayGpcHelperBalance) {
+    const balanceText = String(state?.gopayHelperBalance || '').trim();
+    const balanceError = String(state?.gopayHelperBalanceError || '').trim();
+    const balanceAt = Number(state?.gopayHelperBalanceUpdatedAt) || 0;
+    displayGpcHelperBalance.textContent = balanceError
+      ? `余额查询失败：${balanceError}`
+      : (balanceText || (balanceAt ? '余额已更新' : '余额未获取'));
+  }
+  if (typeof selectGoPayCountryCode !== 'undefined' && selectGoPayCountryCode) {
+    const normalizedGoPayCountryCode = window.GoPayUtils?.normalizeGoPayCountryCode
+      ? window.GoPayUtils.normalizeGoPayCountryCode(state?.gopayCountryCode)
+      : String(state?.gopayCountryCode || '+86').trim();
+    const hasOption = Array.from(selectGoPayCountryCode.options || [])
+      .some((option) => option.value === normalizedGoPayCountryCode);
+    if (!hasOption && normalizedGoPayCountryCode) {
+      const option = document.createElement('option');
+      option.value = normalizedGoPayCountryCode;
+      option.textContent = `自定义 ${normalizedGoPayCountryCode}`;
+      selectGoPayCountryCode.appendChild(option);
+    }
+    selectGoPayCountryCode.value = normalizedGoPayCountryCode || '+86';
+  }
+  if (typeof inputGoPayPhone !== 'undefined' && inputGoPayPhone) {
+    inputGoPayPhone.value = state?.gopayPhone || '';
+  }
+  if (typeof inputGoPayOtp !== 'undefined' && inputGoPayOtp) {
+    inputGoPayOtp.value = state?.gopayOtp || '';
+  }
+  if (typeof inputGoPayPin !== 'undefined' && inputGoPayPin) {
+    inputGoPayPin.value = state?.gopayPin || '';
+  }
   inputVpsUrl.value = state?.vpsUrl || '';
   inputVpsPassword.value = state?.vpsPassword || '';
   setLocalCpaStep9Mode(state?.localCpaStep9Mode);
-  selectPanelMode.value = state?.panelMode || 'cpa';
+  selectPanelMode.value = normalizePanelMode(state?.panelMode || 'cpa');
   inputSub2ApiUrl.value = state?.sub2apiUrl || '';
   inputSub2ApiEmail.value = state?.sub2apiEmail || '';
   inputSub2ApiPassword.value = state?.sub2apiPassword || '';
-  inputSub2ApiGroup.value = state?.sub2apiGroupName || '';
+  renderSub2ApiGroupOptions(state, state?.sub2apiGroupName || '');
+  if (typeof inputSub2ApiAccountPriority !== 'undefined' && inputSub2ApiAccountPriority) {
+    inputSub2ApiAccountPriority.value = String(normalizeSub2ApiAccountPriorityValue(state?.sub2apiAccountPriority));
+  }
   inputSub2ApiDefaultProxy.value = state?.sub2apiDefaultProxyName || '';
   const normalizedIpProxyService = resolveIpProxyService(state?.ipProxyService);
   const normalizedIpProxyServiceProfiles = typeof normalizeIpProxyServiceProfiles === 'function'
@@ -7165,7 +8720,7 @@ function applySettingsState(state) {
     inputIkonaOniApiKey.value = String(state?.ikonaOniApiKey || '');
   }
   const restoredMailProvider = isCustomMailProvider(state?.mailProvider)
-    || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email'].includes(String(state?.mailProvider || '').trim())
+    || [ICLOUD_PROVIDER, 'hotmail-api', GMAIL_PROVIDER, 'luckmail-api', '163', '163-vip', '126', 'qq', 'inbucket', '2925', 'cloudflare-temp-email', 'cloudmail'].includes(String(state?.mailProvider || '').trim())
     ? String(state?.mailProvider || '163').trim()
     : (String(state?.emailGenerator || '').trim().toLowerCase() === 'custom'
       || String(state?.emailGenerator || '').trim().toLowerCase() === 'manual'
@@ -7187,6 +8742,8 @@ function applySettingsState(state) {
       selectEmailGenerator.value = 'cloudflare';
     } else if (restoredEmailGenerator === 'cloudflare-temp-email') {
       selectEmailGenerator.value = 'cloudflare-temp-email';
+    } else if (restoredEmailGenerator === 'cloudmail') {
+      selectEmailGenerator.value = 'cloudmail';
     } else {
       selectEmailGenerator.value = 'duck';
     }
@@ -7226,8 +8783,13 @@ function applySettingsState(state) {
   if (inputCustomMailProviderPool) {
     inputCustomMailProviderPool.value = normalizeCustomEmailPoolEntries(state?.customMailProviderPool).join('\n');
   }
-  if (inputCustomEmailPool) {
-    inputCustomEmailPool.value = normalizeCustomEmailPoolEntries(state?.customEmailPool).join('\n');
+  const restoredCustomEmailPoolEntries = typeof restoreCustomEmailPoolEntriesFromState === 'function'
+    ? restoreCustomEmailPoolEntriesFromState(state)
+    : normalizeCustomEmailPoolEntries(state?.customEmailPool);
+  if (typeof setCustomEmailPoolEntriesState === 'function') {
+    setCustomEmailPoolEntriesState(restoredCustomEmailPoolEntries);
+  } else if (inputCustomEmailPool) {
+    inputCustomEmailPool.value = restoredCustomEmailPoolEntries.join('\n');
   }
   if (typeof syncRunCountFromConfiguredEmailPool === 'function') {
     syncRunCountFromConfiguredEmailPool();
@@ -7240,10 +8802,16 @@ function applySettingsState(state) {
   selectLuckmailEmailType.value = normalizeLuckmailEmailType(state?.luckmailEmailType);
   inputLuckmailDomain.value = state?.luckmailDomain || '';
   applyCloudflareTempEmailSettingsState(state);
+  if (typeof applyCloudMailSettingsState === 'function') {
+    applyCloudMailSettingsState(state);
+  }
   renderCloudflareDomainOptions(state?.cloudflareDomain || '');
   setCloudflareDomainEditMode(false, { clearInput: true });
   inputAutoSkipFailures.checked = Boolean(state?.autoRunSkipFailures);
   inputAutoSkipFailuresThreadIntervalMinutes.value = String(normalizeAutoRunThreadIntervalMinutes(state?.autoRunFallbackThreadIntervalMinutes));
+  if (typeof inputStep6CookieCleanupEnabled !== 'undefined' && inputStep6CookieCleanupEnabled) {
+    inputStep6CookieCleanupEnabled.checked = Boolean(state?.step6CookieCleanupEnabled);
+  }
   inputAutoDelayEnabled.checked = Boolean(state?.autoRunDelayEnabled);
   inputAutoDelayMinutes.value = String(normalizeAutoDelayMinutes(state?.autoRunDelayMinutes));
   inputAutoStepDelaySeconds.value = formatAutoStepDelayInputValue(state?.autoStepDelaySeconds);
@@ -7265,47 +8833,76 @@ function applySettingsState(state) {
       ? Boolean(state.phoneVerificationEnabled)
       : DEFAULT_PHONE_VERIFICATION_ENABLED;
   }
-  if (typeof applyPhoneSmsProviderOrderSelection === 'function') {
-    const restoredProviderOrder = Array.isArray(state?.phoneSmsProviderOrder)
-      ? state.phoneSmsProviderOrder
-      : [];
-    applyPhoneSmsProviderOrderSelection(
-      restoredProviderOrder,
-      { ensureDefault: false, syncProvider: false }
-    );
+  if (typeof setSignupMethod === 'function') {
+    setSignupMethod(state?.signupMethod || DEFAULT_SIGNUP_METHOD);
   }
-  if (typeof selectPhoneSmsProvider !== 'undefined' && selectPhoneSmsProvider) {
-    const nextProvider = normalizePhoneSmsProviderValue(state?.phoneSmsProvider || DEFAULT_PHONE_SMS_PROVIDER);
-    selectPhoneSmsProvider.value = nextProvider;
+  const restoredPhoneSmsProvider = normalizePhoneSmsProvider(state?.phoneSmsProvider);
+  const previousPhoneSmsProvider = selectPhoneSmsProvider ? normalizePhoneSmsProvider(selectPhoneSmsProvider.value) : restoredPhoneSmsProvider;
+  const defaultFiveSimProduct = typeof DEFAULT_FIVE_SIM_PRODUCT !== 'undefined'
+    ? DEFAULT_FIVE_SIM_PRODUCT
+    : 'openai';
+  const defaultNexSmsServiceCode = typeof DEFAULT_NEX_SMS_SERVICE_CODE !== 'undefined'
+    ? DEFAULT_NEX_SMS_SERVICE_CODE
+    : 'ot';
+  setPhoneSmsProviderSelectValue(restoredPhoneSmsProvider);
+  const restoredPhoneSmsProviderOrder = typeof applyPhoneSmsProviderOrderSelection === 'function'
+    ? applyPhoneSmsProviderOrderSelection(state?.phoneSmsProviderOrder || [], {
+      ensureDefault: false,
+      syncProvider: false,
+    })
+    : [];
+  updatePhoneSmsProviderOrderSummary(restoredPhoneSmsProviderOrder);
+  if (previousPhoneSmsProvider !== restoredPhoneSmsProvider) {
+    heroSmsCountrySelectionOrder = [];
+    loadHeroSmsCountries().catch((error) => {
+      console.warn('Failed to reload SMS countries after provider restore:', error);
+    });
   }
   if (inputHeroSmsApiKey) {
-    inputHeroSmsApiKey.value = state?.heroSmsApiKey || '';
+    inputHeroSmsApiKey.value = restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? (state?.fiveSimApiKey || '')
+      : (state?.heroSmsApiKey || '');
   }
   if (typeof inputFiveSimApiKey !== 'undefined' && inputFiveSimApiKey) {
     inputFiveSimApiKey.value = String(state?.fiveSimApiKey || '');
   }
   if (typeof inputFiveSimOperator !== 'undefined' && inputFiveSimOperator) {
-    inputFiveSimOperator.value = normalizeFiveSimOperatorValue(state?.fiveSimOperator || DEFAULT_FIVE_SIM_OPERATOR);
+    inputFiveSimOperator.value = typeof normalizeFiveSimOperatorValue === 'function'
+      ? normalizeFiveSimOperatorValue(state?.fiveSimOperator || DEFAULT_FIVE_SIM_OPERATOR)
+      : normalizeFiveSimOperator(state?.fiveSimOperator || DEFAULT_FIVE_SIM_OPERATOR);
   }
   if (typeof inputFiveSimProduct !== 'undefined' && inputFiveSimProduct) {
-    inputFiveSimProduct.value = normalizeFiveSimProductValue(state?.fiveSimProduct || DEFAULT_FIVE_SIM_PRODUCT);
+    inputFiveSimProduct.value = typeof normalizeFiveSimProductValue === 'function'
+      ? normalizeFiveSimProductValue(state?.fiveSimProduct || defaultFiveSimProduct)
+      : String(state?.fiveSimProduct || defaultFiveSimProduct).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultFiveSimProduct;
   }
   if (typeof inputNexSmsApiKey !== 'undefined' && inputNexSmsApiKey) {
     inputNexSmsApiKey.value = String(state?.nexSmsApiKey || '');
   }
   if (typeof inputNexSmsServiceCode !== 'undefined' && inputNexSmsServiceCode) {
-    inputNexSmsServiceCode.value = normalizeNexSmsServiceCodeValue(
-      state?.nexSmsServiceCode || DEFAULT_NEX_SMS_SERVICE_CODE
-    );
+    inputNexSmsServiceCode.value = typeof normalizeNexSmsServiceCodeValue === 'function'
+      ? normalizeNexSmsServiceCodeValue(state?.nexSmsServiceCode || defaultNexSmsServiceCode)
+      : String(state?.nexSmsServiceCode || defaultNexSmsServiceCode).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || defaultNexSmsServiceCode;
   }
   if (typeof inputHeroSmsReuseEnabled !== 'undefined' && inputHeroSmsReuseEnabled) {
     inputHeroSmsReuseEnabled.checked = normalizeHeroSmsReuseEnabledValue(state?.heroSmsReuseEnabled);
   }
+  if (typeof inputFreePhoneReuseEnabled !== 'undefined' && inputFreePhoneReuseEnabled) {
+    inputFreePhoneReuseEnabled.checked = Boolean(state?.freePhoneReuseEnabled);
+  }
+  if (typeof inputFreePhoneReuseAutoEnabled !== 'undefined' && inputFreePhoneReuseAutoEnabled) {
+    inputFreePhoneReuseAutoEnabled.checked = Boolean(state?.freePhoneReuseAutoEnabled);
+  }
   if (typeof selectHeroSmsAcquirePriority !== 'undefined' && selectHeroSmsAcquirePriority) {
     selectHeroSmsAcquirePriority.value = normalizeHeroSmsAcquirePriority(state?.heroSmsAcquirePriority);
   }
-  if (typeof inputHeroSmsMaxPrice !== 'undefined' && inputHeroSmsMaxPrice) {
-    inputHeroSmsMaxPrice.value = normalizeHeroSmsMaxPriceValue(state?.heroSmsMaxPrice || '');
+  if (inputHeroSmsMaxPrice) {
+    inputHeroSmsMaxPrice.value = restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? normalizeFiveSimMaxPriceValue(state?.fiveSimMaxPrice || '')
+      : normalizeHeroSmsMaxPriceValue(state?.heroSmsMaxPrice || '');
+  }
+  if (inputFiveSimOperator) {
+    inputFiveSimOperator.value = normalizeFiveSimOperator(state?.fiveSimOperator);
   }
   if (typeof inputHeroSmsPreferredPrice !== 'undefined' && inputHeroSmsPreferredPrice) {
     inputHeroSmsPreferredPrice.value = normalizeHeroSmsMaxPriceValue(state?.heroSmsPreferredPrice || '');
@@ -7341,76 +8938,50 @@ function applySettingsState(state) {
       normalizePhoneCodePollMaxRoundsValue(state?.phoneCodePollMaxRounds, DEFAULT_PHONE_CODE_POLL_MAX_ROUNDS)
     );
   }
-  const normalizeProvider = typeof normalizePhoneSmsProviderValue === 'function'
-    ? normalizePhoneSmsProviderValue
-    : ((value = '') => {
-      const normalized = String(value || '').trim().toLowerCase();
-      if (normalized === '5sim') return '5sim';
-      if (normalized === 'nexsms') return 'nexsms';
-      return 'hero-sms';
-    });
-  const providerOrderForRestore = typeof resolveNormalizedProviderOrderForRuntime === 'function'
-    ? resolveNormalizedProviderOrderForRuntime(state || {})
-    : [normalizeProvider(
-      state?.phoneSmsProvider
-      || (typeof DEFAULT_PHONE_SMS_PROVIDER !== 'undefined' ? DEFAULT_PHONE_SMS_PROVIDER : 'hero-sms')
-    )];
-  const activeProvider = providerOrderForRestore[0] || normalizeProvider(
-    state?.phoneSmsProvider
-    || (typeof DEFAULT_PHONE_SMS_PROVIDER !== 'undefined' ? DEFAULT_PHONE_SMS_PROVIDER : 'hero-sms')
-  );
-  const fiveSimProviderValue = typeof PHONE_SMS_PROVIDER_FIVE_SIM !== 'undefined'
-    ? PHONE_SMS_PROVIDER_FIVE_SIM
-    : '5sim';
-  const nexSmsProviderValue = typeof PHONE_SMS_PROVIDER_NEXSMS !== 'undefined'
-    ? PHONE_SMS_PROVIDER_NEXSMS
-    : 'nexsms';
-  if (activeProvider === fiveSimProviderValue) {
-    if (typeof applyFiveSimCountrySelection === 'function') {
-      applyFiveSimCountrySelection(
-        Array.isArray(state?.fiveSimCountryOrder) ? state.fiveSimCountryOrder : []
-      );
-    }
-  } else if (activeProvider === nexSmsProviderValue) {
-    if (typeof applyNexSmsCountrySelection === 'function') {
-      applyNexSmsCountrySelection(
-        Array.isArray(state?.nexSmsCountryOrder) ? state.nexSmsCountryOrder : []
-      );
-    }
-  } else if (typeof applyHeroSmsFallbackSelection === 'function') {
-    const primaryCountryId = normalizeHeroSmsCountryId(state?.heroSmsCountryId, 0);
-    const primaryCountries = primaryCountryId > 0
-      ? [{
-        id: primaryCountryId,
+  if (typeof applyHeroSmsFallbackSelection === 'function') {
+    const primaryCountry = restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? {
+        id: normalizeFiveSimCountryId(state?.fiveSimCountryId),
+        label: normalizeFiveSimCountryLabel(state?.fiveSimCountryLabel),
+      }
+      : {
+        id: normalizeHeroSmsCountryId(state?.heroSmsCountryId),
         label: normalizeHeroSmsCountryLabel(state?.heroSmsCountryLabel),
-      }]
-      : [];
+      };
     applyHeroSmsFallbackSelection(
       [
-        ...primaryCountries,
-        ...normalizeHeroSmsCountryFallbackList(
-          Array.isArray(state?.heroSmsCountryFallback) ? state.heroSmsCountryFallback : []
-        ),
+        primaryCountry,
+        ...(restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? normalizeFiveSimCountryFallbackList(state?.fiveSimCountryFallback || [])
+          : normalizeHeroSmsCountryFallbackList(state?.heroSmsCountryFallback || [])),
       ],
       { includePrimary: true }
     );
+    updateHeroSmsPlatformDisplay();
   } else if (selectHeroSmsCountry) {
-    const restoredCountryId = String(normalizeHeroSmsCountryId(state?.heroSmsCountryId, 0));
-    const hasRestoredCountry = restoredCountryId !== '0'
-      && Array.from(selectHeroSmsCountry.options).some((option) => option.value === restoredCountryId);
-    if (hasRestoredCountry) {
+    const restoredCountryId = restoredPhoneSmsProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? String(normalizeFiveSimCountryId(state?.fiveSimCountryId))
+      : String(normalizeHeroSmsCountryId(state?.heroSmsCountryId));
+    if (Array.from(selectHeroSmsCountry.options).some((option) => option.value === restoredCountryId)) {
       selectHeroSmsCountry.value = restoredCountryId;
     } else {
       Array.from(selectHeroSmsCountry.options).forEach((option) => {
         option.selected = false;
       });
     }
+    updateHeroSmsPlatformDisplay();
   }
   updateHeroSmsPlatformDisplay();
   if (typeof updateHeroSmsRuntimeDisplay === 'function') {
     updateHeroSmsRuntimeDisplay(state);
   }
-  if (state?.autoRunTotalRuns) {
+  const isSyncPhase = typeof isAutoRunSourceSyncPhase === 'function'
+    ? isAutoRunSourceSyncPhase
+    : (phase) => ['scheduled', 'running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(phase);
+  const shouldSyncInitialRunCount = typeof shouldSyncRunCountFromAutoRunSource === 'function'
+    ? shouldSyncRunCountFromAutoRunSource(state)
+    : (Boolean(state?.autoRunning) || isSyncPhase(state?.autoRunPhase ?? state?.phase));
+  if (state?.autoRunTotalRuns && shouldSyncInitialRunCount) {
     inputRunCount.value = String(state.autoRunTotalRuns);
   }
 
@@ -7428,8 +8999,13 @@ function applySettingsState(state) {
   }
   updatePanelModeUI();
   updateMailProviderUI();
+  if (typeof queueCustomEmailPoolRefresh === 'function') {
+    queueCustomEmailPoolRefresh();
+  }
   if (isLuckmailProvider(state?.mailProvider)) {
-    queueLuckmailPurchaseRefresh();
+    if (typeof queueLuckmailPurchaseRefresh === 'function') {
+      queueLuckmailPurchaseRefresh();
+    }
   }
   updateButtonStates();
   if (typeof syncPlusManualConfirmationDialog === 'function') {
@@ -7470,6 +9046,9 @@ async function restoreState() {
     renderContributionMode();
   } catch (err) {
     console.error('Failed to restore state:', err);
+    if (typeof applyOperationDelayState === 'function') {
+      applyOperationDelayState(undefined, { restoreFailed: true });
+    }
   }
 }
 
@@ -7523,6 +9102,24 @@ function openRepositoryHomePage() {
 
 function openReleaseListPage() {
   openExternalUrl(getReleaseListUrl());
+}
+
+function ignoreCurrentReleaseUpdate() {
+  if (!sidepanelUpdateService?.ignoreReleaseSnapshot) {
+    return;
+  }
+
+  const ignoredVersion = sidepanelUpdateService.ignoreReleaseSnapshot(currentReleaseSnapshot);
+  if (!ignoredVersion) {
+    return;
+  }
+
+  renderReleaseSnapshot({
+    ...currentReleaseSnapshot,
+    status: 'ignored',
+    ignoredVersion,
+  });
+  showToast(`已忽略 ${ignoredVersion} 更新，有新版本时会再次提醒。`, 'info', 2200);
 }
 
 function openCloudflareTempEmailUsageGuidePage() {
@@ -7619,6 +9216,10 @@ function resetUpdateCard() {
     btnOpenRelease.hidden = true;
     btnOpenRelease.onclick = null;
   }
+  if (btnIgnoreRelease) {
+    btnIgnoreRelease.hidden = true;
+    btnIgnoreRelease.onclick = null;
+  }
 }
 
 function renderReleaseSnapshot(snapshot) {
@@ -7666,6 +9267,17 @@ function renderReleaseSnapshot(snapshot) {
         btnOpenRelease.textContent = '前往更新';
         btnOpenRelease.onclick = () => openExternalUrl(logUrl);
       }
+      if (btnIgnoreRelease) {
+        btnIgnoreRelease.hidden = false;
+        btnIgnoreRelease.onclick = ignoreCurrentReleaseUpdate;
+      }
+      break;
+    }
+
+    case 'ignored': {
+      extensionUpdateStatus.textContent = localVersionText || 'Ultra0.0';
+      extensionUpdateStatus.classList.add('is-version-label');
+      resetUpdateCard();
       break;
     }
 
@@ -7942,6 +9554,7 @@ function getSelectedEmailGenerator() {
   }
   if (generator === 'cloudflare') return 'cloudflare';
   if (generator === 'cloudflare-temp-email') return 'cloudflare-temp-email';
+  if (generator === 'cloudmail') return 'cloudmail';
   return 'duck';
 }
 
@@ -7989,6 +9602,14 @@ function getEmailGeneratorUiCopy() {
       label: 'Cloudflare Temp Email',
     };
   }
+  if (getSelectedEmailGenerator() === 'cloudmail') {
+    return {
+      buttonLabel: '生成',
+      placeholder: '点击生成 Cloud Mail 邮箱，或手动粘贴邮箱',
+      successVerb: '生成',
+      label: 'Cloud Mail',
+    };
+  }
 
   return {
     buttonLabel: '获取',
@@ -8033,6 +9654,56 @@ function getCustomVerificationPromptCopy(step) {
       },
     } : {}),
   };
+}
+
+function normalizeGoPayOtpInputValue(value = '') {
+  return window.GoPayUtils?.normalizeGoPayOtp
+    ? window.GoPayUtils.normalizeGoPayOtp(value)
+    : String(value || '').trim().replace(/[^\d]/g, '');
+}
+
+async function openGoPayOtpInputDialog(payload = {}) {
+  if (!sharedFormDialog?.open) {
+    throw new Error('验证码输入弹窗未加载，请刷新扩展后重试。');
+  }
+
+  const initialCode = normalizeGoPayOtpInputValue(payload.code || inputGoPayOtp?.value || latestState?.gopayOtp || '');
+  const result = await sharedFormDialog.open({
+    title: '输入 GoPay 验证码',
+    message: '请把当前 GoPay 页面收到的验证码填到这里，确认后插件会继续填写验证码并进入 PIN 步骤。',
+    confirmLabel: '提交验证码',
+    confirmVariant: 'btn-primary',
+    fields: [
+      {
+        key: 'code',
+        label: '验证码',
+        type: 'text',
+        required: true,
+        requiredMessage: '请输入 GoPay 验证码。',
+        placeholder: '请输入数字验证码',
+        inputMode: 'numeric',
+        autocomplete: 'one-time-code',
+        value: initialCode,
+        validate: (value) => {
+          const normalized = normalizeGoPayOtpInputValue(value);
+          if (!normalized) return '请输入 GoPay 验证码。';
+          if (normalized.length < 4) return 'GoPay 验证码长度过短，请检查。';
+          return '';
+        },
+      },
+    ],
+  });
+  const code = normalizeGoPayOtpInputValue(result?.code || '');
+  if (!code) {
+    return { cancelled: true, code: '' };
+  }
+  if (inputGoPayOtp) {
+    inputGoPayOtp.value = code;
+  }
+  syncLatestState({ gopayOtp: code });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => {});
+  return { code };
 }
 
 async function openCustomVerificationConfirmDialog(step) {
@@ -8338,6 +10009,7 @@ function updateMailProviderUI() {
   const useIcloudProvider = isIcloudMailProvider();
   const useEmailGenerator = !useHotmail && !useLuckmail && !useCustomEmail && (!useGeneratedAlias || useGmail);
   const useCloudflareTempEmailProvider = selectMailProvider.value === 'cloudflare-temp-email';
+  const useCloudMailProvider = selectMailProvider.value === 'cloudmail';
   const aliasUiCopy = useGeneratedAlias
     ? getManagedAliasProviderUiCopy(selectMailProvider.value, mail2925Mode)
     : null;
@@ -8360,6 +10032,7 @@ function updateMailProviderUI() {
   const useCloudflare = selectedGenerator === 'cloudflare';
   const useIcloud = selectedGenerator === 'icloud';
   const useCloudflareTempEmailGenerator = selectedGenerator === 'cloudflare-temp-email';
+  const useCloudMailGenerator = selectedGenerator === 'cloudmail';
   const useCodex2ApiLoginOnly = typeof isCodex2ApiLoginOnlyModeEnabled === 'function'
     ? isCodex2ApiLoginOnlyModeEnabled()
     : false;
@@ -8379,6 +10052,9 @@ function updateMailProviderUI() {
   const showCloudflareDomain = useEmailGenerator && useCloudflare;
   const showCloudflareTempEmailSettings = useCloudflareTempEmailProvider || (useEmailGenerator && useCloudflareTempEmailGenerator);
   const showCloudflareTempEmailReceiveMailbox = useCloudflareTempEmailProvider && !useCloudflareTempEmailGenerator;
+  const showCloudMailSettings = useCloudMailProvider || (useEmailGenerator && useCloudMailGenerator);
+  const showCloudMailReceiveMailbox = useCloudMailProvider && !useCloudMailGenerator;
+  const showCloudMailDomain = useEmailGenerator && useCloudMailGenerator;
   const selectedIcloudHost = typeof getSelectedIcloudHostPreference === 'function'
     ? getSelectedIcloudHostPreference()
     : (normalizeIcloudHostValue(icloudHostPreferenceValue || latestState?.icloudHostPreference || '')
@@ -8395,10 +10071,23 @@ function updateMailProviderUI() {
   }
   if (typeof rowCustomEmailPool !== 'undefined' && rowCustomEmailPool) {
     rowCustomEmailPool.style.display = useCustomEmailPool ? '' : 'none';
+    if (useCustomEmailPool) {
+      queueCustomEmailPoolRefresh();
+    } else {
+      resetCustomEmailPoolManager();
+    }
   }
   if (cloudflareTempEmailSection) {
     cloudflareTempEmailSection.style.display = showCloudflareTempEmailSettings ? '' : 'none';
   }
+  if (typeof cloudMailSection !== 'undefined' && cloudMailSection) {
+    cloudMailSection.style.display = showCloudMailSettings ? '' : 'none';
+  }
+  if (typeof rowCloudMailBaseUrl !== 'undefined' && rowCloudMailBaseUrl) rowCloudMailBaseUrl.style.display = showCloudMailSettings ? '' : 'none';
+  if (typeof rowCloudMailAdminEmail !== 'undefined' && rowCloudMailAdminEmail) rowCloudMailAdminEmail.style.display = showCloudMailSettings ? '' : 'none';
+  if (typeof rowCloudMailAdminPassword !== 'undefined' && rowCloudMailAdminPassword) rowCloudMailAdminPassword.style.display = showCloudMailSettings ? '' : 'none';
+  if (typeof rowCloudMailReceiveMailbox !== 'undefined' && rowCloudMailReceiveMailbox) rowCloudMailReceiveMailbox.style.display = showCloudMailReceiveMailbox ? '' : 'none';
+  if (typeof rowCloudMailDomain !== 'undefined' && rowCloudMailDomain) rowCloudMailDomain.style.display = showCloudMailDomain ? '' : 'none';
   if (icloudSection) {
     const showIcloudSection = (useEmailGenerator && useIcloud) || useIcloudProvider;
     icloudSection.style.display = showIcloudSection ? '' : 'none';
@@ -8556,6 +10245,9 @@ function updateMailProviderUI() {
   }
   if (useCustomEmailPool) {
     syncRunCountFromCustomEmailPool();
+    if (typeof queueCustomEmailPoolRefresh === 'function') {
+      queueCustomEmailPoolRefresh();
+    }
   }
   if (useCustomMailProviderPool) {
     syncRunCountFromCustomMailProviderPool();
@@ -8636,9 +10328,137 @@ async function saveCloudflareTempEmailDomainSettings(domains, activeDomain, opti
   }
 }
 
+async function handleDeleteCloudflareDomain(domain) {
+  const targetDomain = normalizeCloudflareDomainValue(domain);
+  if (!targetDomain) {
+    return;
+  }
+
+  const { domains, activeDomain } = getCloudflareDomainsFromState();
+  const nextDomains = domains.filter((item) => item !== targetDomain);
+  if (nextDomains.length === domains.length) {
+    return;
+  }
+
+  const currentDomain = normalizeCloudflareDomainValue(selectCfDomain.value || activeDomain);
+  const nextActiveDomain = currentDomain === targetDomain
+    ? (nextDomains[0] || '')
+    : (nextDomains.includes(currentDomain) ? currentDomain : nextDomains[0] || '');
+  await saveCloudflareDomainSettings(nextDomains, nextActiveDomain, { silent: true });
+  showToast(`已删除 Cloudflare 域名：${targetDomain}`, 'success', 1600);
+}
+
+async function handleDeleteCloudflareTempEmailDomain(domain) {
+  const targetDomain = normalizeCloudflareTempEmailDomainValue(domain);
+  if (!targetDomain) {
+    return;
+  }
+
+  const { domains, activeDomain } = getCloudflareTempEmailDomainsFromState();
+  const nextDomains = domains.filter((item) => item !== targetDomain);
+  if (nextDomains.length === domains.length) {
+    return;
+  }
+
+  const currentDomain = normalizeCloudflareTempEmailDomainValue(selectTempEmailDomain.value || activeDomain);
+  const nextActiveDomain = currentDomain === targetDomain
+    ? (nextDomains[0] || '')
+    : (nextDomains.includes(currentDomain) ? currentDomain : nextDomains[0] || '');
+  await saveCloudflareTempEmailDomainSettings(nextDomains, nextActiveDomain, { silent: true });
+  showToast(`已删除 Cloudflare Temp Email 域名：${targetDomain}`, 'success', 1600);
+}
+
+async function handleAddSub2ApiGroup() {
+  if (!sharedFormDialog?.open) {
+    showToast('表单弹窗未加载，请刷新扩展后重试。', 'error');
+    return;
+  }
+
+  const result = await sharedFormDialog.open({
+    title: '添加 SUB2API 分组',
+    confirmLabel: '添加',
+    confirmVariant: 'btn-primary',
+    fields: [
+      {
+        key: 'groupName',
+        label: '分组',
+        type: 'text',
+        placeholder: '例如 openai-plus',
+        autocomplete: 'off',
+        required: true,
+        requiredMessage: '请先填写 SUB2API 分组名称。',
+        validate: (value) => {
+          const names = normalizeSub2ApiGroupOptions(value);
+          return names.length ? '' : '请先填写 SUB2API 分组名称。';
+        },
+      },
+    ],
+  });
+  if (!result) {
+    return;
+  }
+
+  const newGroups = normalizeSub2ApiGroupOptions(result.groupName);
+  if (!newGroups.length) {
+    return;
+  }
+
+  const selectedGroup = newGroups[0];
+  const nextGroups = normalizeSub2ApiGroupOptions(
+    getSub2ApiGroupOptionsState(latestState),
+    newGroups
+  );
+  syncLatestState({
+    sub2apiGroupName: selectedGroup,
+    sub2apiGroupNames: nextGroups,
+  });
+  renderSub2ApiGroupOptions(latestState, selectedGroup);
+  markSettingsDirty(true);
+  await saveSettings({ silent: true }).catch(() => { });
+  showToast(`已添加并切换到 SUB2API 分组：${selectedGroup}`, 'success', 1800);
+}
+
+async function handleDeleteSub2ApiGroup(groupName) {
+  const targetName = String(groupName || '').trim();
+  if (!targetName) {
+    return;
+  }
+
+  const currentGroups = getSub2ApiGroupOptionsState(latestState);
+  if (currentGroups.length <= 1) {
+    showToast('至少保留一个 SUB2API 分组。', 'warn', 1800);
+    return;
+  }
+
+  const targetKey = targetName.toLowerCase();
+  const nextGroups = currentGroups.filter((name) => name.toLowerCase() !== targetKey);
+  if (nextGroups.length === currentGroups.length) {
+    return;
+  }
+
+  const currentGroup = getSelectedSub2ApiGroupName();
+  const nextSelectedGroup = currentGroup.toLowerCase() === targetKey
+    ? nextGroups[0]
+    : (nextGroups.find((name) => name.toLowerCase() === currentGroup.toLowerCase()) || nextGroups[0]);
+
+  syncLatestState({
+    sub2apiGroupName: nextSelectedGroup,
+    sub2apiGroupNames: nextGroups,
+  });
+  renderSub2ApiGroupOptions(latestState, nextSelectedGroup);
+  sub2ApiGroupPicker.setOpen(true);
+  markSettingsDirty(true);
+  await saveSettings({ silent: true }).catch(() => { });
+  showToast(`已删除 SUB2API 分组：${targetName}`, 'success', 1600);
+}
+
 function updatePanelModeUI() {
-  const useSub2Api = selectPanelMode.value === 'sub2api';
-  const useCodex2Api = selectPanelMode.value === 'codex2api';
+  const panelMode = getSelectedPanelMode();
+  if (selectPanelMode) {
+    selectPanelMode.value = panelMode;
+  }
+  const useSub2Api = panelMode === 'sub2api';
+  const useCodex2Api = panelMode === 'codex2api';
   const useCpa = !useSub2Api && !useCodex2Api;
   const useCodex2ApiLoginOnly = useCodex2Api && Boolean(inputCodex2ApiLoginOnlyMode?.checked);
   rowVpsUrl.style.display = useCpa ? '' : 'none';
@@ -8648,6 +10468,7 @@ function updatePanelModeUI() {
   rowSub2ApiEmail.style.display = useSub2Api ? '' : 'none';
   rowSub2ApiPassword.style.display = useSub2Api ? '' : 'none';
   rowSub2ApiGroup.style.display = useSub2Api ? '' : 'none';
+  rowSub2ApiAccountPriority.style.display = useSub2Api ? '' : 'none';
   rowSub2ApiDefaultProxy.style.display = useSub2Api ? '' : 'none';
   rowCodex2ApiUrl.style.display = useCodex2Api ? '' : 'none';
   rowCodex2ApiAdminKey.style.display = useCodex2Api ? '' : 'none';
@@ -8903,8 +10724,8 @@ function appendLog(entry) {
   const line = document.createElement('div');
   line.className = `log-line log-${entry.level}`;
 
-  const stepMatch = entry.message.match(/(?:Step\s+(\d+)|步骤\s*(\d+))/);
-  const stepNum = stepMatch ? (stepMatch[1] || stepMatch[2]) : null;
+  const normalizedStep = Math.floor(Number(entry.step) || 0);
+  const stepNum = normalizedStep > 0 ? String(normalizedStep) : null;
 
   let html = `<span class="log-time">${time}</span> `;
   html += `<span class="log-level log-level-${entry.level}">${levelLabel}</span> `;
@@ -8945,8 +10766,8 @@ async function fetchGeneratedEmail(options = {}) {
         mail2925Mode: getSelectedMail2925Mode(),
         ...(getSelectedEmailGenerator() === CUSTOM_EMAIL_POOL_GENERATOR
           ? {
-            customEmailPool: normalizeCustomEmailPoolEntries(inputCustomEmailPool?.value),
-          }
+              customEmailPool: getActiveCustomEmailPoolEmails(),
+            }
           : {}),
         ...buildManagedAliasBaseEmailPayload(),
       },
@@ -9066,6 +10887,8 @@ const hotmailManager = window.SidepanelHotmailManager?.createHotmailManager({
     inputHotmailImport,
     inputHotmailPassword,
     inputHotmailRefreshToken,
+    inputHotmailSearch,
+    selectHotmailFilter,
     selectMailProvider,
   },
   helpers: {
@@ -9108,9 +10931,14 @@ const payPalManager = window.SidepanelPayPalManager?.createPayPalManager({
   },
   dom: {
     btnAddPayPalAccount,
+    btnPayPalAccountMenu,
+    payPalAccountCurrent,
+    payPalAccountMenu,
+    payPalAccountPickerRoot,
     selectPayPalAccount,
   },
   helpers: {
+    editableListPicker: editableListPickerModule,
     escapeHtml,
     getPayPalAccounts,
     openFormDialog: (options) => {
@@ -9148,6 +10976,8 @@ const mail2925Manager = window.SidepanelMail2925Manager?.createMail2925Manager({
     inputMail2925Email,
     inputMail2925Import,
     inputMail2925Password,
+    inputMail2925Search,
+    selectMail2925Filter,
     mail2925AccountsList,
     mail2925FormShell,
     mail2925ListShell,
@@ -9279,6 +11109,70 @@ const bindLuckmailEvents = luckmailManager?.bindLuckmailEvents
   || (() => { });
 bindLuckmailEvents();
 
+const customEmailPoolManager = window.SidepanelCustomEmailPoolManager?.createCustomEmailPoolManager({
+  dom: {
+    btnCustomEmailPoolRefresh,
+    btnCustomEmailPoolClearUsed,
+    btnCustomEmailPoolDeleteAll,
+    inputCustomEmailPoolImport,
+    btnCustomEmailPoolImport,
+    customEmailPoolSummary,
+    inputCustomEmailPoolSearch,
+    selectCustomEmailPoolFilter,
+    checkboxCustomEmailPoolSelectAll,
+    customEmailPoolSelectionSummary,
+    btnCustomEmailPoolBulkUsed,
+    btnCustomEmailPoolBulkUnused,
+    btnCustomEmailPoolBulkEnable,
+    btnCustomEmailPoolBulkDisable,
+    btnCustomEmailPoolBulkDelete,
+    customEmailPoolList,
+  },
+  helpers: {
+    copyTextToClipboard,
+    escapeHtml,
+    openConfirmModal,
+    showToast,
+  },
+  state: {
+    getEntries: () => getNormalizedCustomEmailPoolEntriesState(),
+    setEntries: (entries) => {
+      setCustomEmailPoolEntriesState(entries);
+    },
+    getCurrentEmail: () => String(inputEmail?.value || latestState?.email || '').trim().toLowerCase(),
+    isVisible: () => Boolean(rowCustomEmailPool) && rowCustomEmailPool.style.display !== 'none',
+  },
+  actions: {
+    persistEntries: async () => {
+      syncRunCountFromConfiguredEmailPool();
+      updateMailProviderUI();
+      markSettingsDirty(true);
+      await saveSettings({ silent: true });
+    },
+    setRuntimeEmail: async (email) => {
+      await setRuntimeEmailState(email);
+      syncLatestState({ email });
+      if (inputEmail) {
+        inputEmail.value = email || '';
+      }
+    },
+  },
+  constants: {
+    copyIcon: COPY_ICON,
+  },
+});
+const queueCustomEmailPoolRefresh = customEmailPoolManager?.queueCustomEmailPoolRefresh
+  || (() => { });
+const refreshCustomEmailPoolEntries = customEmailPoolManager?.refreshCustomEmailPoolEntries
+  || (async () => { });
+const renderCustomEmailPoolEntries = customEmailPoolManager?.renderCustomEmailPoolEntries
+  || (() => { });
+const resetCustomEmailPoolManager = customEmailPoolManager?.reset
+  || (() => { });
+const bindCustomEmailPoolEvents = customEmailPoolManager?.bindEvents
+  || (() => { });
+bindCustomEmailPoolEvents();
+
 const accountRecordsManager = window.SidepanelAccountRecordsManager?.createAccountRecordsManager({
   state: {
     getLatestState: () => latestState,
@@ -9341,6 +11235,7 @@ const contributionModeManager = window.SidepanelContributionMode?.createContribu
     rowPhoneVerificationEnabled,
     rowCustomPassword,
     rowLocalCpaStep9Mode,
+    rowSub2ApiAccountPriority,
     rowSub2ApiDefaultProxy,
     rowSub2ApiEmail,
     rowSub2ApiGroup,
@@ -9383,6 +11278,7 @@ const baseRenderContributionMode = contributionModeManager?.render
 const renderContributionMode = () => {
   baseRenderContributionMode();
   renderContributionUpdateHint();
+  updateSignupMethodUI({ notify: true });
 };
 const bindContributionModeEvents = contributionModeManager?.bindEvents
   || (() => { });
@@ -9556,6 +11452,8 @@ async function handleSkipStep(step) {
     }
   }
 
+  await persistCurrentSettingsForAction();
+
   const response = await chrome.runtime.sendMessage({
     type: 'SKIP_STEP',
     source: 'sidepanel',
@@ -9584,6 +11482,10 @@ stepsList?.addEventListener('click', async (event) => {
       return;
     }
     await persistCurrentSettingsForAction();
+    const gpcCreateStep = getStepIdByKeyForCurrentMode('plus-checkout-create') || 6;
+    if (step === gpcCreateStep && !(await ensureGpcApiKeyReadyForStart())) {
+      return;
+    }
     if (step === 3) {
       if (inputPassword.value !== (latestState?.customPassword || '')) {
         await chrome.runtime.sendMessage({
@@ -9593,8 +11495,12 @@ stepsList?.addEventListener('click', async (event) => {
         });
         syncLatestState({ customPassword: inputPassword.value });
       }
-      let email = inputEmail.value.trim();
-      if (selectMailProvider.value === 'hotmail-api' || isLuckmailProvider()) {
+      if (shouldExecuteStep3WithSignupPhoneIdentity(latestState)) {
+        const response = await chrome.runtime.sendMessage({ type: 'EXECUTE_STEP', source: 'sidepanel', payload: { step } });
+        if (response?.error) {
+          throw new Error(response.error);
+        }
+      } else if (selectMailProvider.value === 'hotmail-api' || isLuckmailProvider()) {
         const response = await chrome.runtime.sendMessage({ type: 'EXECUTE_STEP', source: 'sidepanel', payload: { step } });
         if (response?.error) {
           throw new Error(response.error);
@@ -9819,6 +11725,14 @@ autoStartModal?.addEventListener('click', (event) => {
 btnAutoStartClose?.addEventListener('click', () => resolveModalChoice(null));
 
 async function startAutoRunFromCurrentSettings() {
+  const initialLockedRunCount = typeof getLockedRunCountFromEmailPool === 'function'
+    ? getLockedRunCountFromEmailPool()
+    : 0;
+  const requestedTotalRuns = initialLockedRunCount > 0
+    ? initialLockedRunCount
+    : getRunCountValue();
+  registerPendingAutoRunStartRunCount(requestedTotalRuns);
+
   try {
     await refreshContributionContentHint();
   } catch (error) {
@@ -9827,6 +11741,10 @@ async function startAutoRunFromCurrentSettings() {
 
   if (typeof persistCurrentSettingsForAction === 'function') {
     await persistCurrentSettingsForAction();
+  }
+  if (!(await ensureGpcApiKeyReadyForStart())) {
+    clearPendingAutoRunStartRunCount();
+    return false;
   }
 
   const customEmailPoolEnabled = typeof usesCustomEmailPoolGenerator === 'function'
@@ -9842,13 +11760,11 @@ async function startAutoRunFromCurrentSettings() {
   if (codex2ApiLoginOnlyEnabled && lockedRunCount <= 0) {
     throw new Error('请先在登录账号池里至少填写 1 个登录邮箱。');
   }
-  const totalRuns = lockedRunCount > 0 ? lockedRunCount : getRunCountValue();
+  const totalRuns = lockedRunCount > 0 ? lockedRunCount : requestedTotalRuns;
+  registerPendingAutoRunStartRunCount(totalRuns);
   if (lockedRunCount > 0) {
     inputRunCount.value = String(lockedRunCount);
   }
-  const plusModeEnabled = typeof inputPlusModeEnabled !== 'undefined' && inputPlusModeEnabled
-    ? Boolean(inputPlusModeEnabled.checked)
-    : Boolean(currentPlusModeEnabled || latestState?.plusModeEnabled);
   let mode = 'restart';
   const autoRunSkipFailures = inputAutoSkipFailures.checked;
   const contributionNickname = String(inputContributionNickname?.value || '').trim();
@@ -9863,35 +11779,21 @@ async function startAutoRunFromCurrentSettings() {
     const runningStep = getRunningSteps()[0] ?? null;
     const choice = await openAutoStartChoiceDialog(startStep, { runningStep });
     if (!choice) {
+      clearPendingAutoRunStartRunCount();
       return false;
     }
     mode = choice;
-  }
-
-  const confirmedPlusContributionPrompt = await maybeShowPlusContributionPromptBeforeAutoRun(plusModeEnabled);
-  if (!confirmedPlusContributionPrompt) {
-    return false;
   }
 
   if (shouldWarnAutoRunFallbackRisk(totalRuns, autoRunSkipFailures)
     && !isAutoRunFallbackRiskPromptDismissed()) {
     const result = await openAutoRunFallbackRiskConfirmModal(totalRuns);
     if (!result.confirmed) {
+      clearPendingAutoRunStartRunCount();
       return false;
     }
     if (result.dismissPrompt) {
       setAutoRunFallbackRiskPromptDismissed(true);
-    }
-  }
-
-  if (shouldWarnPlusAutoRunRisk(totalRuns, plusModeEnabled)
-    && !isAutoRunPlusRiskPromptDismissed()) {
-    const result = await openPlusAutoRunRiskConfirmModal(totalRuns);
-    if (!result.confirmed) {
-      return false;
-    }
-    if (result.dismissPrompt) {
-      setAutoRunPlusRiskPromptDismissed(true);
     }
   }
 
@@ -9901,8 +11803,8 @@ async function startAutoRunFromCurrentSettings() {
   const delayMinutes = normalizeAutoDelayMinutes(inputAutoDelayMinutes.value);
   inputAutoDelayMinutes.value = String(delayMinutes);
   btnAutoRun.innerHTML = delayEnabled
-    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 璁″垝涓?..'
-    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 杩愯涓?..';
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 计划中...'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 运行中...';
   const response = await chrome.runtime.sendMessage({
     type: delayEnabled ? 'SCHEDULE_AUTO_RUN' : 'AUTO_RUN',
     source: 'sidepanel',
@@ -9917,6 +11819,7 @@ async function startAutoRunFromCurrentSettings() {
     },
   });
   if (response?.error) {
+    clearPendingAutoRunStartRunCount();
     throw new Error(response.error);
   }
   return true;
@@ -9927,6 +11830,7 @@ btnAutoRun.addEventListener('click', async () => {
   try {
     await startAutoRunFromCurrentSettings();
   } catch (err) {
+    clearPendingAutoRunStartRunCount();
     setDefaultAutoRunButton();
     inputRunCount.disabled = shouldLockRunCountToEmailPool();
     showToast(err.message, 'error');
@@ -9996,6 +11900,9 @@ btnReset.addEventListener('click', async () => {
     currentLuckmailPurchase: null,
     currentLuckmailMailCursor: null,
     email: null,
+    signupPhoneNumber: '',
+    accountIdentifierType: null,
+    accountIdentifier: '',
   });
   syncAutoRunState({
     autoRunning: false,
@@ -10013,6 +11920,12 @@ btnReset.addEventListener('click', async () => {
   displayLocalhostUrl.textContent = '等待中...';
   displayLocalhostUrl.classList.remove('has-value');
   inputEmail.value = '';
+  if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+    inputSignupPhone.value = '';
+  }
+  if (typeof syncSignupPhoneInputFromState === 'function') {
+    syncSignupPhoneInputFromState(latestState);
+  }
   displayStatus.textContent = '就绪';
   statusBar.className = 'status-bar';
   logArea.innerHTML = '';
@@ -10061,6 +11974,33 @@ inputEmail.addEventListener('change', async () => {
   }
 });
 inputEmail.addEventListener('input', updateButtonStates);
+if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+  inputSignupPhone.addEventListener('focus', () => {
+    signupPhoneInputFocused = true;
+  });
+  inputSignupPhone.addEventListener('blur', async () => {
+    signupPhoneInputFocused = false;
+    if (!signupPhoneInputDirty) {
+      return;
+    }
+    try {
+      await persistSignupPhoneInputValue({ final: true, silent: true });
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+  inputSignupPhone.addEventListener('change', async () => {
+    try {
+      await persistSignupPhoneInputValue({ final: true, silent: true });
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  });
+  inputSignupPhone.addEventListener('input', () => {
+    signupPhoneInputDirty = true;
+    updateButtonStates();
+  });
+}
 inputVpsUrl.addEventListener('input', () => {
   markSettingsDirty(true);
   scheduleSettingsAutoSave();
@@ -10113,15 +12053,20 @@ inputPassword.addEventListener('blur', () => {
 
 inputPlusModeEnabled?.addEventListener('change', () => {
   updatePlusModeUI();
+  updateSignupMethodUI({ notify: true });
   syncStepDefinitionsForMode(
     getSelectedPanelMode(),
     isCodex2ApiLoginOnlyModeEnabled(),
     Boolean(inputPlusModeEnabled.checked),
     getSelectedPlusPaymentMethod(),
-    { render: true }
+    { render: true, signupMethod: getSelectedSignupMethod() }
   );
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+});
+
+inputOperationDelayEnabled?.addEventListener('change', () => {
+  persistOperationDelayToggle().catch(() => { });
 });
 
 selectPlusPaymentMethod?.addEventListener('change', () => {
@@ -10136,6 +12081,105 @@ selectPlusPaymentMethod?.addEventListener('change', () => {
   );
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+});
+
+btnGpcCardKeyPurchase?.addEventListener('click', () => {
+  openExternalUrl('https://pay.ldxp.cn/shop/gpc');
+});
+
+btnGpcHelperConvertApiKey?.addEventListener('click', () => {
+  openExternalUrl(GPC_HELPER_PORTAL_URL);
+});
+
+btnGpcHelperBalance?.addEventListener('click', async () => {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'REFRESH_GPC_CARD_BALANCE',
+      source: 'sidepanel',
+      payload: {
+        gopayHelperApiUrl: inputGpcHelperApi?.value || DEFAULT_GPC_HELPER_API_URL,
+        gopayHelperApiKey: inputGpcHelperCardKey?.value || '',
+        gopayHelperCountryCode: selectGpcHelperCountryCode?.value || '+86',
+        reason: 'manual',
+      },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    if (displayGpcHelperBalance) {
+      displayGpcHelperBalance.textContent = response?.balance || '余额已更新';
+    }
+    const nextState = {
+      gopayHelperBalance: response?.balance || latestState?.gopayHelperBalance || '',
+      gopayHelperBalancePayload: response?.data || response?.payload?.data || response?.payload || latestState?.gopayHelperBalancePayload || null,
+      gopayHelperBalanceUpdatedAt: response?.updatedAt || Date.now(),
+      gopayHelperBalanceError: '',
+      gopayHelperRemainingUses: getGpcBalanceRemainingUsesFromResponse(response) ?? 0,
+      gopayHelperAutoModeEnabled: getGpcAutoModeEnabledFromResponse(response),
+      gopayHelperApiKeyStatus: response?.apiKeyStatus || response?.data?.status || response?.payload?.data?.status || response?.payload?.status || '',
+    };
+    const nextAutoModePermission = getGpcAutoModePermissionFromPayload(nextState.gopayHelperBalancePayload);
+    const nextAutoModeDenied = nextAutoModePermission === false;
+    const nextAutoModeConfirmed = nextAutoModePermission === true || nextState.gopayHelperAutoModeEnabled;
+    const selectedModeBeforeBalanceState = getSelectedGpcHelperPhoneMode();
+    syncLatestState(nextState);
+    if (nextAutoModeDenied && selectedModeBeforeBalanceState === GPC_HELPER_PHONE_MODE_AUTO) {
+      selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
+      syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
+      await saveSettings({ silent: true, force: true }).catch(() => {});
+      showToast('当前 API Key 未开通自动模式，已切回手动模式。', 'warn');
+    } else if (nextAutoModeDenied) {
+      showToast('GPC 余额已更新，当前 API Key 只能使用手动模式。', 'success');
+    } else if (nextAutoModeConfirmed) {
+      showToast('GPC 余额已更新，自动模式可用。', 'success');
+    } else {
+      showToast('GPC 余额已更新，当前接口未返回自动模式权限，已保留所选模式。', 'success');
+    }
+    updatePlusModeUI();
+  } catch (error) {
+    showToast(error?.message || '查询 GPC 余额失败。', 'error');
+  }
+});
+
+selectPlusPaymentMethod?.addEventListener('change', () => {
+  updatePlusModeUI();
+  syncStepDefinitionsForMode(Boolean(inputPlusModeEnabled?.checked), {
+    render: true,
+    plusPaymentMethod: selectPlusPaymentMethod.value,
+  });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+[
+  inputGpcHelperApi,
+  inputGpcHelperCardKey,
+  selectGpcHelperPhoneMode,
+  selectGpcHelperCountryCode,
+  inputGpcHelperPhone,
+  selectGpcHelperOtpChannel,
+  inputGpcHelperLocalSmsEnabled,
+  inputGpcHelperLocalSmsUrl,
+  inputGpcHelperPin,
+  selectGoPayCountryCode,
+  inputGoPayPhone,
+  inputGoPayOtp,
+  inputGoPayPin,
+].forEach((input) => {
+  input?.addEventListener('input', () => {
+    markSettingsDirty(true);
+    scheduleSettingsAutoSave();
+  });
+  input?.addEventListener('change', () => {
+    if (input === selectGpcHelperPhoneMode || input === selectGpcHelperOtpChannel || input === inputGpcHelperLocalSmsEnabled) {
+      updatePlusModeUI();
+    }
+    markSettingsDirty(true);
+    saveSettings({ silent: true }).catch(() => { });
+  });
+  input?.addEventListener('blur', () => {
+    saveSettings({ silent: true }).catch(() => { });
+  });
 });
 
 selectMailProvider.addEventListener('change', async () => {
@@ -10235,7 +12279,20 @@ checkboxAutoDeleteIcloud?.addEventListener('change', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
-selectPanelMode.addEventListener('change', () => {
+selectPanelMode.addEventListener('change', async () => {
+  const previousPanelMode = normalizePanelMode(latestState?.panelMode || 'cpa');
+  const nextPanelMode = normalizePanelMode(selectPanelMode.value);
+  selectPanelMode.value = nextPanelMode;
+  const confirmed = await confirmCpaPhoneSignupIfNeeded({
+    signupMethod: getSelectedSignupMethod(),
+    panelMode: nextPanelMode,
+  });
+  if (!confirmed) {
+    selectPanelMode.value = previousPanelMode;
+    updatePanelModeUI();
+    return;
+  }
+  syncLatestState({ panelMode: nextPanelMode });
   updatePanelModeUI();
   syncStepDefinitionsForMode(
     getSelectedPanelMode(),
@@ -10581,12 +12638,31 @@ inputSub2ApiPassword.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
-inputSub2ApiGroup.addEventListener('input', () => {
+inputSub2ApiGroup.addEventListener('change', () => {
+  syncLatestState({
+    sub2apiGroupName: getSelectedSub2ApiGroupName(),
+    sub2apiGroupNames: normalizeSub2ApiGroupOptions(
+      getSub2ApiGroupOptionsState(latestState),
+      getSelectedSub2ApiGroupName()
+    ),
+  });
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputSub2ApiAccountPriority.addEventListener('input', () => {
   markSettingsDirty(true);
   scheduleSettingsAutoSave();
 });
-inputSub2ApiGroup.addEventListener('blur', () => {
+inputSub2ApiAccountPriority.addEventListener('blur', () => {
+  inputSub2ApiAccountPriority.value = String(normalizeSub2ApiAccountPriorityValue(inputSub2ApiAccountPriority.value));
   saveSettings({ silent: true }).catch(() => { });
+});
+
+btnAddSub2ApiGroup?.addEventListener('click', () => {
+  handleAddSub2ApiGroup().catch((error) => {
+    showToast(error?.message || '添加 SUB2API 分组失败。', 'error');
+  });
 });
 
 inputSub2ApiDefaultProxy.addEventListener('input', () => {
@@ -10960,6 +13036,7 @@ inputInbucketHost.addEventListener('blur', () => {
 });
 
 inputRunCount.addEventListener('input', () => {
+  clearPendingAutoRunStartRunCount();
   updateFallbackThreadIntervalInputState();
 });
 inputRunCount.addEventListener('blur', () => {
@@ -11047,6 +13124,11 @@ inputAutoDelayEnabled.addEventListener('change', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
+inputStep6CookieCleanupEnabled?.addEventListener('change', () => {
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
 inputAutoDelayMinutes.addEventListener('input', () => {
   markSettingsDirty(true);
   scheduleSettingsAutoSave();
@@ -11056,9 +13138,137 @@ inputAutoDelayMinutes.addEventListener('blur', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
-inputOAuthFlowTimeoutEnabled?.addEventListener('change', () => {
+
+
+function getPhoneSmsCountrySelectionForProvider(provider = getSelectedPhoneSmsProvider(), options = {}) {
+  const normalizedProvider = normalizePhoneSmsProvider(provider);
+  const countrySelect = selectHeroSmsCountry || selectHeroSmsCountryFallback;
+  const selectionLimit = Math.max(1, Math.floor(Number(options.maxSelection) || HERO_SMS_COUNTRY_SELECTION_MAX));
+  const ensureDefault = options.ensureDefault !== false;
+  const defaultCountry = normalizedProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? { id: DEFAULT_FIVE_SIM_COUNTRY_ID, label: DEFAULT_FIVE_SIM_COUNTRY_LABEL }
+    : { id: DEFAULT_HERO_SMS_COUNTRY_ID, label: DEFAULT_HERO_SMS_COUNTRY_LABEL };
+
+  if (!countrySelect) {
+    return ensureDefault ? [defaultCountry] : [];
+  }
+
+  const optionByValue = new Map(
+    Array.from(countrySelect.options || []).map((option) => [String(option.value), option])
+  );
+  const selectedIds = Array.from(countrySelect.options || [])
+    .filter((option) => option.selected)
+    .map((option) => normalizePhoneSmsCountryId(option.value, normalizedProvider))
+    .filter(Boolean);
+
+  if (!selectedIds.length && !countrySelect.multiple) {
+    const fallbackId = normalizePhoneSmsCountryId(countrySelect.value, normalizedProvider);
+    if (fallbackId) {
+      selectedIds.push(fallbackId);
+    }
+  }
+
+  const selectedSet = new Set(selectedIds.map((id) => String(id)));
+  let orderedIds = heroSmsCountrySelectionOrder
+    .map((id) => normalizePhoneSmsCountryId(id, normalizedProvider))
+    .filter((id) => id && selectedSet.has(String(id)));
+
+  selectedIds.forEach((id) => {
+    if (!orderedIds.some((existing) => String(existing) === String(id))) {
+      orderedIds.push(id);
+    }
+  });
+
+  if (!orderedIds.length && ensureDefault) {
+    orderedIds = [defaultCountry.id];
+  }
+
+  return orderedIds.slice(0, selectionLimit).map((id) => {
+    const option = optionByValue.get(String(id));
+    const optionLabel = String(option?.textContent || '').trim();
+    return {
+      id,
+      label: optionLabel || normalizePhoneSmsCountryLabel(defaultCountry.id === id ? defaultCountry.label : '', normalizedProvider),
+    };
+  });
+}
+
+async function switchPhoneSmsProvider(nextProvider) {
+  const previousProvider = getLastAppliedPhoneSmsProvider();
+  const normalizedNextProvider = normalizePhoneSmsProvider(nextProvider);
+
+  const currentApiKey = String(inputHeroSmsApiKey?.value || '');
+  const currentMaxPrice = normalizePhoneSmsMaxPriceValue(inputHeroSmsMaxPrice?.value || '', previousProvider);
+  const currentSelection = typeof getPhoneSmsCountrySelectionForProvider === 'function'
+    ? getPhoneSmsCountrySelectionForProvider(previousProvider, { ensureDefault: true })
+    : [];
+  const currentPrimary = currentSelection[0] || getSelectedHeroSmsCountryOption();
+  const currentFallback = currentSelection.slice(1);
+
+  const patch = {
+    phoneSmsProvider: normalizedNextProvider,
+  };
+  if (previousProvider === PHONE_SMS_PROVIDER_FIVE_SIM) {
+    patch.fiveSimApiKey = currentApiKey;
+    patch.fiveSimMaxPrice = currentMaxPrice;
+    patch.fiveSimCountryId = currentPrimary.id;
+    patch.fiveSimCountryLabel = currentPrimary.label;
+    patch.fiveSimCountryFallback = currentFallback;
+    patch.fiveSimCountryOrder = [currentPrimary, ...currentFallback]
+      .map((country) => normalizeFiveSimCountryId(country?.id, ''))
+      .filter(Boolean);
+    patch.fiveSimOperator = normalizeFiveSimOperator(inputFiveSimOperator?.value || latestState?.fiveSimOperator);
+  } else {
+    patch.heroSmsApiKey = currentApiKey;
+    patch.heroSmsMaxPrice = currentMaxPrice;
+    patch.heroSmsCountryId = currentPrimary.id;
+    patch.heroSmsCountryLabel = currentPrimary.label;
+    patch.heroSmsCountryFallback = currentFallback;
+  }
+
+  syncLatestState(patch);
+  setPhoneSmsProviderSelectValue(normalizedNextProvider);
+  heroSmsCountrySelectionOrder = [];
+  if (inputHeroSmsApiKey) {
+    inputHeroSmsApiKey.value = normalizedNextProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? String(latestState?.fiveSimApiKey || '')
+      : String(latestState?.heroSmsApiKey || '');
+  }
+  if (inputHeroSmsMaxPrice) {
+    inputHeroSmsMaxPrice.value = normalizedNextProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+      ? normalizeFiveSimMaxPriceValue(latestState?.fiveSimMaxPrice || '')
+      : normalizeHeroSmsMaxPriceValue(latestState?.heroSmsMaxPrice || '');
+  }
+  if (inputFiveSimOperator) {
+    inputFiveSimOperator.value = normalizeFiveSimOperator(latestState?.fiveSimOperator);
+  }
+  if (displayHeroSmsPriceTiers) displayHeroSmsPriceTiers.textContent = '未获取';
+  if (displayPhoneSmsBalance) displayPhoneSmsBalance.textContent = '余额未获取';
+  if (rowHeroSmsPriceTiers) rowHeroSmsPriceTiers.style.display = 'none';
+
+  await loadHeroSmsCountries();
+  const restoredPrimary = normalizedNextProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? {
+      id: normalizeFiveSimCountryId(latestState?.fiveSimCountryId),
+      label: normalizeFiveSimCountryLabel(latestState?.fiveSimCountryLabel),
+    }
+    : {
+      id: normalizeHeroSmsCountryId(latestState?.heroSmsCountryId),
+      label: normalizeHeroSmsCountryLabel(latestState?.heroSmsCountryLabel),
+    };
+  const restoredFallback = normalizedNextProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+    ? normalizeFiveSimCountryFallbackList(latestState?.fiveSimCountryFallback || [])
+    : normalizeHeroSmsCountryFallbackList(latestState?.heroSmsCountryFallback || []);
+  applyHeroSmsFallbackSelection([restoredPrimary, ...restoredFallback], { includePrimary: true });
+  updatePhoneVerificationSettingsUI();
   markSettingsDirty(true);
-  saveSettings({ silent: true }).catch(() => { });
+  saveSettings({ silent: true }).catch(() => {});
+}
+
+selectPhoneSmsProvider?.addEventListener('change', () => {
+  switchPhoneSmsProvider(selectPhoneSmsProvider.value).catch((error) => {
+    showToast(`切换接码平台失败：${error?.message || error}`, 'warn', 2200);
+  });
 });
 
 inputPhoneVerificationEnabled?.addEventListener('change', async () => {
@@ -11071,10 +13281,33 @@ inputPhoneVerificationEnabled?.addEventListener('change', async () => {
       );
     }
   } else {
+    setSignupMethod(SIGNUP_METHOD_EMAIL);
     updatePhoneVerificationSettingsUI();
+    showToast('已切回邮箱注册', 'info', 1600);
   }
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+});
+
+signupMethodButtons.forEach((button) => {
+  button.addEventListener('click', async () => {
+    if (button.disabled) {
+      return;
+    }
+    const nextSignupMethod = normalizeSignupMethod(button.dataset.signupMethod);
+    const confirmed = await confirmCpaPhoneSignupIfNeeded({
+      signupMethod: nextSignupMethod,
+      panelMode: getSelectedPanelMode(),
+    });
+    if (!confirmed) {
+      updateSignupMethodUI();
+      return;
+    }
+    setSignupMethod(nextSignupMethod);
+    updateSignupMethodUI();
+    markSettingsDirty(true);
+    saveSettings({ silent: true }).catch(() => { });
+  });
 });
 
 selectPhoneSmsProvider?.addEventListener('change', async () => {
@@ -11214,6 +13447,59 @@ inputHeroSmsReuseEnabled?.addEventListener('change', () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
+inputFreePhoneReuseEnabled?.addEventListener('change', () => {
+  if (!inputFreePhoneReuseEnabled.checked && inputFreePhoneReuseAutoEnabled) {
+    inputFreePhoneReuseAutoEnabled.checked = false;
+  }
+  updatePhoneVerificationSettingsUI();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputFreePhoneReuseAutoEnabled?.addEventListener('change', () => {
+  updatePhoneVerificationSettingsUI();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+btnSaveFreeReusablePhone?.addEventListener('click', async () => {
+  const phoneNumber = String(inputFreeReusablePhone?.value || '').trim();
+  if (!phoneNumber) {
+    showToast?.('请先填写白嫖复用手机号。', 'warn', 2200);
+    inputFreeReusablePhone?.focus?.();
+    return;
+  }
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'SET_FREE_REUSABLE_PHONE', payload: { phoneNumber },
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    await refreshFreeReusablePhoneStateFallback(response || {});
+    showToast?.('已记录白嫖复用手机号。', 'success', 1800);
+  } catch (error) {
+    console.error('Failed to save free reusable phone:', error);
+    showToast?.(`记录白嫖复用手机号失败：${error?.message || error}`, 'error', 4000);
+  }
+});
+
+btnClearFreeReusablePhone?.addEventListener('click', async () => {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'CLEAR_FREE_REUSABLE_PHONE',
+    });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
+    await refreshFreeReusablePhoneStateFallback(response || {}, { clear: true });
+    showToast?.('已清除白嫖复用手机号。', 'info', 1800);
+  } catch (error) {
+    console.error('Failed to clear free reusable phone:', error);
+    showToast?.(`清除白嫖复用手机号失败：${error?.message || error}`, 'error', 4000);
+  }
+});
+
 selectHeroSmsAcquirePriority?.addEventListener('change', () => {
   selectHeroSmsAcquirePriority.value = normalizeHeroSmsAcquirePriority(selectHeroSmsAcquirePriority.value);
   markSettingsDirty(true);
@@ -11227,7 +13513,16 @@ inputHeroSmsMaxPrice?.addEventListener('input', () => {
   markSettingsDirty(true);
 });
 inputHeroSmsMaxPrice?.addEventListener('blur', () => {
-  inputHeroSmsMaxPrice.value = normalizeHeroSmsMaxPriceValue(inputHeroSmsMaxPrice.value);
+  inputHeroSmsMaxPrice.value = normalizePhoneSmsMaxPriceValue(inputHeroSmsMaxPrice.value, getSelectedPhoneSmsProvider());
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputFiveSimOperator?.addEventListener('input', () => {
+  markSettingsDirty(true);
+  scheduleSettingsAutoSave();
+});
+inputFiveSimOperator?.addEventListener('blur', () => {
+  inputFiveSimOperator.value = normalizeFiveSimOperator(inputFiveSimOperator.value);
   saveSettings({ silent: true }).catch(() => { });
 });
 inputHeroSmsPreferredPrice?.addEventListener('input', () => {
@@ -11269,6 +13564,19 @@ btnHeroSmsPricePreview?.addEventListener('click', async () => {
   } catch (error) {
     if (typeof showToast === 'function') {
       showToast(`价格预览失败：${error?.message || error}`, 'warn', 2200);
+    }
+  }
+});
+
+btnPhoneSmsBalance?.addEventListener('click', async () => {
+  try {
+    await previewPhoneSmsBalance();
+    if (typeof showToast === 'function') {
+      showToast('已刷新接码平台余额。', 'info', 1600);
+    }
+  } catch (error) {
+    if (typeof showToast === 'function') {
+      showToast(`余额查询失败：${error?.message || error}`, 'warn', 2200);
     }
   }
 });
@@ -11496,6 +13804,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
 
+    case 'REQUEST_GOPAY_OTP_INPUT': {
+      (async () => {
+        const result = await openGoPayOtpInputDialog(message.payload || {});
+        sendResponse(result || { cancelled: true, code: '' });
+      })().catch((err) => {
+        sendResponse({ error: err.message });
+      });
+      return true;
+    }
+
     case 'SECURITY_BLOCKED_ALERT': {
       openConfirmModal({
         title: message.payload?.title || '流程已完全停止',
@@ -11511,6 +13829,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       appendLog(message.payload);
       if (message.payload.level === 'error') {
         showToast(message.payload.message, 'error');
+        scheduleAccountRunHistoryRefresh();
       }
       break;
 
@@ -11557,11 +13876,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       displayLocalhostUrl.textContent = '等待中...';
       displayLocalhostUrl.classList.remove('has-value');
       inputEmail.value = '';
+      if (typeof inputSignupPhone !== 'undefined' && inputSignupPhone) {
+        inputSignupPhone.value = '';
+      }
+      syncLatestState({
+        signupPhoneNumber: '',
+        accountIdentifierType: null,
+        accountIdentifier: '',
+      });
+      if (typeof syncSignupPhoneInputFromState === 'function') {
+        syncSignupPhoneInputFromState(latestState);
+      }
       displayStatus.textContent = '就绪';
       statusBar.className = 'status-bar';
       logArea.innerHTML = '';
       resetIcloudManager();
       resetLuckmailManager();
+      resetCustomEmailPoolManager();
       document.querySelectorAll('.step-row').forEach(row => row.className = 'step-row');
       document.querySelectorAll('.step-status').forEach(el => el.textContent = '');
       syncAutoRunState({
@@ -11589,8 +13920,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case 'DATA_UPDATED': {
       syncLatestState(message.payload);
+      if (message.payload.operationDelayEnabled !== undefined && typeof applyOperationDelayState === 'function') {
+        applyOperationDelayState(message.payload);
+      }
       if (message.payload.email !== undefined) {
         inputEmail.value = message.payload.email || '';
+        queueCustomEmailPoolRefresh();
+      }
+      if (
+        message.payload.signupPhoneNumber !== undefined
+        || message.payload.accountIdentifierType !== undefined
+        || message.payload.accountIdentifier !== undefined
+      ) {
+        if (typeof syncSignupPhoneInputFromState === 'function') {
+          syncSignupPhoneInputFromState(latestState);
+        }
       }
       if (
         message.payload.password !== undefined
@@ -11603,7 +13947,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         setLocalCpaStep9Mode(message.payload.localCpaStep9Mode);
       }
       if (message.payload.panelMode !== undefined) {
-        selectPanelMode.value = message.payload.panelMode || 'cpa';
+        selectPanelMode.value = normalizePanelMode(message.payload.panelMode || 'cpa');
         if (message.payload.codex2apiLoginOnlyMode !== undefined && inputCodex2ApiLoginOnlyMode) {
           inputCodex2ApiLoginOnlyMode.checked = Boolean(message.payload.codex2apiLoginOnlyMode);
         }
@@ -11626,6 +13970,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           inputIkonaOniApiKey.value = String(message.payload.ikonaOniApiKey || '');
         }
         updatePanelModeUI();
+      }
+      if (
+        message.payload.sub2apiGroupName !== undefined
+        || message.payload.sub2apiGroupNames !== undefined
+      ) {
+        renderSub2ApiGroupOptions(latestState, latestState?.sub2apiGroupName || '');
       }
       if (
         message.payload.ipProxyEnabled !== undefined
@@ -11807,11 +14157,54 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       ) {
         updateMailProviderUI();
       }
+      if (message.payload.cloudMailBaseUrl !== undefined && inputCloudMailBaseUrl) {
+        inputCloudMailBaseUrl.value = message.payload.cloudMailBaseUrl || '';
+      }
+      if (message.payload.cloudMailAdminEmail !== undefined && inputCloudMailAdminEmail) {
+        inputCloudMailAdminEmail.value = message.payload.cloudMailAdminEmail || '';
+      }
+      if (message.payload.cloudMailAdminPassword !== undefined && inputCloudMailAdminPassword) {
+        inputCloudMailAdminPassword.value = message.payload.cloudMailAdminPassword || '';
+      }
+      if (message.payload.cloudMailReceiveMailbox !== undefined && inputCloudMailReceiveMailbox) {
+        inputCloudMailReceiveMailbox.value = message.payload.cloudMailReceiveMailbox || '';
+      }
+      if (message.payload.cloudMailDomain !== undefined && inputCloudMailDomain) {
+        inputCloudMailDomain.value = message.payload.cloudMailDomain || '';
+      }
       if (message.payload.plusModeEnabled !== undefined && inputPlusModeEnabled) {
         inputPlusModeEnabled.checked = Boolean(message.payload.plusModeEnabled);
       }
       if (message.payload.plusPaymentMethod !== undefined && selectPlusPaymentMethod) {
         selectPlusPaymentMethod.value = normalizePlusPaymentMethod(message.payload.plusPaymentMethod);
+      }
+      if (message.payload.gopayHelperPhoneMode !== undefined && selectGpcHelperPhoneMode) {
+        selectGpcHelperPhoneMode.value = normalizeGpcHelperPhoneModeValue(message.payload.gopayHelperPhoneMode);
+      }
+      if (message.payload.gopayHelperAutoModeEnabled === false
+        && selectGpcHelperPhoneMode?.value === GPC_HELPER_PHONE_MODE_AUTO
+        && isGpcAutoModePermissionDenied(latestState)) {
+        selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
+        syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
+        showToast('当前 API Key 未开通自动模式，已切回手动模式。', 'warn', 2200);
+      }
+      if (message.payload.gopayHelperOtpChannel !== undefined && selectGpcHelperOtpChannel) {
+        selectGpcHelperOtpChannel.value = normalizeGpcOtpChannelValue(message.payload.gopayHelperOtpChannel);
+      }
+      if (message.payload.gopayHelperLocalSmsHelperEnabled !== undefined && inputGpcHelperLocalSmsEnabled) {
+        inputGpcHelperLocalSmsEnabled.checked = Boolean(message.payload.gopayHelperLocalSmsHelperEnabled);
+      }
+      if (message.payload.gopayHelperLocalSmsHelperUrl !== undefined && inputGpcHelperLocalSmsUrl) {
+        inputGpcHelperLocalSmsUrl.value = normalizeGpcLocalSmsHelperBaseUrlValue(message.payload.gopayHelperLocalSmsHelperUrl);
+      }
+      if (message.payload.gopayHelperBalance !== undefined || message.payload.gopayHelperBalanceError !== undefined) {
+        if (typeof displayGpcHelperBalance !== 'undefined' && displayGpcHelperBalance) {
+          const balanceText = String(message.payload.gopayHelperBalance ?? latestState?.gopayHelperBalance ?? '').trim();
+          const balanceError = String(message.payload.gopayHelperBalanceError ?? latestState?.gopayHelperBalanceError ?? '').trim();
+          displayGpcHelperBalance.textContent = balanceError
+            ? `余额查询失败：${balanceError}`
+            : (balanceText || '余额已更新');
+        }
       }
       if (message.payload.codex2apiLoginOnlyMode !== undefined && inputCodex2ApiLoginOnlyMode) {
         inputCodex2ApiLoginOnlyMode.checked = Boolean(message.payload.codex2apiLoginOnlyMode);
@@ -11840,6 +14233,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (
         message.payload.plusModeEnabled !== undefined
         || message.payload.plusPaymentMethod !== undefined
+        || message.payload.gopayHelperPhoneMode !== undefined
+        || message.payload.gopayHelperAutoModeEnabled !== undefined
+        || message.payload.gopayHelperOtpChannel !== undefined
+        || message.payload.gopayHelperLocalSmsHelperEnabled !== undefined
         || message.payload.codex2apiLoginOnlyMode !== undefined
       ) {
         syncStepDefinitionsForMode(
@@ -11850,6 +14247,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           { render: true }
         );
         updatePlusModeUI();
+        updateSignupMethodUI({ notify: true });
+      }
+      if (
+        message.payload.plusManualConfirmationPending !== undefined
+        || message.payload.plusManualConfirmationRequestId !== undefined
+        || message.payload.plusManualConfirmationStep !== undefined
+        || message.payload.plusManualConfirmationMethod !== undefined
+        || message.payload.plusManualConfirmationTitle !== undefined
+        || message.payload.plusManualConfirmationMessage !== undefined
+      ) {
+        void syncPlusManualConfirmationDialog();
       }
       if (message.payload.currentHotmailAccountId !== undefined || message.payload.hotmailAccounts !== undefined) {
         renderHotmailAccounts();
@@ -11865,6 +14273,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (selectMailProvider.value === '2925') {
           setManagedAliasBaseEmailInputForProvider('2925', latestState);
         }
+      }
+      if (message.payload.customEmailPoolEntries !== undefined || message.payload.customEmailPool !== undefined) {
+        setCustomEmailPoolEntriesState(restoreCustomEmailPoolEntriesFromState({
+          ...latestState,
+          ...message.payload,
+        }));
+        syncRunCountFromConfiguredEmailPool();
+        queueCustomEmailPoolRefresh();
       }
       if (message.payload.luckmailApiKey !== undefined) {
         inputLuckmailApiKey.value = message.payload.luckmailApiKey || '';
@@ -11918,6 +14334,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         inputAutoDelayEnabled.checked = Boolean(message.payload.autoRunDelayEnabled);
         updateAutoDelayInputState();
       }
+      if (
+        message.payload.step6CookieCleanupEnabled !== undefined
+        && typeof inputStep6CookieCleanupEnabled !== 'undefined'
+        && inputStep6CookieCleanupEnabled
+      ) {
+        inputStep6CookieCleanupEnabled.checked = Boolean(message.payload.step6CookieCleanupEnabled);
+      }
       if (message.payload.autoRunDelayMinutes !== undefined) {
         inputAutoDelayMinutes.value = String(normalizeAutoDelayMinutes(message.payload.autoRunDelayMinutes));
       }
@@ -11951,8 +14374,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           )
         );
       }
-      if (message.payload.heroSmsApiKey !== undefined && inputHeroSmsApiKey) {
-        inputHeroSmsApiKey.value = message.payload.heroSmsApiKey || '';
+      if (message.payload.phoneSmsProvider !== undefined && selectPhoneSmsProvider) {
+        setPhoneSmsProviderSelectValue(message.payload.phoneSmsProvider);
+      }
+      if ((message.payload.heroSmsApiKey !== undefined || message.payload.fiveSimApiKey !== undefined) && inputHeroSmsApiKey) {
+        inputHeroSmsApiKey.value = getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? (message.payload.fiveSimApiKey !== undefined ? message.payload.fiveSimApiKey || '' : latestState?.fiveSimApiKey || '')
+          : (message.payload.heroSmsApiKey !== undefined ? message.payload.heroSmsApiKey || '' : latestState?.heroSmsApiKey || '');
       }
       if (message.payload.fiveSimApiKey !== undefined && inputFiveSimApiKey) {
         inputFiveSimApiKey.value = String(message.payload.fiveSimApiKey || '').trim();
@@ -11982,11 +14410,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.heroSmsReuseEnabled !== undefined && inputHeroSmsReuseEnabled) {
         inputHeroSmsReuseEnabled.checked = normalizeHeroSmsReuseEnabledValue(message.payload.heroSmsReuseEnabled);
       }
+      if (message.payload.freePhoneReuseEnabled !== undefined && inputFreePhoneReuseEnabled) {
+        inputFreePhoneReuseEnabled.checked = Boolean(message.payload.freePhoneReuseEnabled);
+        updatePhoneVerificationSettingsUI();
+      }
+      if (message.payload.freePhoneReuseAutoEnabled !== undefined && inputFreePhoneReuseAutoEnabled) {
+        inputFreePhoneReuseAutoEnabled.checked = Boolean(message.payload.freePhoneReuseAutoEnabled);
+        updatePhoneVerificationSettingsUI();
+      }
       if (message.payload.heroSmsAcquirePriority !== undefined && selectHeroSmsAcquirePriority) {
         selectHeroSmsAcquirePriority.value = normalizeHeroSmsAcquirePriority(message.payload.heroSmsAcquirePriority);
       }
-      if (message.payload.heroSmsMaxPrice !== undefined && typeof inputHeroSmsMaxPrice !== 'undefined' && inputHeroSmsMaxPrice) {
-        inputHeroSmsMaxPrice.value = normalizeHeroSmsMaxPriceValue(message.payload.heroSmsMaxPrice);
+      if ((message.payload.heroSmsMaxPrice !== undefined || message.payload.fiveSimMaxPrice !== undefined) && inputHeroSmsMaxPrice) {
+        inputHeroSmsMaxPrice.value = getSelectedPhoneSmsProvider() === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? normalizeFiveSimMaxPriceValue(message.payload.fiveSimMaxPrice !== undefined ? message.payload.fiveSimMaxPrice : latestState?.fiveSimMaxPrice)
+          : normalizeHeroSmsMaxPriceValue(message.payload.heroSmsMaxPrice !== undefined ? message.payload.heroSmsMaxPrice : latestState?.heroSmsMaxPrice);
+      }
+      if (message.payload.fiveSimOperator !== undefined && inputFiveSimOperator) {
+        inputFiveSimOperator.value = normalizeFiveSimOperator(message.payload.fiveSimOperator);
       }
       if (message.payload.heroSmsPreferredPrice !== undefined && typeof inputHeroSmsPreferredPrice !== 'undefined' && inputHeroSmsPreferredPrice) {
         inputHeroSmsPreferredPrice.value = normalizeHeroSmsMaxPriceValue(message.payload.heroSmsPreferredPrice);
@@ -12046,6 +14487,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.phoneVerificationEnabled !== undefined && inputPhoneVerificationEnabled) {
         inputPhoneVerificationEnabled.checked = Boolean(message.payload.phoneVerificationEnabled);
+      }
+      if (message.payload.signupMethod !== undefined) {
+        setSignupMethod(message.payload.signupMethod);
+      }
+      if (message.payload.phoneVerificationEnabled !== undefined || message.payload.signupMethod !== undefined) {
         updatePhoneVerificationSettingsUI();
       }
       const activePhoneSmsProvider = normalizePhoneSmsProviderValue(
@@ -12081,39 +14527,54 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         message.payload.heroSmsCountryId !== undefined
         || message.payload.heroSmsCountryLabel !== undefined
         || message.payload.heroSmsCountryFallback !== undefined
-        || message.payload.phoneSmsProvider !== undefined
-        || message.payload.phoneSmsProviderOrder !== undefined
+        || message.payload.fiveSimCountryId !== undefined
+        || message.payload.fiveSimCountryLabel !== undefined
+        || message.payload.fiveSimCountryFallback !== undefined
+        || message.payload.fiveSimCountryOrder !== undefined
       ) {
-        const nextPrimary = {
-          id: normalizeHeroSmsCountryId(
-            message.payload.heroSmsCountryId !== undefined
-              ? message.payload.heroSmsCountryId
-              : latestState?.heroSmsCountryId,
-            0
-          ),
-          label: normalizeHeroSmsCountryLabel(
-            message.payload.heroSmsCountryLabel !== undefined
-              ? message.payload.heroSmsCountryLabel
-              : latestState?.heroSmsCountryLabel
-          ),
-        };
-        const nextFallback = normalizeHeroSmsCountryFallbackList(
-          message.payload.heroSmsCountryFallback !== undefined
-            ? message.payload.heroSmsCountryFallback
-            : latestState?.heroSmsCountryFallback
-        );
-        const nextPrimaryCountries = Number(nextPrimary.id) > 0 ? [nextPrimary] : [];
+        const activeProvider = getSelectedPhoneSmsProvider();
+        const nextPrimary = activeProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? {
+            id: normalizeFiveSimCountryId(
+              message.payload.fiveSimCountryId !== undefined
+                ? message.payload.fiveSimCountryId
+                : latestState?.fiveSimCountryId
+            ),
+            label: normalizeFiveSimCountryLabel(
+              message.payload.fiveSimCountryLabel !== undefined
+                ? message.payload.fiveSimCountryLabel
+                : latestState?.fiveSimCountryLabel
+            ),
+          }
+          : {
+            id: normalizeHeroSmsCountryId(
+              message.payload.heroSmsCountryId !== undefined
+                ? message.payload.heroSmsCountryId
+                : latestState?.heroSmsCountryId
+            ),
+            label: normalizeHeroSmsCountryLabel(
+              message.payload.heroSmsCountryLabel !== undefined
+                ? message.payload.heroSmsCountryLabel
+                : latestState?.heroSmsCountryLabel
+            ),
+          };
+        const nextFallback = activeProvider === PHONE_SMS_PROVIDER_FIVE_SIM
+          ? normalizeFiveSimCountryFallbackList(
+            message.payload.fiveSimCountryFallback !== undefined
+              ? message.payload.fiveSimCountryFallback
+              : message.payload.fiveSimCountryOrder !== undefined
+                ? message.payload.fiveSimCountryOrder
+              : latestState?.fiveSimCountryFallback
+          )
+          : normalizeHeroSmsCountryFallbackList(
+            message.payload.heroSmsCountryFallback !== undefined
+              ? message.payload.heroSmsCountryFallback
+              : latestState?.heroSmsCountryFallback
+          );
         applyHeroSmsFallbackSelection(
-          [...nextPrimaryCountries, ...nextFallback],
+          [nextPrimary, ...nextFallback],
           { includePrimary: true }
         );
-      }
-      if (
-        message.payload.phoneSmsProvider !== undefined
-        || message.payload.phoneSmsProviderOrder !== undefined
-        || message.payload.fiveSimProduct !== undefined
-        || message.payload.nexSmsServiceCode !== undefined
-      ) {
         updateHeroSmsPlatformDisplay();
       }
       if (
@@ -12125,6 +14586,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         || message.payload.currentPhoneVerificationCountdownEndsAt !== undefined
         || message.payload.currentPhoneVerificationCountdownWindowIndex !== undefined
         || message.payload.currentPhoneVerificationCountdownWindowTotal !== undefined
+        || message.payload.freeReusablePhoneActivation !== undefined
         || message.payload.heroSmsLastPriceTiers !== undefined
         || message.payload.heroSmsLastPriceCountryId !== undefined
         || message.payload.heroSmsLastPriceCountryLabel !== undefined
@@ -12173,6 +14635,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       applyAutoRunStatus(message.payload);
       updateStatusDisplay(latestState);
       updateButtonStates();
+      if (!['scheduled', 'running', 'waiting_step', 'waiting_email', 'retrying', 'waiting_interval'].includes(message.payload.phase)) {
+        scheduleAccountRunHistoryRefresh();
+      }
       break;
     }
   }
@@ -12209,6 +14674,7 @@ document.addEventListener('click', (event) => {
   const clickedInsideFiveSimCountryMenu = Boolean(fiveSimCountryMenuShell?.contains(event.target));
   const clickedInsideNexSmsCountryMenu = Boolean(nexSmsCountryMenuShell?.contains(event.target));
   const clickedInsideProviderOrderMenu = Boolean(phoneSmsProviderOrderMenuShell?.contains(event.target));
+  const clickedInsideEditableListPicker = isClickInsideEditableListPicker(event.target);
 
   if (configMenuOpen && !clickedInsideConfigMenu) {
     closeConfigMenu();
@@ -12229,6 +14695,9 @@ document.addEventListener('click', (event) => {
   const providerOrderMenuOpen = btnPhoneSmsProviderOrderMenu?.getAttribute('aria-expanded') === 'true';
   if (providerOrderMenuOpen && !clickedInsideProviderOrderMenu) {
     setPhoneSmsProviderOrderMenuOpen(false);
+  }
+  if (!clickedInsideEditableListPicker) {
+    closeEditableListPickers();
   }
 });
 
@@ -12251,6 +14720,7 @@ document.addEventListener('keydown', (event) => {
   if (btnPhoneSmsProviderOrderMenu?.getAttribute('aria-expanded') === 'true') {
     setPhoneSmsProviderOrderMenuOpen(false);
   }
+  closeEditableListPickers();
 });
 
 window.addEventListener('resize', () => {
@@ -12273,7 +14743,9 @@ initMail2925ListExpandedState();
 if (typeof initIpProxySectionExpandedState === 'function') {
   initIpProxySectionExpandedState();
 }
-initPhoneVerificationSectionExpandedState();
+if (typeof initPhoneVerificationSectionExpandedState === 'function') {
+  initPhoneVerificationSectionExpandedState();
+}
 applyPhoneSmsProviderOrderSelection([], { ensureDefault: false, syncProvider: false });
 updateSaveButtonState();
 updateConfigMenuControls();

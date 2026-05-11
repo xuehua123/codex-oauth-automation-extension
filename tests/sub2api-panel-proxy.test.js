@@ -79,7 +79,10 @@ function createSub2ApiPanelContext(fetchCalls = []) {
       if (parsed.pathname === '/api/v1/admin/groups/all') {
         return createJsonResponse({
           code: 0,
-          data: [{ id: 5, name: 'codex', platform: 'openai' }],
+          data: [
+            { id: 5, name: 'codex', platform: 'openai' },
+            { id: 9, name: 'codex-plus', platform: 'openai' },
+          ],
         });
       }
       if (parsed.pathname === '/api/v1/admin/proxies/all') {
@@ -220,6 +223,36 @@ test('SUB2API step 1 omits proxy_id when default proxy is empty', async () => {
   assert.equal(Object.hasOwn(generateCall.body, 'proxy_id'), false);
 });
 
+test('SUB2API step 10 creates accounts in multiple configured groups', async () => {
+  const fetchCalls = [];
+  const context = createSub2ApiPanelContext(fetchCalls);
+
+  const step1Result = await vm.runInContext(`
+    step1_generateOpenAiAuthUrl({
+      sub2apiEmail: 'admin@example.com',
+      sub2apiPassword: 'secret',
+      sub2apiGroupName: 'codex, codex-plus'
+    }, { report: false })
+  `, context);
+
+  await vm.runInContext(`
+    step9_submitOpenAiCallback({
+      localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+      sub2apiUrl: 'https://sub.example/admin/accounts',
+      sub2apiEmail: 'admin@example.com',
+      sub2apiPassword: 'secret',
+      sub2apiGroupName: 'codex, codex-plus',
+      sub2apiSessionId: 'session-1',
+      sub2apiOAuthState: 'oauth-state',
+      sub2apiGroupIds: ${JSON.stringify(step1Result.sub2apiGroupIds)}
+    })
+  `, context);
+
+  const createCall = fetchCalls.find((call) => call.path === '/api/v1/admin/accounts');
+  assert.deepEqual(Array.from(step1Result.sub2apiGroupIds), [5, 9]);
+  assert.deepEqual(createCall.body.group_ids, [5, 9]);
+});
+
 test('SUB2API step 10 omits proxy_id when no proxy is configured', async () => {
   const fetchCalls = [];
   const context = createSub2ApiPanelContext(fetchCalls);
@@ -243,4 +276,50 @@ test('SUB2API step 10 omits proxy_id when no proxy is configured', async () => {
 
   assert.equal(Object.hasOwn(exchangeCall.body, 'proxy_id'), false);
   assert.equal(Object.hasOwn(createCall.body, 'proxy_id'), false);
+});
+
+test('SUB2API step 10 creates account with configured account priority', async () => {
+  const fetchCalls = [];
+  const context = createSub2ApiPanelContext(fetchCalls);
+
+  await vm.runInContext(`
+    step9_submitOpenAiCallback({
+      localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+      sub2apiUrl: 'https://sub.example/admin/accounts',
+      sub2apiEmail: 'admin@example.com',
+      sub2apiPassword: 'secret',
+      sub2apiGroupName: 'codex',
+      sub2apiSessionId: 'session-1',
+      sub2apiOAuthState: 'oauth-state',
+      sub2apiGroupId: 5,
+      sub2apiAccountPriority: 3
+    })
+  `, context);
+
+  const createCall = fetchCalls.find((call) => call.path === '/api/v1/admin/accounts');
+  assert.equal(createCall.body.priority, 3);
+});
+
+test('SUB2API account priority must be an integer greater than or equal to 1', async () => {
+  const fetchCalls = [];
+  const context = createSub2ApiPanelContext(fetchCalls);
+
+  await assert.rejects(
+    () => vm.runInContext(`
+      step9_submitOpenAiCallback({
+        localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+        sub2apiUrl: 'https://sub.example/admin/accounts',
+        sub2apiEmail: 'admin@example.com',
+        sub2apiPassword: 'secret',
+        sub2apiGroupName: 'codex',
+        sub2apiSessionId: 'session-1',
+        sub2apiOAuthState: 'oauth-state',
+        sub2apiGroupId: 5,
+        sub2apiAccountPriority: 0
+      })
+    `, context),
+    /SUB2API 账号优先级必须是大于等于 1 的整数/
+  );
+
+  assert.equal(fetchCalls.some((call) => call.path === '/api/v1/admin/accounts'), false);
 });

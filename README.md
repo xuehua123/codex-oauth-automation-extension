@@ -2,7 +2,7 @@
 
 一个用于批量跑通 ChatGPT OAuth 注册/登录流程的 Chrome 扩展。
 
-当前版本基于侧边栏控制，支持单步执行、整套自动执行、停止当前流程、保存常用配置，以及通过 DuckDuckGo / QQ / 163 / 163 VIP / 126 / Inbucket / Hotmail 协助获取验证码。
+当前版本基于侧边栏控制，支持单步执行、整套自动执行、停止当前流程、保存常用配置，以及通过 DuckDuckGo / QQ / 163 / 163 VIP / 126 / Inbucket / Hotmail / Cloud Mail 协助获取验证码。
 
 ## 插件效果
 
@@ -40,6 +40,7 @@
 - 自动获取注册验证码与登录验证码
 - 支持 `Hotmail`：继续使用 `邮箱 + 客户端 ID + 刷新令牌（refresh token）`，并可在远程服务与本地助手两种模式间切换
 - 支持 `2925`：新增多账号池、自动登录登出、Step 4 / Step 8 命中“子邮箱已达上限邮箱”后的 24 小时禁用与自动切号
+- 支持 `Cloud Mail`：可通过 skymail.ink API 生成自定义域邮箱，也可作为转发收件通道轮询验证码
 - 支持 `QQ Mail`、`163 Mail`、`163 VIP Mail`、`126 Mail`、`Inbucket mailbox`
 - 支持从 DuckDuckGo Email Protection 自动生成新的 `@duck.com` 地址
 - 支持基于 Cloudflare 自定义域名自动生成随机邮箱前缀
@@ -48,8 +49,8 @@
   - 页面要求填写 `age`
 - 支持 `Auto` 多轮运行
 - 支持中途 `Stop`
-- 支持通过日志区的 `记录` 按钮查看邮箱记录面板，按邮箱展示最终状态、时间、失败标签和重试次数
-- 支持将邮箱记录完整快照同步到本地 helper，便于开发者直接查看 `data/account-run-history.json`
+- 支持通过日志区的 `记录` 按钮查看账号记录面板，同一轮的邮箱和手机号会合并显示，按最终状态、时间、失败标签和重试次数筛选
+- 支持将账号记录完整快照同步到本地 helper，便于开发者直接查看 `data/account-run-history.json`
 - Step 8 会自动寻找 OAuth 同意页的“继续”按钮，并通过 Chrome debugger 输入事件发起点击，然后监听本地回调地址
 
 
@@ -208,10 +209,11 @@ Step 1 和 Step 10 都依赖这个地址。
 
 ### `Mail`
 
-支持七种验证码来源：
+支持八种验证码来源：
 
 - `Hotmail`
 - `2925`
+- `Cloud Mail`
 - `163 Mail`
 - `163 VIP Mail`
 - `126 Mail`
@@ -222,6 +224,7 @@ Step 1 和 Step 10 都依赖这个地址。
 
 - `Hotmail` 通过侧边栏里的 Hotmail 账号池选择账号，可切换为远程服务模式或本地助手模式
 - `2925` 通过侧边栏里的 2925 账号池选择账号，并在 Step 4 / Step 8 前自动校验网页邮箱登录态
+- `Cloud Mail` 通过侧边栏配置 API 地址、管理员账号、接收邮箱或生成域名，可直接生成邮箱或轮询转发收件箱
 - `QQ`、`163`、`163 VIP`、`126` 用于直接轮询网页邮箱
 - `Inbucket` 通过你在侧边栏里配置的 host 访问 `mailbox` 页面：`https://<your-inbucket-host>/m/<mailbox>/`
 
@@ -308,7 +311,7 @@ python3 scripts/hotmail_helper.py
 Hotmail helper listening on http://127.0.0.1:17373
 ```
 
-同时还会输出本地邮箱记录快照文件路径。看到这些输出后，再回到扩展里点 `校验`、`复制最新验证码`；邮箱记录快照会按默认本地 helper 地址自动同步，无需再手动开启本地同步。
+同时还会输出本地账号记录快照文件路径。看到这些输出后，再回到扩展里点 `校验`、`复制最新验证码`；账号记录快照会按默认本地 helper 地址自动同步，无需再手动开启本地同步。
 
 #### 最小排错说明
 
@@ -495,6 +498,12 @@ Cloudflare 模式下，插件不会再调用 Cloudflare API 创建路由。
 - `重新开始`：重置当前流程进度，从 Step 1 开始新一轮
 - `继续当前`：把 `已完成 / 已跳过` 视为已处理，从第一个未处理步骤继续往后执行
 
+### 操作间延迟
+
+`操作间延迟` 默认开启。开启后，自动流程和手动单步在每个页面输入、选择、点击、提交、继续或授权操作完成后固定等待 2 秒；第一项页面操作不会提前等待。分格 OTP/验证码会先整组填完，然后只等待一次。
+
+该开关不同于步间间隔，不影响邮箱轮询、短信/WhatsApp 轮询、后台 API、网络重试、后台定时器或存储持久化，也不影响 `confirm-oauth` 和 `platform-verify` 的交互节奏。
+
 ## 工作流
 
 ### 单步模式
@@ -506,7 +515,7 @@ Cloudflare 模式下，插件不会再调用 Cloudflare API 创建路由。
 3. `Fill Password`
 4. `Get Signup Code`
 5. `Fill Name / Birthday`
-6. `Clear Login Cookies`
+6. `Wait Registration Success`
 7. `Login via OAuth`
 8. `Get Login Code`
 9. `Manual OAuth Confirm`
@@ -521,7 +530,7 @@ Cloudflare 模式下，插件不会再调用 Cloudflare API 创建路由。
 1. Step 1 打开 `https://chatgpt.com/`
 2. 根据 `Mail` 选择邮箱来源
 3. 如果 `Mail = Hotmail`，会从账号池自动分配一个可用账号
-4. 如果 `Mail = 自定义邮箱` 且配置了 `自定义号池`，会按号池顺序分配当前轮邮箱；否则如果不是 Hotmail，则按当前“邮箱生成”配置尝试自动获取或分配邮箱（Duck / Cloudflare / iCloud / 自定义邮箱池等）
+4. 如果 `Mail = 自定义邮箱` 且配置了 `自定义号池`，会按号池顺序分配当前轮邮箱；否则如果不是 Hotmail，则按当前“邮箱生成”配置尝试自动获取或分配邮箱（Duck / Cloudflare / Cloud Mail / iCloud / 自定义邮箱池等）
 5. Step 2 点击注册、填写邮箱，并按真实落地页进入密码页或直接进入邮箱验证码页
 6. 如果自动获取失败，暂停并等待你在侧边栏填写邮箱后点击 `Continue`
 7. 继续执行 Step 3 ~ Step 10
@@ -544,7 +553,7 @@ Cloudflare 模式下，插件不会再调用 Cloudflare API 创建路由。
 - 打开 `https://chatgpt.com/`
 - 确认官网首页或注册入口弹窗已经可操作
 
-这一步不再获取 `OAuth` 链接；`OAuth` 链接会在 Step 6 内部按需刷新。
+这一步不再获取 `OAuth` 链接；`OAuth` 链接会在 Step 7 内部按需刷新。
 
 ### Step 2: Signup + Email
 
@@ -600,15 +609,14 @@ Cloudflare 模式下，插件不会再调用 Cloudflare API 创建路由。
 如果资料页出现顶部“我同意以下所有各项”总勾选框，脚本会优先自动勾选，再点击 `完成帐户创建`。
 点击 `完成帐户创建` 后，Step 5 会立刻记为完成，不再等待页面跳转结果；自动运行在进入 Step 6 前只会等待当前页面加载完成，不再接管 ChatGPT 跳转或 onboarding 跳过逻辑。
 
-### Step 6: Clear Login Cookies
+### Step 6: Wait Registration Success
 
-这一步只负责登录前清理环境：
+这一步只负责等待注册完成后的页面状态稳定：
 
-- 开始前先等待 10 秒
-- 直接删除 `chatgpt.com / openai.com` 相关 cookies
-- 必要时再用 `browsingData` 补扫一次
+- 固定等待 20 秒
+- 默认不清理 `chatgpt.com / openai.com` 相关 cookies；侧栏开启第六步 `清 Cookies` 后才会在等待结束后执行清理
+- 等待完成后直接进入后续 OAuth 登录链路
 
-把 cookies 清理独立成单独步骤后，后续登录链路的重开锚点就不再落在这里。
 
 ### Step 7: Login via OAuth
 
@@ -835,3 +843,11 @@ sidepanel/                 侧边栏 UI
 - 没有硬编码你的 CPA 地址、密码或账户
 - 自定义密码只存在当前会话存储中
 - 邮箱和密码会被记录到本轮 `accounts` 中，便于追踪本次运行结果
+
+## 来源与致谢
+
+本项目早期代码与 [whwh1233/StepFlow-Duck](https://github.com/whwh1233/StepFlow-Duck) 同源，共同历史截至 `387e177e005e9863f3de193ad8b954e9efb5fd1d`。当前维护者最初接触到的是社群内分享的 zip 软件包，当时压缩包内没有 `LICENSE` 文件，也没有任何 GitHub 远程仓库地址或开源协议声明。
+
+后续核对发现，原作者也将同源早期代码发布到了 GitHub，并在 `72218aab151a2ff74bf1763684a6370657c7bc57` 提交补充 MIT License。当前仓库已改为 MIT License，并补充原作者署名与来源说明。完整时间线见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+感谢原作者 whwh1233、Jimmy 以及后续所有贡献者的早期工作和持续改进。当前仓库中的相关服务入口、贡献入口、交流群入口和其他维护者整理的入口，不代表原项目作者背书。
