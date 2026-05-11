@@ -286,6 +286,15 @@
         return;
       }
 
+      if (isPhoneSignupState(state)) {
+        const phoneResult = await executeSignupPhoneCodeStep(state, signupTabId);
+        if (phoneResult?.emailVerificationRequired || phoneResult?.emailVerificationPage) {
+          await addLog('步骤 4：手机验证码已通过，OpenAI 要求继续邮箱验证，切换到邮箱验证码轮询。', 'info');
+        } else {
+          return phoneResult;
+        }
+      }
+
       if (shouldUseCustomRegistrationEmail(state)) {
         await confirmCustomVerificationStepBypass(4);
         return;

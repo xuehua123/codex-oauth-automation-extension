@@ -173,3 +173,129 @@ test('step 4 does not request a fresh code first for standard mailbox providers'
   assert.equal(capturedOptions.requestFreshCodeFirst, false);
   assert.equal(capturedOptions.resendIntervalMs, 25000);
 });
+
+test('step 4 runs signup phone verification before mailbox polling for phone signup', async () => {
+  const completions = [];
+  const phoneCalls = [];
+  let mailConfigCalled = false;
+
+  const executor = api.createStep4Executor({
+    addLog: async () => {},
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    completeStepFromBackground: async (step, payload) => {
+      completions.push({ step, payload });
+    },
+    confirmCustomVerificationStepBypass: async () => {},
+    getMailConfig: () => {
+      mailConfigCalled = true;
+      return { provider: 'qq', label: 'QQ 邮箱' };
+    },
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    phoneVerificationHelpers: {
+      completeSignupPhoneVerificationFlow: async (tabId, options) => {
+        phoneCalls.push({ tabId, options });
+        return { code: '123456', skipProfileStep: true };
+      },
+    },
+    resolveSignupMethod: () => 'phone',
+    resolveVerificationStep: async () => {
+      throw new Error('mailbox polling should not run after phone verification completes');
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScript: async () => ({}),
+    sendToContentScriptResilient: async () => ({}),
+    isRetryableContentScriptTransportError: () => false,
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    throwIfStopped: () => {},
+  });
+
+  await executor.executeStep4({
+    signupMethod: 'phone',
+    signupPhoneActivation: { provider: 'hero-sms' },
+    password: 'secret',
+  });
+
+  assert.equal(phoneCalls.length, 1);
+  assert.equal(phoneCalls[0].tabId, 1);
+  assert.equal(phoneCalls[0].options.state.signupMethod, 'phone');
+  assert.deepStrictEqual(completions, [
+    {
+      step: 4,
+      payload: {
+        phoneVerification: true,
+        code: '123456',
+        skipProfileStep: true,
+      },
+    },
+  ]);
+  assert.equal(mailConfigCalled, false);
+});
+
+test('step 4 falls back to mailbox polling when phone signup still requires email verification', async () => {
+  const logs = [];
+  let capturedMail = null;
+  let capturedOptions = null;
+
+  const executor = api.createStep4Executor({
+    addLog: async (message, level = 'info') => {
+      logs.push({ message, level });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    completeStepFromBackground: async () => {
+      throw new Error('phone completion should not run when email verification is required');
+    },
+    confirmCustomVerificationStepBypass: async () => {},
+    getMailConfig: () => ({
+      provider: 'qq',
+      label: 'QQ 邮箱',
+      source: 'qq-mail',
+      url: 'https://mail.qq.com',
+    }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    phoneVerificationHelpers: {
+      completeSignupPhoneVerificationFlow: async () => ({ emailVerificationRequired: true }),
+    },
+    resolveSignupMethod: () => 'phone',
+    resolveVerificationStep: async (_step, _state, mail, options) => {
+      capturedMail = mail;
+      capturedOptions = options;
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScript: async () => ({}),
+    sendToContentScriptResilient: async () => ({}),
+    isRetryableContentScriptTransportError: () => false,
+    shouldUseCustomRegistrationEmail: () => false,
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    throwIfStopped: () => {},
+  });
+
+  await executor.executeStep4({
+    signupMethod: 'phone',
+    signupPhoneActivation: { provider: 'hero-sms' },
+    password: 'secret',
+  });
+
+  assert.equal(capturedMail.provider, 'qq');
+  assert.equal(capturedOptions.requestFreshCodeFirst, false);
+  assert.match(
+    logs.map((entry) => entry.message).join('\n'),
+    /手机验证码已通过，OpenAI 要求继续邮箱验证/
+  );
+});

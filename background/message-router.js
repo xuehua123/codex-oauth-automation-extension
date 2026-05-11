@@ -1160,6 +1160,90 @@
           return { ok: true, ...result };
         }
 
+        case 'RUN_IP_PROXY_AUTO_SYNC_NOW': {
+          if (typeof runIpProxyAutoSync !== 'function') {
+            throw new Error('IP 代理自动同步能力尚未接入。');
+          }
+          const result = await runIpProxyAutoSync('manual');
+          return { ok: true, ...result };
+        }
+
+        case 'REFRESH_IP_PROXY_POOL': {
+          if (typeof refreshIpProxyPool !== 'function') {
+            throw new Error('IP 代理池能力尚未接入。');
+          }
+          const result = await refreshIpProxyPool({
+            maxItems: message.payload?.maxItems,
+            mode: message.payload?.mode,
+            skipExitProbe: message.payload?.skipExitProbe,
+          });
+          return { ok: true, ...result };
+        }
+
+        case 'SWITCH_IP_PROXY': {
+          if (typeof switchIpProxy !== 'function') {
+            throw new Error('IP 代理切换能力尚未接入。');
+          }
+          const result = await switchIpProxy(message.payload?.direction || 'next', {
+            maxItems: message.payload?.maxItems,
+            mode: message.payload?.mode,
+            forceRefresh: message.payload?.forceRefresh,
+            skipExitProbe: message.payload?.skipExitProbe,
+          });
+          return { ok: true, ...result };
+        }
+
+        case 'CHANGE_IP_PROXY_EXIT': {
+          if (typeof changeIpProxyExit !== 'function') {
+            throw new Error('IP 代理 Change 能力尚未接入。');
+          }
+          const result = await changeIpProxyExit({
+            mode: message.payload?.mode,
+            skipExitProbe: message.payload?.skipExitProbe,
+          });
+          return { ok: true, ...result };
+        }
+
+        case 'PROBE_IP_PROXY_EXIT': {
+          if (typeof probeIpProxyExit !== 'function') {
+            throw new Error('IP 代理出口检测能力尚未接入。');
+          }
+          const probeState = await getState();
+          const mode = typeof normalizeIpProxyMode === 'function'
+            ? normalizeIpProxyMode(probeState?.ipProxyMode)
+            : String(probeState?.ipProxyMode || 'account').trim().toLowerCase();
+          const provider = typeof normalizeIpProxyProviderValue === 'function'
+            ? normalizeIpProxyProviderValue(probeState?.ipProxyService)
+            : String(probeState?.ipProxyService || '').trim().toLowerCase();
+          const is711AccountMode = mode === 'account' && provider === '711proxy';
+          const previousReason = String(probeState?.ipProxyAppliedReason || '').trim().toLowerCase();
+          const previousExitError = String(probeState?.ipProxyAppliedExitError || '').trim();
+          const hadMissingAuthChallenge = /challenge=0|provided=0|未触发代理鉴权挑战|未收到 407/i.test(previousExitError);
+          const shouldPreRebindBeforeProbe = Boolean(
+            probeState?.ipProxyEnabled
+            && is711AccountMode
+            && (hadMissingAuthChallenge || previousReason === 'connectivity_failed')
+          );
+          const timeoutMs = Number(message.payload?.timeoutMs) > 0
+            ? Number(message.payload.timeoutMs)
+            : (is711AccountMode ? (shouldPreRebindBeforeProbe ? 15000 : 12000) : undefined);
+
+          if (probeState?.ipProxyEnabled && typeof applyIpProxySettingsFromState === 'function') {
+            await applyIpProxySettingsFromState(probeState, {
+              skipExitProbe: true,
+              resetNetworkState: shouldPreRebindBeforeProbe,
+              forceAuthRebind: shouldPreRebindBeforeProbe,
+              suppressAuthRebind: !shouldPreRebindBeforeProbe,
+            }).catch(() => null);
+          }
+
+          const result = await probeIpProxyExit({
+            timeoutMs,
+            authRebindMaxAttempts: is711AccountMode ? 1 : undefined,
+          });
+          return { ok: true, ...result };
+        }
+
         case 'EXPORT_SETTINGS': {
           return { ok: true, ...(await exportSettingsBundle()) };
         }
