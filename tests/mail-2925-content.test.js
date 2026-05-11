@@ -319,6 +319,7 @@ return {
 test('handlePollEmail skips explicit mismatched target emails when receive-mode matching is enabled', async () => {
   const bundle = [
     extractFunction('extractEmails'),
+    extractFunction('extractForwardedTargetEmails'),
     extractFunction('emailMatchesTarget'),
     extractFunction('getTargetEmailMatchState'),
     extractFunction('normalizeMinuteTimestamp'),
@@ -544,6 +545,51 @@ return {
     { sessionKey: '4:1000', codes: [] },
     { sessionKey: '8:2000', codes: [] },
   ]);
+});
+
+test('extractVerificationCode strict mode matches the new suspicious log-in mail body', () => {
+  const bundle = [
+    extractFunction('extractStrictChatGPTVerificationCode'),
+    extractFunction('isLikelyCompactTimeValue'),
+    extractFunction('isLikelyHeaderTimestampCode'),
+    extractFunction('findSafeStandaloneSixDigitCode'),
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = 'ChatGPT Log-in Code\nWe noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219';
+  assert.equal(api.extractVerificationCode(bodyText, true), '982219');
+  assert.equal(api.extractVerificationCode(bodyText, false), '982219');
+});
+
+test('extractVerificationCode ignores compact header time before fallback code', () => {
+  const bundle = [
+    extractFunction('extractStrictChatGPTVerificationCode'),
+    extractFunction('isLikelyCompactTimeValue'),
+    extractFunction('isLikelyHeaderTimestampCode'),
+    extractFunction('findSafeStandaloneSixDigitCode'),
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = [
+    'Your temporary ChatGPT login code',
+    'From: otp <otp@tm1.openai.com>',
+    'To: test@example.com',
+    'Time: 2026-4-22 101755',
+    'OpenAI',
+    '371138',
+  ].join('\n');
+
+  assert.equal(api.extractVerificationCode(bodyText, false), '371138');
 });
 
 test('openMailAndGetMessageText always returns to inbox after opening a 2925 message', async () => {
@@ -908,9 +954,15 @@ const window = {
   },
 };
 
+const operationDelayCalls = [];
+
 async function sleep() {}
 function simulateClick(node) {
   node.click();
+}
+async function performOperationWithDelay(metadata, operation) {
+  operationDelayCalls.push({ label: metadata.label, kind: metadata.kind });
+  return await operation();
 }
 
 ${bundle}
@@ -918,6 +970,7 @@ ${bundle}
 return {
   rememberCheckbox,
   agreementCheckbox,
+  operationDelayCalls,
   ensureAgreementChecked,
 };
 `)();
@@ -927,4 +980,8 @@ return {
   assert.equal(result, true);
   assert.equal(api.rememberCheckbox.checked, true);
   assert.equal(api.agreementCheckbox.checked, true);
+  assert.deepStrictEqual(api.operationDelayCalls, [
+    { label: 'mail2925-agreement-checkbox', kind: 'click' },
+    { label: 'mail2925-agreement-checkbox', kind: 'click' },
+  ]);
 });

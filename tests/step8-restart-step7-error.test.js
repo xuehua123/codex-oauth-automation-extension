@@ -68,6 +68,10 @@ async function getLoginAuthStateFromContent() {
   };
 }
 
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
 ${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
 
 return {
@@ -100,6 +104,10 @@ async function getLoginAuthStateFromContent() {
   };
 }
 
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
 ${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
 
 return {
@@ -113,6 +121,105 @@ return {
     () => api.run(),
     /CF_SECURITY_BLOCKED::/
   );
+});
+
+test('ensureStep8VerificationPageReady allows add-email handoff only when requested', async () => {
+  const api = new Function(`
+function getLoginAuthStateLabel(state) {
+  return state === 'add_email_page' ? '添加邮箱页' : 'unknown page';
+}
+
+async function getLoginAuthStateFromContent() {
+  return {
+    state: 'add_email_page',
+    url: 'https://auth.openai.com/add-email',
+  };
+}
+
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
+${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
+
+return {
+  run(options) {
+    return ensureStep8VerificationPageReady(options || {});
+  },
+};
+`)();
+
+  await assert.rejects(
+    () => api.run({}),
+    /当前未进入登录验证码页面/
+  );
+
+  const result = await api.run({ allowAddEmailPage: true });
+  assert.equal(result.state, 'add_email_page');
+});
+
+test('ensureStep8VerificationPageReady sends bounded backoff options for operation timed out recovery', async () => {
+  const api = new Function(`
+const sentRecoveries = [];
+const logs = [];
+
+function getLoginAuthStateLabel(state) {
+  return state === 'login_timeout_error_page' ? 'login timeout page' : 'unknown page';
+}
+
+let inspectCalls = 0;
+async function getLoginAuthStateFromContent() {
+  inspectCalls += 1;
+  if (inspectCalls === 1) {
+    return {
+      state: 'login_timeout_error_page',
+      url: 'https://auth.openai.com/email-verification',
+      errorText: 'Operation timed out',
+    };
+  }
+  return {
+    state: 'verification_page',
+    url: 'https://auth.openai.com/email-verification',
+  };
+}
+
+async function sendToContentScriptResilient(source, message, options) {
+  sentRecoveries.push({ source, message, options });
+  return { recovered: true, clickCount: 1 };
+}
+
+async function addLog(message, level) {
+  logs.push({ message, level });
+}
+
+function getErrorMessage(error) {
+  return String(error?.message || error || '');
+}
+
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
+${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
+
+return {
+  async run() {
+    const result = await ensureStep8VerificationPageReady({});
+    return { result, sentRecoveries, logs };
+  },
+};
+`)();
+
+  const snapshot = await api.run();
+
+  assert.equal(snapshot.result.state, 'verification_page');
+  assert.equal(snapshot.sentRecoveries.length, 1);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayBaseMs, 1000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayIncrementMs, 1000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayMaxMs, 5000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.maxClickAttempts, 5);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.timeoutMs, 45000);
+  assert.equal(snapshot.sentRecoveries[0].options.timeoutMs, 50000);
 });
 
 test('step 8 reruns step 7 when auth page enters login timeout retry state', async () => {
@@ -185,7 +292,80 @@ test('step 8 reruns step 7 when auth page enters login timeout retry state', asy
   assert.equal(calls.logs.some(({ message }) => /重新开始|重新发起/.test(message)), true);
   assert.deepStrictEqual(calls.rerunOptions, [
     {
-      logMessage: '步骤 8：认证页进入重试/超时报错状态，正在回到步骤 7 重新发起登录流程...',
+      logMessage: '认证页进入重试/超时报错状态，正在回到步骤 7 重新发起登录流程...',
+      logStep: 8,
+      logStepKey: 'fetch-login-code',
     },
   ]);
+});
+
+test('step 8 escalates to rerun step 7 after too many local retry_without_step7 recoveries', async () => {
+  const calls = {
+    rerunStep7: 0,
+    ensureReady: 0,
+    logs: [],
+  };
+
+  const executor = step8Api.createStep8Executor({
+    addLog: async (message, level) => {
+      calls.logs.push({ message, level });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    CLOUDFLARE_TEMP_EMAIL_PROVIDER: 'cloudflare-temp-email',
+    completeStepFromBackground: async () => {},
+    confirmCustomVerificationStepBypass: async () => {},
+    ensureStep8VerificationPageReady: async () => {
+      calls.ensureReady += 1;
+      return { state: 'verification_page' };
+    },
+    rerunStep7ForStep8Recovery: async () => {
+      calls.rerunStep7 += 1;
+      throw new Error('RERUN_MARKER');
+    },
+    getOAuthFlowRemainingMs: async () => 8000,
+    getOAuthFlowStepTimeoutMs: async (defaultTimeoutMs) => Math.min(defaultTimeoutMs, 8000),
+    getMailConfig: () => ({
+      provider: 'qq',
+      label: 'QQ mail',
+      source: 'mail-qq',
+      url: 'https://mail.qq.com',
+      navigateOnReuse: false,
+    }),
+    getState: async () => ({ email: 'user@example.com', password: 'secret', oauthUrl: 'https://oauth.example/latest' }),
+    getTabId: async () => 1,
+    HOTMAIL_PROVIDER: 'hotmail-api',
+    isTabAlive: async () => true,
+    isVerificationMailPollingError: () => true,
+    LUCKMAIL_PROVIDER: 'luckmail-api',
+    resolveVerificationStep: async () => {
+      throw new Error('Content script on icloud-mail did not respond in 1s. Try refreshing the tab and retry.');
+    },
+    reuseOrCreateTab: async () => {},
+    setState: async () => {},
+    shouldUseCustomRegistrationEmail: () => false,
+    sleepWithStop: async () => {},
+    STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
+    STEP7_MAIL_POLLING_RECOVERY_MAX_ATTEMPTS: 8,
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    () => executor.executeStep8({
+      email: 'user@example.com',
+      password: 'secret',
+      oauthUrl: 'https://oauth.example/latest',
+    }),
+    /RERUN_MARKER/
+  );
+
+  assert.equal(calls.rerunStep7, 1);
+  assert.equal(calls.ensureReady >= 4, true);
+  assert.equal(
+    calls.logs.some(({ message }) => /连续重试 \d+ 次，改为回到步骤 7/.test(message)),
+    true
+  );
 });

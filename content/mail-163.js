@@ -73,6 +73,21 @@ function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function getNetEaseMailLabel(hostname) {
+  const currentHostname = String(
+    hostname || (typeof location !== 'undefined' ? location.hostname : '') || ''
+  ).toLowerCase();
+
+  if (currentHostname === 'mail.126.com' || currentHostname.endsWith('.mail.126.com')) {
+    return '126 邮箱';
+  }
+  if (currentHostname === 'webmail.vip.163.com') {
+    return '163 VIP 邮箱';
+  }
+
+  return '163 邮箱';
+}
+
 function isVisibleNode(node) {
   if (!node) return false;
   if (node.hidden) return false;
@@ -114,7 +129,7 @@ function isLikelyMailItemNode(node) {
     return false;
   }
 
-  return /发件人|验证码|verification|chatgpt|openai|code/i.test(summaryText);
+  return /发件人|验证码|verification|chatgpt|openai|code|log-?in/i.test(summaryText);
 }
 
 function findMailItems() {
@@ -391,7 +406,7 @@ function selectOpenedMailTextCandidate(item, candidates = [], options = {}) {
     if (sender && lower.includes(sender)) {
       return true;
     }
-    return Boolean(extractVerificationCode(candidate) && /chatgpt|openai|verification|验证码|login code/i.test(lower));
+    return Boolean(extractVerificationCode(candidate) && /chatgpt|openai|verification|验证码|log-?in\s+code/i.test(lower));
   }) || source[0] || '';
 
   const filteredCandidates = candidates.filter((candidate) => !excludedSet.has(normalizeText(candidate)));
@@ -476,8 +491,9 @@ async function handlePollEmail(step, payload) {
   const { senderFilters, subjectFilters, maxAttempts, intervalMs, excludeCodes = [], filterAfterTimestamp = 0 } = payload;
   const excludedCodeSet = new Set(excludeCodes.filter(Boolean));
   const filterAfterMinute = normalizeMinuteTimestamp(Number(filterAfterTimestamp) || 0);
+  const mailLabel = getNetEaseMailLabel();
 
-  log(`步骤 ${step}：开始轮询 163 邮箱（最多 ${maxAttempts} 次）`);
+  log(`步骤 ${step}：开始轮询 ${mailLabel}（最多 ${maxAttempts} 次）`);
   if (filterAfterMinute) {
     log(`步骤 ${step}：仅尝试 ${new Date(filterAfterMinute).toLocaleString('zh-CN', { hour12: false })} 及之后时间的邮件。`);
   }
@@ -508,7 +524,7 @@ async function handlePollEmail(step, payload) {
   }
 
   if (items.length === 0) {
-    throw new Error('163 邮箱列表未加载完成，请确认当前已打开收件箱。');
+    throw new Error(`${mailLabel}列表未加载完成，请确认当前已打开收件箱。`);
   }
 
   log(`步骤 ${step}：邮件列表已加载，共 ${items.length} 封邮件`);
@@ -520,7 +536,7 @@ async function handlePollEmail(step, payload) {
   const FALLBACK_AFTER = 3;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    log(`步骤 ${step}：正在轮询 163 邮箱，第 ${attempt}/${maxAttempts} 次`);
+    log(`步骤 ${step}：正在轮询 ${mailLabel}，第 ${attempt}/${maxAttempts} 次`);
 
     if (attempt > 1) {
       await refreshInbox();
@@ -605,7 +621,7 @@ async function handlePollEmail(step, payload) {
   }
 
   throw new Error(
-    `${(maxAttempts * intervalMs / 1000).toFixed(0)} 秒后仍未在 163 邮箱中找到新的匹配邮件。` +
+    `${(maxAttempts * intervalMs / 1000).toFixed(0)} 秒后仍未在 ${mailLabel}中找到新的匹配邮件。` +
     '请手动检查收件箱。'
   );
 }
@@ -703,6 +719,9 @@ async function refreshInbox() {
 function extractVerificationCode(text) {
   const matchCn = text.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})/);
   if (matchCn) return matchCn[1];
+
+  const matchOpenAiLogin = text.match(/(?:chatgpt\s+log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
+  if (matchOpenAiLogin) return matchOpenAiLogin[1];
 
   const matchEn = text.match(/code[:\s]+is[:\s]+(\d{6})|code[:\s]+(\d{6})/i);
   if (matchEn) return matchEn[1] || matchEn[2];

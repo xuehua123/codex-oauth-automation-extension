@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const {
+  normalizeIcloudForwardMailProvider,
+  normalizeIcloudTargetMailboxType,
+} = require('../mail-provider-utils');
 
 const source = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 
@@ -70,68 +74,40 @@ test('sidepanel modal message preserves line breaks and supports inline links', 
   assert.match(css, /\.modal-message a,\s*[\s\S]*\.modal-alert a/);
 });
 
-test('buildCloudflareTempEmailUsageGuideModalConfig returns a modal payload with inline links for generator mode', () => {
-  const bundle = extractFunction('buildCloudflareTempEmailUsageGuideModalConfig');
+test('openCloudflareTempEmailUsageGuidePage opens the contribution portal home page', () => {
+  const bundle = extractFunction('openCloudflareTempEmailUsageGuidePage');
 
   const api = new Function(`
-const selectMailProvider = { value: '163' };
-const selectEmailGenerator = { value: 'cloudflare-temp-email' };
-const CLOUDFLARE_TEMP_EMAIL_BUILD_TUTORIAL_URL = 'https://linux.do/t/topic/316819';
-const CLOUDFLARE_TEMP_EMAIL_RANDOM_SUBDOMAIN_ISSUE_URL = 'https://github.com/dreamhunter2333/cloudflare_temp_email/issues/942';
-function getSelectedEmailGenerator() { return String(selectEmailGenerator.value || '').trim().toLowerCase(); }
+const openedUrls = [];
+function getContributionPortalUrl() { return 'https://apikey.qzz.io'; }
+function openExternalUrl(url) { openedUrls.push(url); }
 ${bundle}
 return {
-  buildCloudflareTempEmailUsageGuideModalConfig,
+  openedUrls,
+  openCloudflareTempEmailUsageGuidePage,
 };
   `)();
 
-  const modalConfig = api.buildCloudflareTempEmailUsageGuideModalConfig();
-  assert.equal(typeof modalConfig.title, 'string');
-  assert.equal(typeof modalConfig.messageHtml, 'string');
-  assert.equal(typeof modalConfig.alert?.text, 'string');
-  assert.equal(modalConfig.title.length > 0, true);
-  assert.equal(modalConfig.messageHtml.length > 0, true);
-  assert.equal(modalConfig.alert.text.length > 0, true);
-  assert.equal(modalConfig.messageHtml.includes('<a '), true);
-  assert.equal(modalConfig.messageHtml.includes('Issue #942'), true);
-  assert.equal(modalConfig.messageHtml.includes('LINUX DO 教程'), true);
+  api.openCloudflareTempEmailUsageGuidePage();
+  assert.deepEqual(api.openedUrls, ['https://apikey.qzz.io']);
 });
 
-test('buildCloudflareTempEmailUsageGuideModalConfig returns a distinct alert for provider mode', () => {
-  const bundle = extractFunction('buildCloudflareTempEmailUsageGuideModalConfig');
+test('openCloudflareTempEmailUsageGuidePage skips opening when the contribution portal URL is empty', () => {
+  const bundle = extractFunction('openCloudflareTempEmailUsageGuidePage');
 
   const api = new Function(`
-const selectMailProvider = { value: 'cloudflare-temp-email' };
-const selectEmailGenerator = { value: 'duck' };
-const CLOUDFLARE_TEMP_EMAIL_BUILD_TUTORIAL_URL = 'https://linux.do/t/topic/316819';
-const CLOUDFLARE_TEMP_EMAIL_RANDOM_SUBDOMAIN_ISSUE_URL = 'https://github.com/dreamhunter2333/cloudflare_temp_email/issues/942';
-function getSelectedEmailGenerator() { return String(selectEmailGenerator.value || '').trim().toLowerCase(); }
+const openedUrls = [];
+function getContributionPortalUrl() { return ''; }
+function openExternalUrl(url) { openedUrls.push(url); }
 ${bundle}
 return {
-  buildCloudflareTempEmailUsageGuideModalConfig,
+  openedUrls,
+  openCloudflareTempEmailUsageGuidePage,
 };
   `)();
 
-  const providerConfig = api.buildCloudflareTempEmailUsageGuideModalConfig();
-
-  const generatorApi = new Function(`
-const selectMailProvider = { value: '163' };
-const selectEmailGenerator = { value: 'cloudflare-temp-email' };
-const CLOUDFLARE_TEMP_EMAIL_BUILD_TUTORIAL_URL = 'https://linux.do/t/topic/316819';
-const CLOUDFLARE_TEMP_EMAIL_RANDOM_SUBDOMAIN_ISSUE_URL = 'https://github.com/dreamhunter2333/cloudflare_temp_email/issues/942';
-function getSelectedEmailGenerator() { return String(selectEmailGenerator.value || '').trim().toLowerCase(); }
-${bundle}
-return {
-  buildCloudflareTempEmailUsageGuideModalConfig,
-};
-  `)();
-
-  const generatorConfig = generatorApi.buildCloudflareTempEmailUsageGuideModalConfig();
-  assert.equal(typeof providerConfig.alert?.text, 'string');
-  assert.equal(typeof providerConfig.messageHtml, 'string');
-  assert.equal(providerConfig.alert.text.length > 0, true);
-  assert.equal(providerConfig.messageHtml.length > 0, true);
-  assert.notEqual(providerConfig.alert.text, generatorConfig.alert.text);
+  api.openCloudflareTempEmailUsageGuidePage();
+  assert.deepEqual(api.openedUrls, []);
 });
 
 test('openCloudflareTempEmailRepositoryPage opens the upstream repository', () => {
@@ -200,7 +176,7 @@ return {
 test('updateMailProviderUI keeps the temp domain selector visible and updates the hint when random subdomain is enabled', () => {
   const bundle = extractFunction('updateMailProviderUI');
 
-  const api = new Function(`
+  const api = new Function('normalizeIcloudTargetMailboxType', 'normalizeIcloudForwardMailProvider', `
 let latestState = {
   cloudflareTempEmailDomains: ['mail.example.com'],
 };
@@ -291,7 +267,7 @@ return {
   autoHintText,
   calls,
 };
-  `)();
+  `)(normalizeIcloudTargetMailboxType, normalizeIcloudForwardMailProvider);
 
   api.updateMailProviderUI();
   assert.equal(api.cloudflareTempEmailSection.style.display, '');

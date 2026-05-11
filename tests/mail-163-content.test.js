@@ -101,6 +101,23 @@ return { findMailItems };
   assert.equal(rows.length, 1);
 });
 
+test('getNetEaseMailLabel returns the active NetEase mailbox brand', () => {
+  const bundle = [
+    extractFunction('getNetEaseMailLabel'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { getNetEaseMailLabel };
+`)();
+
+  assert.equal(api.getNetEaseMailLabel('mail.126.com'), '126 邮箱');
+  assert.equal(api.getNetEaseMailLabel('app.mail.126.com'), '126 邮箱');
+  assert.equal(api.getNetEaseMailLabel('webmail.vip.163.com'), '163 VIP 邮箱');
+  assert.equal(api.getNetEaseMailLabel('mail.163.com'), '163 邮箱');
+  assert.equal(api.getNetEaseMailLabel('example.com'), '163 邮箱');
+});
+
 test('getMailTimestamp parses visible hh:mm text even when no title attribute exists', () => {
   const bundle = [
     extractFunction('normalizeText'),
@@ -340,14 +357,30 @@ return { openMailAndGetMessageText, mailItem };
   assert.doesNotMatch(text, /111111/);
 });
 
+test('extractVerificationCode matches the new suspicious log-in mail body', () => {
+  const bundle = [
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = 'ChatGPT Log-in Code\nWe noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219';
+  assert.equal(api.extractVerificationCode(bodyText), '982219');
+});
+
 test('handlePollEmail ignores same-minute old snapshot mail before fallback', async () => {
   const bundle = [
     extractFunction('normalizeText'),
     extractFunction('normalizeMinuteTimestamp'),
+    extractFunction('getNetEaseMailLabel'),
     extractFunction('handlePollEmail'),
   ].join('\n');
 
   const api = new Function(`
+const location = { hostname: 'mail.126.com' };
 let currentItems = [{ id: 'old-mail' }];
 const seenCodes = new Set();
 
@@ -405,7 +438,7 @@ return { handlePollEmail };
       intervalMs: 1,
       filterAfterTimestamp: new Date(2026, 3, 22, 22, 22, 40, 0).getTime(),
     }),
-    /未在 163 邮箱中找到新的匹配邮件/
+    /未在 126 邮箱中找到新的匹配邮件/
   );
 });
 
@@ -413,6 +446,7 @@ test('handlePollEmail accepts a new same-minute mail that appears after the snap
   const bundle = [
     extractFunction('normalizeText'),
     extractFunction('normalizeMinuteTimestamp'),
+    extractFunction('getNetEaseMailLabel'),
     extractFunction('handlePollEmail'),
   ].join('\n');
 
@@ -505,6 +539,7 @@ test('handlePollEmail falls back to row text when the subject node is missing', 
   const bundle = [
     extractFunction('normalizeText'),
     extractFunction('normalizeMinuteTimestamp'),
+    extractFunction('getNetEaseMailLabel'),
     extractFunction('handlePollEmail'),
   ].join('\n');
 
@@ -584,6 +619,7 @@ test('handlePollEmail opens matching mail body when preview has no code', async 
   const bundle = [
     extractFunction('normalizeText'),
     extractFunction('normalizeMinuteTimestamp'),
+    extractFunction('getNetEaseMailLabel'),
     extractFunction('handlePollEmail'),
   ].join('\n');
 

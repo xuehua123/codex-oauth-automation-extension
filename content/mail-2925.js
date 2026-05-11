@@ -501,7 +501,9 @@ async function ensureAgreementChecked() {
     if (isCheckboxChecked(checkbox)) {
       continue;
     }
-    simulateClick(checkbox);
+    await performOperationWithDelay({ stepKey: 'fetch-signup-code', kind: 'click', label: 'mail2925-agreement-checkbox' }, async () => {
+      simulateClick(checkbox);
+    });
     changed = true;
     await sleep(120);
   }
@@ -668,16 +670,92 @@ function matchesMailFilters(text, senderFilters, subjectFilters) {
   return senderMatch || subjectMatch;
 }
 
-function extractVerificationCode(text, strictChatGPTCodeOnly = false) {
-  if (strictChatGPTCodeOnly) {
-    const strictMatch = String(text || '').match(/your\s+chatgpt\s+code\s+is\s+(\d{6})/i);
-    return strictMatch ? strictMatch[1] : null;
+function extractStrictChatGPTVerificationCode(text) {
+  const normalized = String(text || '');
+  const patterns = [
+    /your\s+(?:temporary\s+)?chatgpt\s+(?:(?:log-?in|login)\s+)?code\s+is[\s\S]{0,80}?(\d{6})/i,
+    /(?:chatgpt\s+log-?in\s+code|suspicious\s+log-?in)[\s\S]{0,200}?enter\s+this\s+code[\s\S]{0,80}?(\d{6})/i,
+    /enter\s+this\s+code[\s\S]{0,80}?(\d{6})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (match) return match[1];
   }
+
+  return null;
+}
+
+function isLikelyCompactTimeValue(value = '') {
+  const text = String(value || '');
+  if (!/^\d{6}$/.test(text)) return false;
+
+  const hours = Number(text.slice(0, 2));
+  const minutes = Number(text.slice(2, 4));
+  const seconds = Number(text.slice(4, 6));
+  return hours >= 0 && hours <= 23
+    && minutes >= 0 && minutes <= 59
+    && seconds >= 0 && seconds <= 59;
+}
+
+function isLikelyHeaderTimestampCode(text, index, value) {
+  const source = String(text || '');
+  const candidate = String(value || '');
+  if (!candidate) return false;
+
+  const before = source.slice(Math.max(0, index - 80), index);
+  const after = source.slice(index + candidate.length, index + candidate.length + 40);
+  const context = `${before}${candidate}${after}`.replace(/\s+/g, ' ');
+  const beforeCompact = before.replace(/\s+/g, ' ');
+  const timeLike = isLikelyCompactTimeValue(candidate);
+
+  if (
+    timeLike
+    && /(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2})\s*$/.test(beforeCompact)
+  ) {
+    return true;
+  }
+
+  if (
+    timeLike
+    && /(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2})\s*(?:\d{1,2}:\d{2}(?::\d{2})?|\d{6})/.test(context)
+  ) {
+    return true;
+  }
+
+  return /(?:time|date|sent|received|received\s+at|sent\s+at|\u65f6\s*\u95f4|\u65e5\s*\u671f)[\s:\uFF1A-]*$/i.test(beforeCompact)
+    && (timeLike || /^20\d{4}$/.test(candidate));
+}
+
+function findSafeStandaloneSixDigitCode(text) {
+  const normalized = String(text || '');
+  const pattern = /\b(\d{6})\b/g;
+  let match = null;
+
+  while ((match = pattern.exec(normalized)) !== null) {
+    const candidate = match[1];
+    if (!isLikelyHeaderTimestampCode(normalized, match.index, candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function extractVerificationCode(text, strictChatGPTCodeOnly = false) {
+  const strictCode = extractStrictChatGPTVerificationCode(text);
+  if (strictChatGPTCodeOnly) {
+    return strictCode;
+  }
+  if (strictCode) return strictCode;
 
   const normalized = String(text || '');
 
   const matchCn = normalized.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})/);
   if (matchCn) return matchCn[1];
+
+  const matchOpenAiLogin = normalized.match(/(?:chatgpt\s+log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
+  if (matchOpenAiLogin) return matchOpenAiLogin[1];
 
   const matchChatGPT = normalized.match(/your\s+chatgpt\s+code\s+is\s+(\d{6})/i);
   if (matchChatGPT) return matchChatGPT[1];
@@ -685,10 +763,7 @@ function extractVerificationCode(text, strictChatGPTCodeOnly = false) {
   const matchEn = normalized.match(/code[:\s]+is[:\s]+(\d{6})|code[:\s]+(\d{6})/i);
   if (matchEn) return matchEn[1] || matchEn[2];
 
-  const match6 = normalized.match(/\b(\d{6})\b/);
-  if (match6) return match6[1];
-
-  return null;
+  return findSafeStandaloneSixDigitCode(normalized);
 }
 
 function extractEmails(text = '') {
@@ -696,10 +771,29 @@ function extractEmails(text = '') {
   return [...new Set(matches.map((item) => item.toLowerCase()))];
 }
 
+function extractForwardedTargetEmails(text = '') {
+  const normalizedText = String(text || '').toLowerCase();
+  const matches = normalizedText.match(/bounce\+[a-z0-9._%+-]*-([a-z0-9._%+-]+)=([a-z0-9.-]+\.[a-z]{2,})@(?:tm\d*\.openai\.com|em\d+\.tm\.openai\.com)/gi) || [];
+  const decoded = matches
+    .map((candidate) => {
+      const match = String(candidate || '').match(/bounce\+[a-z0-9._%+-]*-([a-z0-9._%+-]+)=([a-z0-9.-]+\.[a-z]{2,})@/i);
+      if (!match) {
+        return '';
+      }
+      return `${match[1].toLowerCase()}@${match[2].toLowerCase()}`;
+    })
+    .filter(Boolean);
+  return [...new Set(decoded)];
+}
+
 function emailMatchesTarget(candidate, targetEmail) {
   const normalizedCandidate = String(candidate || '').trim().toLowerCase();
   const normalizedTarget = String(targetEmail || '').trim().toLowerCase();
-  return Boolean(normalizedCandidate && normalizedTarget && normalizedCandidate === normalizedTarget);
+  if (!normalizedCandidate || !normalizedTarget) {
+    return false;
+  }
+
+  return normalizedCandidate === normalizedTarget;
 }
 
 function getTargetEmailMatchState(text, targetEmail) {
@@ -714,12 +808,30 @@ function getTargetEmailMatchState(text, targetEmail) {
   }
 
   const extractedEmails = extractEmails(normalizedText);
+  const forwardedTargetEmails = extractForwardedTargetEmails(normalizedText);
   if (!extractedEmails.length) {
+    return forwardedTargetEmails.length
+      ? {
+        matches: forwardedTargetEmails.some((candidate) => emailMatchesTarget(candidate, normalizedTarget)),
+        hasExplicitEmail: true,
+      }
+      : { matches: true, hasExplicitEmail: false };
+  }
+
+  const targetDomain = normalizedTarget.includes('@')
+    ? normalizedTarget.split('@').pop()
+    : '';
+  const comparableEmails = [...new Set(
+    (targetDomain
+      ? [...extractedEmails, ...forwardedTargetEmails].filter((candidate) => String(candidate || '').trim().toLowerCase().endsWith(`@${targetDomain}`))
+      : [...extractedEmails, ...forwardedTargetEmails])
+  )];
+  if (!comparableEmails.length) {
     return { matches: true, hasExplicitEmail: false };
   }
 
   return {
-    matches: extractedEmails.some((candidate) => emailMatchesTarget(candidate, normalizedTarget)),
+    matches: comparableEmails.some((candidate) => emailMatchesTarget(candidate, normalizedTarget)),
     hasExplicitEmail: true,
   };
 }
@@ -776,6 +888,17 @@ function parseMailItemTimestamp(item) {
   if (match) {
     date.setMonth(Number(match[1]) - 1, Number(match[2]));
     date.setHours(Number(match[3]), Number(match[4]), 0, 0);
+    return date.getTime();
+  }
+
+  match = timeText.match(/(\d{1,2})月(\d{1,2})日(?:\s*(\d{1,2}):(\d{2}))?/);
+  if (match) {
+    date.setMonth(Number(match[1]) - 1, Number(match[2]));
+    if (match[3] && match[4]) {
+      date.setHours(Number(match[3]), Number(match[4]), 0, 0);
+    } else {
+      date.setHours(0, 0, 0, 0);
+    }
     return date.getTime();
   }
 
@@ -931,6 +1054,11 @@ async function waitForMail2925View(targetView, timeoutMs = 45000) {
   return detectMail2925ViewState();
 }
 
+async function performOperationWithDelay(metadata, operation) {
+  const gate = window.CodexOperationDelay?.performOperationWithDelay;
+  return typeof gate === 'function' ? gate(metadata, operation) : operation();
+}
+
 async function ensureMail2925Session(payload = {}) {
   const email = String(payload?.email || '').trim();
   const password = String(payload?.password || '');
@@ -1014,13 +1142,19 @@ async function ensureMail2925Session(payload = {}) {
   }
 
   await ensureAgreementChecked();
-  fillInput(emailInput, email);
+  await performOperationWithDelay({ stepKey: 'fetch-signup-code', kind: 'fill', label: 'mail2925-login-email' }, async () => {
+    fillInput(emailInput, email);
+  });
   await sleep(150);
-  fillInput(passwordInput, password);
+  await performOperationWithDelay({ stepKey: 'fetch-signup-code', kind: 'fill', label: 'mail2925-login-password' }, async () => {
+    fillInput(passwordInput, password);
+  });
   await sleep(200);
   await sleep(1000);
   log(`步骤 0：2925 已定位到登录表单，准备点击“登录”，当前地址 ${location.href}`, 'info');
-  simulateClick(loginButton);
+  await performOperationWithDelay({ stepKey: 'fetch-signup-code', kind: 'submit', label: 'mail2925-login-submit' }, async () => {
+    simulateClick(loginButton);
+  });
   log(`步骤 0：2925 已点击“登录”，点击后地址 ${location.href}`, 'info');
 
   const finalState = await waitForMail2925View('mailbox', 40000);

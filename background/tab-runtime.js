@@ -286,6 +286,52 @@
       }
     }
 
+    async function waitForTabStableComplete(tabId, options = {}) {
+      const {
+        timeoutMs = 30000,
+        retryDelayMs = 300,
+        stableMs = 1000,
+        initialDelayMs = 0,
+      } = options;
+      const start = Date.now();
+      let lastUrl = '';
+      let lastStatus = '';
+      let stableStartedAt = 0;
+      let lastTab = null;
+
+      if (initialDelayMs > 0) {
+        await sleepOrStop(initialDelayMs);
+      }
+
+      while (Date.now() - start < timeoutMs) {
+        throwIfStopped();
+        try {
+          lastTab = await chrome.tabs.get(tabId);
+        } catch {
+          return null;
+        }
+
+        const currentUrl = String(lastTab?.url || '');
+        const currentStatus = String(lastTab?.status || '');
+        if (currentStatus === 'complete') {
+          if (currentUrl !== lastUrl || currentStatus !== lastStatus || !stableStartedAt) {
+            stableStartedAt = Date.now();
+          }
+          if (Date.now() - stableStartedAt >= stableMs) {
+            return lastTab;
+          }
+        } else {
+          stableStartedAt = 0;
+        }
+
+        lastUrl = currentUrl;
+        lastStatus = currentStatus;
+        await sleepOrStop(retryDelayMs);
+      }
+
+      return lastTab;
+    }
+
     async function ensureContentScriptReadyOnTab(source, tabId, options = {}) {
       const {
         inject = null,
@@ -293,6 +339,8 @@
         timeoutMs = 30000,
         retryDelayMs = 700,
         logMessage = '',
+        logStep = null,
+        logStepKey = '',
       } = options;
       const preInjectRetryCount = Number.isInteger(options.preInjectRetryCount)
         ? Math.max(0, options.preInjectRetryCount)
@@ -367,7 +415,10 @@
 
         if (logMessage && !logged) {
           console.warn(LOG_PREFIX, `[ensureContentScriptReadyOnTab] ${source} tab=${tabId} still not ready after ${Date.now() - start}ms`);
-          await addLog(logMessage, 'warn');
+          await addLog(logMessage, 'warn', {
+            step: logStep,
+            stepKey: logStepKey,
+          });
           logged = true;
         }
 
@@ -388,6 +439,17 @@
       if (message.type === 'FILL_CODE') return Number(message.step) === 7 ? 45000 : 30000;
       if (message.type === 'PREPARE_SIGNUP_VERIFICATION') return 45000;
       return 30000;
+    }
+
+    function resolveResponseTimeoutMs(message, requestedResponseTimeoutMs, remainingTimeoutMs = null) {
+      const fallbackTimeoutMs = getContentScriptResponseTimeoutMs(message);
+      const requestedTimeoutMs = Number.isFinite(Number(requestedResponseTimeoutMs))
+        ? Math.max(1, Math.floor(Number(requestedResponseTimeoutMs)))
+        : fallbackTimeoutMs;
+      if (!Number.isFinite(Number(remainingTimeoutMs))) {
+        return requestedTimeoutMs;
+      }
+      return Math.max(1, Math.min(requestedTimeoutMs, Math.floor(Number(remainingTimeoutMs))));
     }
 
     function getMessageDebugLabel(source, message, tabId = null) {
@@ -453,7 +515,13 @@
           pendingCommands.delete(source);
           reject(new Error(`Content script on ${source} did not respond in ${timeout / 1000}s. Try refreshing the tab and retry.`));
         }, timeout);
-        pendingCommands.set(source, { message, resolve, reject, timer });
+        pendingCommands.set(source, {
+          message,
+          resolve,
+          reject,
+          timer,
+          responseTimeoutMs: timeout,
+        });
         console.log(LOG_PREFIX, `Command queued for ${source} (waiting for ready)`);
       });
     }
@@ -463,7 +531,7 @@
       if (pending) {
         clearTimeout(pending.timer);
         pendingCommands.delete(source);
-        sendTabMessageWithTimeout(tabId, source, pending.message).then(pending.resolve).catch(pending.reject);
+        sendTabMessageWithTimeout(tabId, source, pending.message, pending.responseTimeoutMs).then(pending.resolve).catch(pending.reject);
         console.log(LOG_PREFIX, `Flushed queued command to ${source} (tab ${tabId})`);
       }
     }
@@ -478,6 +546,31 @@
     }
 
     async function reuseOrCreateTab(source, url, options = {}) {
+      if (options.forceNew) {
+        await closeConflictingTabsForSource(source, url);
+        const tab = await chrome.tabs.create({ url, active: true });
+
+        if (options.inject) {
+          await waitForTabUpdateComplete(tab.id);
+          if (options.injectSource) {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (injectedSource) => {
+                window.__MULTIPAGE_SOURCE = injectedSource;
+              },
+              args: [options.injectSource],
+            });
+          }
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: options.inject,
+          });
+        }
+
+        await rememberSourceLastUrl(source, url);
+        return tab.id;
+      }
+
       const alive = await isTabAlive(source);
       if (alive) {
         const tabId = await getTabId(source);
@@ -578,13 +671,13 @@
 
       if (!entry || !entry.ready) {
         throwIfStopped();
-        return queueCommand(source, message);
+        return queueCommand(source, message, responseTimeoutMs);
       }
 
       const alive = await isTabAlive(source);
       throwIfStopped();
       if (!alive) {
-        return queueCommand(source, message);
+        return queueCommand(source, message, responseTimeoutMs);
       }
 
       throwIfStopped();
@@ -596,6 +689,8 @@
         timeoutMs = 30000,
         retryDelayMs = 600,
         logMessage = '',
+        logStep = null,
+        logStepKey = '',
         responseTimeoutMs,
       } = options;
       const start = Date.now();
@@ -606,12 +701,18 @@
       while (Date.now() - start < timeoutMs) {
         throwIfStopped();
         attempt += 1;
+        const remainingTimeoutMs = Math.max(1, timeoutMs - (Date.now() - start));
+        const effectiveResponseTimeoutMs = resolveResponseTimeoutMs(
+          message,
+          responseTimeoutMs,
+          remainingTimeoutMs
+        );
 
         try {
           return await sendToContentScript(
             source,
             message,
-            responseTimeoutMs !== undefined ? { responseTimeoutMs } : {}
+            { responseTimeoutMs: effectiveResponseTimeoutMs }
           );
         } catch (err) {
           const retryable = isRetryableContentScriptTransportError(err);
@@ -621,7 +722,10 @@
 
           lastError = err;
           if (logMessage && !logged) {
-            await addLog(logMessage, 'warn');
+            await addLog(logMessage, 'warn', {
+              step: logStep,
+              stepKey: logStepKey,
+            });
             logged = true;
           }
 
@@ -636,6 +740,8 @@
       const {
         timeoutMs = 45000,
         maxRecoveryAttempts = 2,
+        logStep = null,
+        logStepKey = '',
         responseTimeoutMs,
       } = options;
       const start = Date.now();
@@ -645,12 +751,18 @@
 
       while (Date.now() - start < timeoutMs) {
         throwIfStopped();
+        const remainingTimeoutMs = Math.max(1, timeoutMs - (Date.now() - start));
+        const effectiveResponseTimeoutMs = resolveResponseTimeoutMs(
+          message,
+          responseTimeoutMs,
+          remainingTimeoutMs
+        );
 
         try {
           return await sendToContentScript(
             mail.source,
             message,
-            responseTimeoutMs !== undefined ? { responseTimeoutMs } : {}
+            { responseTimeoutMs: effectiveResponseTimeoutMs }
           );
         } catch (err) {
           if (!isRetryableContentScriptTransportError(err)) {
@@ -659,7 +771,10 @@
 
           lastError = err;
           if (!logged) {
-            await addLog(`步骤 ${message.step}：${mail.label} 页面通信异常，正在尝试让邮箱页重新就绪...`, 'warn');
+            await addLog(`${mail.label} 页面通信异常，正在尝试让邮箱页重新就绪...`, 'warn', {
+              step: logStep,
+              stepKey: logStepKey,
+            });
             logged = true;
           }
 
@@ -698,6 +813,7 @@
       queueCommand,
       registerTab,
       rememberSourceLastUrl,
+      resolveResponseTimeoutMs,
       reuseOrCreateTab,
       sendTabMessageWithTimeout,
       sendToContentScript,
@@ -705,6 +821,7 @@
       sendToMailContentScriptResilient,
       summarizeMessageResultForDebug,
       waitForTabComplete,
+      waitForTabStableComplete,
       waitForTabUrlFamily,
       waitForTabUrlMatch,
     };

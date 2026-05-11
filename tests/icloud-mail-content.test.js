@@ -81,6 +81,20 @@ return { readOpenedMailBody, extractVerificationCode };
   assert.equal(api.extractVerificationCode(bodyText), '731091');
 });
 
+test('extractVerificationCode matches the new suspicious log-in mail body', () => {
+  const bundle = [
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = 'ChatGPT Log-in Code\nWe noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219';
+  assert.equal(api.extractVerificationCode(bodyText), '982219');
+});
+
 test('readOpenedMailBody ignores conversation list rows when no detail pane is open', () => {
   const bundle = [
     extractFunction('normalizeText'),
@@ -178,4 +192,254 @@ return {
   api.setThreadItems([selectedItem, staleItem]);
   assert.equal(api.isThreadItemSelected(staleItem, api.buildItemSignature(selectedItem)), true);
   assert.equal(api.isThreadItemSelected(staleItem, api.buildItemSignature(staleItem)), false);
+});
+
+test('icloud poll session baseline is reused across calls and enables fallback after carry-over attempts', async () => {
+  const bundle = [
+    extractFunction('normalizeText'),
+    extractFunction('getThreadItemMetadata'),
+    extractFunction('buildItemSignature'),
+    extractFunction('extractVerificationCode'),
+    extractFunction('normalizePollSessionKey'),
+    extractFunction('getOrCreatePollSessionBaseline'),
+    extractFunction('persistPollSessionBaseline'),
+    extractFunction('handlePollEmail'),
+  ].join('\n');
+
+  const api = new Function(`
+const ICLOUD_POLL_SESSION_CACHE = new Map();
+function log() {}
+function throwIfStopped() {}
+async function sleep() {}
+async function waitForElement() { return true; }
+async function refreshInbox() { return true; }
+function normalizeThreadEntry(entry) {
+  return {
+    signature: String(entry.signature || ''),
+    sender: String(entry.sender || ''),
+    subject: String(entry.subject || ''),
+    preview: String(entry.preview || ''),
+    timestamp: String(entry.timestamp || ''),
+    ariaLabel: String(entry.ariaLabel || ''),
+  };
+}
+let currentThreadData = [];
+function setThreadData(next) {
+  currentThreadData = Array.isArray(next) ? next.map(normalizeThreadEntry) : [];
+}
+function collectThreadItems() {
+  return currentThreadData.map((entry) => ({
+    getAttribute(name) {
+      if (name === 'aria-label') return entry.ariaLabel || entry.signature;
+      return '';
+    },
+    querySelector(selector) {
+      if (selector === '.thread-participants') return { textContent: entry.sender };
+      if (selector === '.thread-subject') return { textContent: entry.subject };
+      if (selector === '.thread-preview') return { textContent: entry.preview };
+      if (selector === '.thread-timestamp') return { textContent: entry.timestamp };
+      return null;
+    },
+  }));
+}
+async function openMailItemAndRead(item) {
+  const meta = getThreadItemMetadata(item);
+  return {
+    sender: meta.sender,
+    recipients: '',
+    timestamp: meta.timestamp,
+    bodyText: meta.preview,
+    combinedText: meta.combinedText,
+  };
+}
+${bundle}
+return {
+  handlePollEmail,
+  setThreadData,
+};
+`)();
+
+  api.setThreadData([
+    { signature: 'old-1', sender: 'OpenAI', subject: '旧邮件', preview: 'no code', timestamp: '10:00', ariaLabel: 'old-1' },
+  ]);
+
+  await assert.rejects(
+    () => api.handlePollEmail(8, {
+      senderFilters: ['openai'],
+      subjectFilters: ['code'],
+      maxAttempts: 1,
+      intervalMs: 10,
+      excludeCodes: [],
+      sessionKey: 's-1',
+    }),
+    /仍未在 iCloud 邮箱中找到新的匹配邮件/
+  );
+
+  api.setThreadData([
+    { signature: 'old-1', sender: 'OpenAI', subject: '旧邮件', preview: 'no code', timestamp: '10:00', ariaLabel: 'old-1' },
+    { signature: 'old-2', sender: 'OpenAI', subject: '旧邮件2', preview: 'no code', timestamp: '10:01', ariaLabel: 'old-2' },
+    { signature: 'old-3', sender: 'OpenAI', subject: '旧邮件3', preview: 'no code', timestamp: '10:02', ariaLabel: 'old-3' },
+    { signature: 'old-4', sender: 'OpenAI', subject: '旧邮件4', preview: 'no code', timestamp: '10:03', ariaLabel: 'old-4' },
+    { signature: 'old-code', sender: 'OpenAI', subject: 'ChatGPT Log-in Code', preview: 'enter this code 556677', timestamp: '10:04', ariaLabel: 'old-code' },
+  ]);
+
+  const result = await api.handlePollEmail(8, {
+    senderFilters: ['openai'],
+    subjectFilters: ['code', 'login'],
+    maxAttempts: 1,
+    intervalMs: 10,
+    excludeCodes: [],
+    sessionKey: 's-1',
+  });
+
+  assert.equal(result.code, '556677');
+});
+
+test('icloud step8 polling finds a visible first-row code immediately', async () => {
+  const bundle = [
+    extractFunction('normalizeText'),
+    extractFunction('getThreadItemMetadata'),
+    extractFunction('buildItemSignature'),
+    extractFunction('extractVerificationCode'),
+    extractFunction('normalizePollSessionKey'),
+    extractFunction('getOrCreatePollSessionBaseline'),
+    extractFunction('persistPollSessionBaseline'),
+    extractFunction('handlePollEmail'),
+  ].join('\n');
+
+  const api = new Function(`
+const ICLOUD_POLL_SESSION_CACHE = new Map();
+function log() {}
+function throwIfStopped() {}
+async function sleep() {}
+async function waitForElement() { return true; }
+async function refreshInbox() { return true; }
+const currentThreadData = [
+  {
+    signature: 'visible-code',
+    sender: 'noreply@tm.openai.com',
+    subject: '你的 OpenAI 代码为 576773',
+    preview: '输入此临时验证码以继续：576773',
+    timestamp: '21:05',
+    ariaLabel: 'visible-code',
+  },
+  {
+    signature: 'older-code',
+    sender: 'noreply@tm.openai.com',
+    subject: '你的 OpenAI 代码为 697852',
+    preview: '输入此临时验证码以继续：697852',
+    timestamp: '21:04',
+    ariaLabel: 'older-code',
+  },
+];
+function collectThreadItems() {
+  return currentThreadData.map((entry) => ({
+    getAttribute(name) {
+      if (name === 'aria-label') return entry.ariaLabel || entry.signature;
+      return '';
+    },
+    querySelector(selector) {
+      if (selector === '.thread-participants') return { textContent: entry.sender };
+      if (selector === '.thread-subject') return { textContent: entry.subject };
+      if (selector === '.thread-preview') return { textContent: entry.preview };
+      if (selector === '.thread-timestamp') return { textContent: entry.timestamp };
+      return null;
+    },
+  }));
+}
+async function openMailItemAndRead(item) {
+  const meta = getThreadItemMetadata(item);
+  return {
+    sender: meta.sender,
+    recipients: '',
+    timestamp: meta.timestamp,
+    bodyText: meta.preview,
+    combinedText: meta.combinedText,
+  };
+}
+${bundle}
+return { handlePollEmail };
+`)();
+
+  const result = await api.handlePollEmail(8, {
+    senderFilters: ['openai', 'noreply', 'chatgpt'],
+    subjectFilters: ['code', '验证码', 'login'],
+    maxAttempts: 1,
+    intervalMs: 10,
+    excludeCodes: [],
+    sessionKey: '8:visible-first',
+  });
+
+  assert.equal(result.code, '576773');
+});
+
+test('icloud step8 visible first-row code still respects excluded codes', async () => {
+  const bundle = [
+    extractFunction('normalizeText'),
+    extractFunction('getThreadItemMetadata'),
+    extractFunction('buildItemSignature'),
+    extractFunction('extractVerificationCode'),
+    extractFunction('normalizePollSessionKey'),
+    extractFunction('getOrCreatePollSessionBaseline'),
+    extractFunction('persistPollSessionBaseline'),
+    extractFunction('handlePollEmail'),
+  ].join('\n');
+
+  const api = new Function(`
+const ICLOUD_POLL_SESSION_CACHE = new Map();
+function log() {}
+function throwIfStopped() {}
+async function sleep() {}
+async function waitForElement() { return true; }
+async function refreshInbox() { return true; }
+const currentThreadData = [
+  {
+    signature: 'visible-code',
+    sender: 'noreply@tm.openai.com',
+    subject: '你的 OpenAI 代码为 576773',
+    preview: '输入此临时验证码以继续：576773',
+    timestamp: '21:05',
+    ariaLabel: 'visible-code',
+  },
+];
+function collectThreadItems() {
+  return currentThreadData.map((entry) => ({
+    getAttribute(name) {
+      if (name === 'aria-label') return entry.ariaLabel || entry.signature;
+      return '';
+    },
+    querySelector(selector) {
+      if (selector === '.thread-participants') return { textContent: entry.sender };
+      if (selector === '.thread-subject') return { textContent: entry.subject };
+      if (selector === '.thread-preview') return { textContent: entry.preview };
+      if (selector === '.thread-timestamp') return { textContent: entry.timestamp };
+      return null;
+    },
+  }));
+}
+async function openMailItemAndRead(item) {
+  const meta = getThreadItemMetadata(item);
+  return {
+    sender: meta.sender,
+    recipients: '',
+    timestamp: meta.timestamp,
+    bodyText: meta.preview,
+    combinedText: meta.combinedText,
+  };
+}
+${bundle}
+return { handlePollEmail };
+`)();
+
+  await assert.rejects(
+    () => api.handlePollEmail(8, {
+      senderFilters: ['openai', 'noreply', 'chatgpt'],
+      subjectFilters: ['code', '验证码', 'login'],
+      maxAttempts: 1,
+      intervalMs: 10,
+      excludeCodes: ['576773'],
+      sessionKey: '8:excluded-visible-first',
+    }),
+    /仍未在 iCloud 邮箱中找到新的匹配邮件/
+  );
 });

@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const {
+  normalizeIcloudForwardMailProvider,
+  normalizeIcloudTargetMailboxType,
+} = require('../mail-provider-utils');
 
 const sidepanelSource = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 
@@ -118,16 +122,71 @@ test('sidepanel html contains contribution mode runtime UI and loads the module 
   assert.ok(moduleIndex < sidepanelIndex);
 });
 
+test('sidepanel settings refresh preserves rendered step progress', () => {
+  const applySettingsStateSource = extractFunction('applySettingsState');
+  assert.doesNotMatch(
+    applySettingsStateSource,
+    /syncStepDefinitionsForMode\(Boolean\(state\?\.plusModeEnabled\),\s*\{\s*render:\s*true\s*\}\)/
+  );
+  assert.match(applySettingsStateSource, /renderStepStatuses\(latestState\)/);
+
+  const bundle = [
+    extractFunction('isDoneStatus'),
+    extractFunction('getStepStatuses'),
+    extractFunction('renderSingleStepStatus'),
+    extractFunction('renderStepStatuses'),
+    extractFunction('updateProgressCounter'),
+  ].join('\n');
+
+  const api = new Function(`
+const STATUS_ICONS = {
+  pending: '',
+  running: '',
+  completed: 'C',
+  failed: 'F',
+  stopped: 'S',
+  manual_completed: 'M',
+  skipped: 'K',
+};
+let latestState = { stepStatuses: { 1: 'completed', 2: 'running', 3: 'pending' } };
+let STEP_IDS = [1, 2, 3];
+let STEP_DEFAULT_STATUSES = { 1: 'pending', 2: 'pending', 3: 'pending' };
+const rows = new Map(STEP_IDS.map((step) => [step, { className: 'step-row' }]));
+const statusEls = new Map(STEP_IDS.map((step) => [step, { textContent: '' }]));
+const document = {
+  querySelector(selector) {
+    const match = selector.match(/data-step="(\\d+)"/);
+    const step = match ? Number(match[1]) : 0;
+    return selector.includes('step-status') ? statusEls.get(step) : rows.get(step);
+  },
+};
+const stepsProgress = { textContent: '' };
+${bundle}
+return { renderStepStatuses, rows, statusEls, stepsProgress };
+`)();
+
+  api.renderStepStatuses();
+
+  assert.equal(api.rows.get(1).className, 'step-row completed');
+  assert.equal(api.rows.get(2).className, 'step-row running');
+  assert.equal(api.rows.get(3).className, 'step-row pending');
+  assert.equal(api.statusEls.get(1).textContent, 'C');
+  assert.equal(api.statusEls.get(2).textContent, '');
+  assert.equal(api.stepsProgress.textContent, '1 / 3');
+});
+
 test('collectSettingsPayload omits custom password and local sync settings in contribution mode', () => {
   const bundle = extractFunction('collectSettingsPayload');
 
-  const api = new Function(`
+  const api = new Function('normalizeIcloudTargetMailboxType', 'normalizeIcloudForwardMailProvider', `
 let latestState = { contributionMode: true };
+const window = {};
 let cloudflareDomainEditMode = false;
 let cloudflareTempEmailDomainEditMode = false;
 const selectCfDomain = { value: 'example.com' };
 const selectTempEmailDomain = { value: 'mail.example.com' };
 const selectPanelMode = { value: 'cpa' };
+function getSelectedPlusPaymentMethod() { return 'paypal'; }
 const inputVpsUrl = { value: 'https://panel.example.com' };
 const inputVpsPassword = { value: 'panel-secret' };
 const inputSub2ApiUrl = { value: 'https://sub.example.com' };
@@ -144,6 +203,18 @@ const selectMailProvider = { value: '163' };
 const selectEmailGenerator = { value: 'duck' };
 const checkboxAutoDeleteIcloud = { checked: true };
 const selectIcloudHostPreference = { value: 'auto' };
+const inputPhoneVerificationEnabled = { checked: true };
+const selectPhoneSmsProvider = { value: 'hero-sms' };
+const inputHeroSmsApiKey = { value: '' };
+const inputHeroSmsReuseEnabled = { checked: true };
+const selectHeroSmsAcquirePriority = { value: 'country' };
+const inputHeroSmsMaxPrice = { value: '' };
+const inputFiveSimOperator = { value: 'any' };
+const inputPhoneReplacementLimit = { value: '3' };
+const inputPhoneCodeWaitSeconds = { value: '60' };
+const inputPhoneCodeTimeoutWindows = { value: '2' };
+const inputPhoneCodePollIntervalSeconds = { value: '5' };
+const inputPhoneCodePollMaxRounds = { value: '4' };
 const inputAccountRunHistoryTextEnabled = { checked: true };
 const inputAccountRunHistoryHelperBaseUrl = { value: 'http://127.0.0.1:17373' };
 const inputInbucketHost = { value: 'inbucket.local' };
@@ -164,8 +235,38 @@ const inputAutoSkipFailuresThreadIntervalMinutes = { value: '5' };
 const inputAutoDelayEnabled = { checked: true };
 const inputAutoDelayMinutes = { value: '30' };
 const inputAutoStepDelaySeconds = { value: '10' };
+const inputOAuthFlowTimeoutEnabled = { checked: true };
 const inputVerificationResendCount = { value: '6' };
 const DEFAULT_VERIFICATION_RESEND_COUNT = 4;
+const PHONE_SMS_PROVIDER_HERO_SMS = 'hero-sms';
+const PHONE_SMS_PROVIDER_FIVE_SIM = '5sim';
+const DEFAULT_PHONE_SMS_PROVIDER = PHONE_SMS_PROVIDER_HERO_SMS;
+const DEFAULT_FIVE_SIM_COUNTRY_ID = 'vietnam';
+const DEFAULT_FIVE_SIM_COUNTRY_LABEL = '越南 (Vietnam)';
+const DEFAULT_FIVE_SIM_OPERATOR = 'any';
+const FIVE_SIM_SUPPORTED_COUNTRY_ID_SET = new Set(['indonesia', 'thailand', 'vietnam']);
+const HERO_SMS_SUPPORTED_COUNTRY_ID_SET = new Set(['6', '52', '10']);
+const DEFAULT_PHONE_VERIFICATION_REPLACEMENT_LIMIT = 3;
+const DEFAULT_HERO_SMS_REUSE_ENABLED = true;
+const HERO_SMS_ACQUIRE_PRIORITY_COUNTRY = 'country';
+const HERO_SMS_ACQUIRE_PRIORITY_PRICE = 'price';
+const DEFAULT_HERO_SMS_ACQUIRE_PRIORITY = HERO_SMS_ACQUIRE_PRIORITY_COUNTRY;
+const DEFAULT_HERO_SMS_COUNTRY_ID = 52;
+const DEFAULT_HERO_SMS_COUNTRY_LABEL = 'Thailand';
+const PHONE_REPLACEMENT_LIMIT_MIN = 1;
+const PHONE_REPLACEMENT_LIMIT_MAX = 20;
+const PHONE_CODE_WAIT_SECONDS_MIN = 15;
+const PHONE_CODE_WAIT_SECONDS_MAX = 300;
+const DEFAULT_PHONE_CODE_WAIT_SECONDS = 60;
+const PHONE_CODE_TIMEOUT_WINDOWS_MIN = 1;
+const PHONE_CODE_TIMEOUT_WINDOWS_MAX = 10;
+const DEFAULT_PHONE_CODE_TIMEOUT_WINDOWS = 2;
+const PHONE_CODE_POLL_INTERVAL_SECONDS_MIN = 1;
+const PHONE_CODE_POLL_INTERVAL_SECONDS_MAX = 30;
+const DEFAULT_PHONE_CODE_POLL_INTERVAL_SECONDS = 5;
+const PHONE_CODE_POLL_MAX_ROUNDS_MIN = 1;
+const PHONE_CODE_POLL_MAX_ROUNDS_MAX = 120;
+const DEFAULT_PHONE_CODE_POLL_MAX_ROUNDS = 4;
 
 function getCloudflareDomainsFromState() { return { domains: ['example.com'], activeDomain: 'example.com' }; }
 function normalizeCloudflareDomainValue(value) { return String(value || '').trim(); }
@@ -185,24 +286,49 @@ function normalizeAutoRunThreadIntervalMinutes(value) { return Number(value) || 
 function normalizeAutoDelayMinutes(value) { return Number(value) || 30; }
 function normalizeAutoStepDelaySeconds(value) { return value === '' ? null : Number(value); }
 function normalizeVerificationResendCount(value, fallback) { return Number.isFinite(Number(value)) ? Number(value) : fallback; }
+function normalizePhoneSmsProvider(value = '') { return String(value || '').trim().toLowerCase() === '5sim' ? '5sim' : 'hero-sms'; }
+function getSelectedPhoneSmsProvider() { return normalizePhoneSmsProvider(selectPhoneSmsProvider?.value || latestState?.phoneSmsProvider); }
+function normalizeFiveSimCountryId(value, fallback = DEFAULT_FIVE_SIM_COUNTRY_ID) { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || fallback; }
+function normalizeFiveSimCountryLabel(value = '', fallback = DEFAULT_FIVE_SIM_COUNTRY_LABEL) { return String(value || '').trim() || fallback; }
+function normalizeFiveSimOperator(value = '', fallback = DEFAULT_FIVE_SIM_OPERATOR) { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '') || fallback; }
+function normalizeFiveSimMaxPriceValue(value = '') { const numeric = Number(String(value ?? '').trim()); return Number.isFinite(numeric) && numeric > 0 ? String(Math.round(numeric * 10000) / 10000) : ''; }
+function normalizeFiveSimCountryFallbackList(value = []) { return Array.isArray(value) ? value.map((entry) => ({ id: normalizeFiveSimCountryId(entry?.id ?? entry, ''), label: String(entry?.label || entry?.id || entry || '').trim() })).filter((entry) => entry.id) : []; }
+function normalizeHeroSmsMaxPriceValue(value = '') { const numeric = Number(String(value ?? '').trim()); return Number.isFinite(numeric) && numeric > 0 ? String(Math.round(numeric * 10000) / 10000) : ''; }
+function normalizePhoneSmsMaxPriceValue(value = '', provider = getSelectedPhoneSmsProvider()) { return normalizePhoneSmsProvider(provider) === '5sim' ? normalizeFiveSimMaxPriceValue(value) : normalizeHeroSmsMaxPriceValue(value); }
+function normalizeHeroSmsReuseEnabledValue(value) { return value === undefined || value === null ? true : Boolean(value); }
+function normalizeHeroSmsAcquirePriority(value = '') { return String(value || '').trim().toLowerCase() === 'price' ? 'price' : 'country'; }
+function normalizeHeroSmsCountryId(value) { return Math.max(1, Math.floor(Number(value) || 52)); }
+function normalizeHeroSmsCountryLabel(value = '') { return String(value || '').trim() || 'Thailand'; }
+function normalizeHeroSmsCountryFallbackList(value = []) { return Array.isArray(value) ? value.map((entry) => ({ id: normalizeHeroSmsCountryId(entry?.id ?? entry), label: String(entry?.label || 'Thailand') })) : []; }
+function normalizePhoneVerificationReplacementLimit(value, fallback = 3) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function normalizePhoneCodeWaitSecondsValue(value, fallback = 60) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function normalizePhoneCodeTimeoutWindowsValue(value, fallback = 2) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function normalizePhoneCodePollIntervalSecondsValue(value, fallback = 5) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function normalizePhoneCodePollMaxRoundsValue(value, fallback = 4) { const parsed = Number.parseInt(String(value ?? '').trim(), 10); return Number.isFinite(parsed) ? parsed : fallback; }
+function getSelectedHeroSmsCountryOption() { return { id: 52, label: 'Thailand' }; }
+function syncHeroSmsFallbackSelectionOrderFromSelect() { return [{ id: 52, label: 'Thailand' }]; }
 ${bundle}
 return {
   collectSettingsPayload,
   setLatestState(nextState) { latestState = nextState; },
 };
-`)();
+`)(normalizeIcloudTargetMailboxType, normalizeIcloudForwardMailProvider);
 
   const contributionPayload = api.collectSettingsPayload();
+  assert.equal('panelMode' in contributionPayload, false);
   assert.equal('customPassword' in contributionPayload, false);
   assert.equal('accountRunHistoryTextEnabled' in contributionPayload, false);
   assert.equal('accountRunHistoryHelperBaseUrl' in contributionPayload, false);
+  assert.equal(contributionPayload.phoneVerificationEnabled, true);
   assert.equal(contributionPayload.cloudflareTempEmailUseRandomSubdomain, true);
 
   api.setLatestState({ contributionMode: false });
   const normalPayload = api.collectSettingsPayload();
+  assert.equal(normalPayload.panelMode, 'cpa');
   assert.equal(normalPayload.customPassword, 'Secret123!');
   assert.equal(normalPayload.accountRunHistoryTextEnabled, true);
   assert.equal(normalPayload.accountRunHistoryHelperBaseUrl, 'http://127.0.0.1:17373');
+  assert.equal(normalPayload.phoneVerificationEnabled, true);
   assert.equal(normalPayload.codex2apiUrl, 'http://localhost:8080/admin/accounts');
   assert.equal(normalPayload.codex2apiAdminKey, 'codex-admin-secret');
   assert.equal(normalPayload.cloudflareTempEmailUseRandomSubdomain, true);
@@ -231,6 +357,8 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
   let latestState = {
     contributionMode: false,
     panelMode: 'sub2api',
+    contributionSource: 'sub2api',
+    contributionTargetGroupName: 'codex号池',
     contributionSessionId: '',
     contributionStatus: '',
     contributionStatusMessage: '',
@@ -258,6 +386,7 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
     btnOpenAccountRecords: createElement(),
     btnOpenContributionUpload: createElement(),
     btnStartContribution: createElement(),
+    contributionModeBadge: createElement(),
     inputContributionNickname: createElement({ value: '贡献者昵称' }),
     inputContributionQq: createElement({ value: '123456' }),
     contributionCallbackStatus: createElement(),
@@ -353,7 +482,9 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
             state: message.payload.enabled
               ? {
                 contributionMode: true,
-                panelMode: 'cpa',
+                panelMode: 'sub2api',
+                contributionSource: 'sub2api',
+                contributionTargetGroupName: 'codex号池',
                 contributionNickname: '',
                 contributionQq: '',
                 contributionSessionId: '',
@@ -368,6 +499,8 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
               : {
                 contributionMode: false,
                 panelMode: 'cpa',
+                contributionSource: 'cpa',
+                contributionTargetGroupName: '',
                 contributionNickname: '',
                 contributionQq: '',
                 contributionSessionId: '',
@@ -387,7 +520,7 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
             state: {
               ...latestState,
               contributionStatus: 'processing',
-              contributionStatusMessage: '已提交回调，等待 CPA 确认',
+              contributionStatusMessage: '已提交回调，等待服务端确认',
               contributionCallbackStatus: 'submitted',
               contributionCallbackMessage: '已提交回调',
             },
@@ -405,7 +538,8 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
       },
     },
     constants: {
-      contributionUploadUrl: 'https://apikey.qzz.io',
+      contributionPortalUrl: 'https://apikey.qzz.io',
+      contributionUploadUrl: 'https://apikey.qzz.io/upload',
       pollIntervalMs: 2500,
     },
   });
@@ -413,13 +547,15 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
   manager.render();
   assert.equal(dom.contributionModePanel.hidden, true);
   assert.equal(dom.btnContributionMode.disabled, false);
+  assert.equal(dom.contributionModeBadge.textContent, '');
 
   manager.bindEvents();
   await dom.btnContributionMode.listeners.click();
 
   assert.equal(dom.contributionModePanel.hidden, false);
-  assert.equal(dom.selectPanelMode.value, 'cpa');
+  assert.equal(dom.selectPanelMode.value, 'sub2api');
   assert.equal(dom.selectPanelMode.disabled, true);
+  assert.equal(dom.contributionModeBadge.textContent, 'SUB2API');
   assert.equal(dom.btnOpenAccountRecords.disabled, true);
   assert.equal(dom.contributionOauthStatus.textContent, '\u672a\u751f\u6210\u767b\u5f55\u5730\u5740');
   assert.equal(dom.contributionCallbackStatus.textContent, '\u7b49\u5f85\u56de\u8c03');
@@ -452,10 +588,10 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
   assert.equal(statusState.contributionStatus, 'processing');
   assert.equal(dom.contributionOauthStatus.textContent, '\u5df2\u63d0\u4ea4\u56de\u8c03');
   assert.equal(dom.contributionCallbackStatus.textContent, '\u5df2\u63d0\u4ea4\u56de\u8c03');
-  assert.equal(dom.contributionModeSummary.textContent, '\u5df2\u63d0\u4ea4\u56de\u8c03\uff0c\u7b49\u5f85 CPA \u786e\u8ba4');
+  assert.equal(dom.contributionModeSummary.textContent, '\u5df2\u63d0\u4ea4\u56de\u8c03\uff0c\u7b49\u5f85\u670d\u52a1\u7aef\u786e\u8ba4');
 
   dom.btnOpenContributionUpload.listeners.click();
-  assert.deepStrictEqual(openedUrls, ['https://apikey.qzz.io', 'https://apikey.qzz.io']);
+  assert.deepStrictEqual(openedUrls, ['https://apikey.qzz.io', 'https://apikey.qzz.io/upload']);
 
   await dom.btnExitContributionMode.listeners.click();
   manager.render();
@@ -475,7 +611,9 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
   blocked = true;
   latestState = {
     contributionMode: true,
-    panelMode: 'cpa',
+    panelMode: 'sub2api',
+    contributionSource: 'sub2api',
+    contributionTargetGroupName: 'codex号池',
     contributionNickname: '贡献者昵称',
     contributionQq: '123456',
     contributionSessionId: 'session-002',
@@ -486,6 +624,8 @@ test('contribution mode manager enters mode, starts main auto flow, polls contri
     contributionCallbackMessage: '\u7b49\u5f85\u56de\u8c03',
   };
   manager.render();
+  assert.equal(dom.selectPanelMode.value, 'sub2api');
+  assert.equal(dom.contributionModeBadge.textContent, 'SUB2API');
   assert.equal(dom.btnExitContributionMode.disabled, true);
   manager.stopPolling();
 });

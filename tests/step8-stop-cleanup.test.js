@@ -138,6 +138,7 @@ const stepWaiters = new Map();
 let resumeWaiter = null;
 
 function cancelPendingCommands() {}
+function abortActiveIcloudRequests() {}
 async function addLog() {}
 async function broadcastStopToContentScripts() {}
 async function markRunningStepsStopped() {}

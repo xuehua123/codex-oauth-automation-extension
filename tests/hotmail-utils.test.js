@@ -181,7 +181,28 @@ test('shouldClearHotmailCurrentSelection returns true only when account becomes 
 test('extractVerificationCode returns first six-digit code from multilingual mail text', () => {
   assert.equal(extractVerificationCode('你的 ChatGPT 验证码为 370794，请勿泄露。'), '370794');
   assert.equal(extractVerificationCode('Your verification code is 654321.'), '654321');
+  assert.equal(extractVerificationCode('ChatGPT Log-in Code\nIf that was you, enter this code:\n\n982219'), '982219');
+  assert.equal(extractVerificationCode('Enter this temporary verification code to continue: 472196.'), '472196');
   assert.equal(extractVerificationCode('No code here'), null);
+});
+
+test('extractVerificationCode ignores TempMail bounce ids before the actual OpenAI code body', () => {
+  const detailText = [
+    'Your temporary ChatGPT login code',
+    'From: bounces+20216706-6caa-silvermatrix=m4f984jfnb.my.id@em7877.tm.openai.com',
+    'To: silvermatrix@m4f984jfnb.my.id',
+    'Received: 5/3/2026, 7:19:18 PM',
+    'ChatGPT Log-in Code',
+    'Hi there,',
+    'We noticed a suspicious log-in on your account. If that was you, enter this code:',
+    '472196',
+  ].join(' ');
+
+  assert.equal(extractVerificationCode(detailText), '472196');
+  assert.equal(
+    extractVerificationCode('Your temporary ChatGPT login code From: bounces+20216706-6caa-silvermatrix=m4f984jfnb.my.id@em7877.tm.openai.com'),
+    null
+  );
 });
 
 test('extractVerificationCodeFromMessage reads code from the latest message subject or preview', () => {
@@ -201,6 +222,24 @@ test('extractVerificationCodeFromMessage reads code from the latest message subj
       from: { emailAddress: { address: 'noreply@openai.com' } },
     }),
     '654321'
+  );
+
+  assert.equal(
+    extractVerificationCodeFromMessage({
+      subject: 'ChatGPT Log-in Code',
+      bodyPreview: 'We noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219',
+      from: { emailAddress: { address: 'noreply@openai.com' } },
+    }),
+    '982219'
+  );
+
+  assert.equal(
+    extractVerificationCodeFromMessage({
+      subject: 'Your temporary ChatGPT login code',
+      bodyPreview: 'Enter this temporary verification code to continue: 472196.',
+      from: { emailAddress: { address: 'bounces+20216706-6caa-user=example.com@em7877.tm.openai.com' } },
+    }),
+    '472196'
   );
 });
 
@@ -348,18 +387,26 @@ test('pickVerificationMessageWithTimeFallback can ignore afterTimestamp while ke
 
 test('buildHotmailMailApiLatestUrl includes email, client id, refresh token, and mailbox', () => {
   const url = new URL(buildHotmailMailApiLatestUrl({
+    apiUrl: 'https://example.com/api/mail-new',
     clientId: 'client-123',
     email: 'user@hotmail.com',
     refreshToken: 'refresh-token-xyz',
     mailbox: 'Junk',
   }));
 
-  assert.equal(url.origin + url.pathname, 'https://apple.882263.xyz/api/mail-new');
+  assert.equal(url.origin + url.pathname, 'https://example.com/api/mail-new');
   assert.equal(url.searchParams.get('client_id'), 'client-123');
   assert.equal(url.searchParams.get('email'), 'user@hotmail.com');
   assert.equal(url.searchParams.get('refresh_token'), 'refresh-token-xyz');
   assert.equal(url.searchParams.get('mailbox'), 'Junk');
   assert.equal(url.searchParams.get('response_type'), 'json');
+});
+
+test('buildHotmailMailApiLatestUrl requires an explicit api url', () => {
+  assert.throws(
+    () => buildHotmailMailApiLatestUrl({ email: 'user@hotmail.com' }),
+    /Hotmail mail API URL is required/
+  );
 });
 
 test('buildHotmailMailApiLatestUrl supports custom api url and can omit response_type', () => {
@@ -396,6 +443,14 @@ test('normalizeHotmailMailApiMessages maps third-party payload fields into verif
       body: 'No code here',
       received_at: '2026-04-10T10:03:00.000Z',
     },
+    {
+      id: 'mail-3',
+      from_address: 'bounces+user@em7877.tm.openai.com',
+      subject: 'Your temporary ChatGPT login code',
+      text_content: 'Enter this temporary verification code to continue: 030199.',
+      html_content: '<p>Should not be used while text_content exists 111111</p>',
+      created_at: '2026-05-03T19:01:42.790346+00:00',
+    },
   ]);
 
   assert.deepEqual(messages, [
@@ -412,6 +467,13 @@ test('normalizeHotmailMailApiMessages maps third-party payload fields into verif
       from: { emailAddress: { address: 'alerts@example.com' } },
       bodyPreview: 'No code here',
       receivedDateTime: '2026-04-10T10:03:00.000Z',
+    },
+    {
+      id: 'mail-3',
+      subject: 'Your temporary ChatGPT login code',
+      from: { emailAddress: { address: 'bounces+user@em7877.tm.openai.com' } },
+      bodyPreview: 'Enter this temporary verification code to continue: 030199.',
+      receivedDateTime: '2026-05-03T19:01:42.790346+00:00',
     },
   ]);
 });

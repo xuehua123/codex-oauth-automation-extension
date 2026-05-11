@@ -3,15 +3,18 @@
 })(typeof self !== 'undefined' ? self : globalThis, function createSignupFlowHelpersModule() {
   function createSignupFlowHelpers(deps = {}) {
     const {
+      addLog,
       buildGeneratedAliasEmail,
       chrome,
       ensureContentScriptReadyOnTab,
       ensureHotmailAccountForFlow,
       ensureMail2925AccountForFlow,
       ensureLuckmailPurchaseForFlow,
+      fetchGeneratedEmail,
       isGeneratedAliasProvider,
       isReusableGeneratedAliasEmail,
       isHotmailProvider,
+      isRetryableContentScriptTransportError = () => false,
       isLuckmailProvider,
       isSignupEmailVerificationPageUrl,
       isSignupPasswordPageUrl,
@@ -19,10 +22,50 @@
       reuseOrCreateTab,
       sendToContentScriptResilient,
       setEmailState,
+      setState,
       SIGNUP_ENTRY_URL,
       SIGNUP_PAGE_INJECT_FILES,
+      waitForTabStableComplete = null,
       waitForTabUrlMatch,
     } = deps;
+
+    async function waitForSignupEntryTabToSettle(tabId, step = 1) {
+      if (step !== 2 || !Number.isInteger(tabId) || typeof waitForTabStableComplete !== 'function') {
+        return null;
+      }
+
+      if (typeof chrome?.tabs?.get === 'function' && typeof chrome?.windows?.update === 'function') {
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          const windowId = Number(tab?.windowId);
+          if (Number.isInteger(windowId) && windowId >= 0) {
+            await chrome.windows.update(windowId, { state: 'normal', focused: true }).catch(() => {});
+            await chrome.windows.update(windowId, {
+              focused: true,
+              width: 1200,
+              height: 900,
+            }).catch(() => {});
+          }
+        } catch {
+          // Best-effort only. Step 2 still has content-side entry retries.
+        }
+      }
+
+      if (typeof addLog === 'function') {
+        await addLog(
+          `步骤 ${step}：注册页已打开，正在等待页面加载完成并额外稳定 3 秒...`,
+          'info',
+          { step, stepKey: 'signup-entry' }
+        );
+      }
+
+      return waitForTabStableComplete(tabId, {
+        timeoutMs: 45000,
+        retryDelayMs: 300,
+        stableMs: 3000,
+        initialDelayMs: 300,
+      });
+    }
 
     async function openSignupEntryTab(step = 1) {
       if (typeof prepareSignupEntryForLoggedOutState === 'function') {
@@ -34,6 +77,8 @@
         injectSource: 'signup-page',
         reloadIfSameUrl: true,
       });
+
+      await waitForSignupEntryTabToSettle(tabId, step);
 
       await ensureContentScriptReadyOnTab('signup-page', tabId, {
         inject: SIGNUP_PAGE_INJECT_FILES,
@@ -66,46 +111,95 @@
       return { tabId, result: result || {} };
     }
 
-    function resolveSignupPostEmailState(rawUrl) {
+    function parseUrlSafely(rawUrl) {
+      if (!rawUrl) return null;
+      try {
+        return new URL(rawUrl);
+      } catch {
+        return null;
+      }
+    }
+
+    function fallbackSignupPhoneVerificationPageUrl(rawUrl) {
+      const parsed = parseUrlSafely(rawUrl);
+      if (!parsed) return false;
+      return /\/phone-verification(?:[/?#]|$)/i.test(parsed.pathname || '');
+    }
+
+    function fallbackSignupProfilePageUrl(rawUrl) {
+      const parsed = parseUrlSafely(rawUrl);
+      if (!parsed) return false;
+      return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile)(?:[/?#]|$)/i.test(parsed.pathname || '');
+    }
+
+    function resolveSignupPostIdentityState(rawUrl) {
       if (isSignupPasswordPageUrl(rawUrl)) {
         return 'password_page';
       }
       if (isSignupEmailVerificationPageUrl(rawUrl)) {
         return 'verification_page';
       }
+      const isPhoneVerificationUrl = typeof isSignupPhoneVerificationPageUrl === 'function'
+        ? isSignupPhoneVerificationPageUrl(rawUrl)
+        : fallbackSignupPhoneVerificationPageUrl(rawUrl);
+      if (isPhoneVerificationUrl) {
+        return 'phone_verification_page';
+      }
+      const isProfileUrl = typeof isSignupProfilePageUrl === 'function'
+        ? isSignupProfilePageUrl(rawUrl)
+        : fallbackSignupProfilePageUrl(rawUrl);
+      if (isProfileUrl) {
+        return 'profile_page';
+      }
       return '';
     }
 
-    async function ensureSignupPostEmailPageReadyInTab(tabId, step = 2, options = {}) {
+    async function ensureSignupPostIdentityPageReadyInTab(tabId, step = 2, options = {}) {
       const { skipUrlWait = false } = options;
       let landingUrl = '';
       let landingState = '';
 
       if (!skipUrlWait) {
-        const matchedTab = await waitForTabUrlMatch(tabId, (url) => Boolean(resolveSignupPostEmailState(url)), {
+        const matchedTab = await waitForTabUrlMatch(tabId, (url) => Boolean(resolveSignupPostIdentityState(url)), {
           timeoutMs: 45000,
           retryDelayMs: 300,
         });
         if (!matchedTab) {
-          throw new Error('等待邮箱提交后的页面跳转超时，请检查页面是否仍停留在邮箱输入页。');
+          throw new Error('等待注册身份提交后的页面跳转超时，请检查页面是否仍停留在输入页。');
         }
 
         landingUrl = matchedTab.url || '';
-        landingState = resolveSignupPostEmailState(landingUrl);
+        landingState = resolveSignupPostIdentityState(landingUrl);
       }
 
       if (!landingState) {
         try {
           const currentTab = await chrome.tabs.get(tabId);
           landingUrl = landingUrl || currentTab?.url || '';
-          landingState = resolveSignupPostEmailState(landingUrl);
+          landingState = resolveSignupPostIdentityState(landingUrl);
         } catch {
           landingUrl = landingUrl || '';
         }
       }
 
       if (!landingState) {
-        throw new Error(`邮箱提交后未能识别当前页面，既不是密码页也不是邮箱验证码页。URL: ${landingUrl || 'unknown'}`);
+        throw new Error(`注册身份提交后未能识别当前页面，既不是密码页、验证码页，也不是资料页。URL: ${landingUrl || 'unknown'}`);
+      }
+
+      if (landingState !== 'password_page' && typeof waitForTabStableComplete === 'function') {
+        const stableTab = await waitForTabStableComplete(tabId, {
+          timeoutMs: 45000,
+          retryDelayMs: 300,
+          stableMs: 800,
+          initialDelayMs: 300,
+        });
+        if (stableTab?.url) {
+          const stableState = resolveSignupPostIdentityState(stableTab.url);
+          if (stableState) {
+            landingUrl = stableTab.url;
+            landingState = stableState;
+          }
+        }
       }
 
       await ensureContentScriptReadyOnTab('signup-page', tabId, {
@@ -113,12 +207,12 @@
         injectSource: 'signup-page',
         timeoutMs: 45000,
         retryDelayMs: 900,
-        logMessage: landingState === 'verification_page'
-          ? `步骤 ${step}：邮箱验证码页仍在加载，正在等待页面恢复...`
-          : `步骤 ${step}：密码页仍在加载，正在重试连接内容脚本...`,
+        logMessage: landingState === 'password_page'
+          ? `步骤 ${step}：密码页仍在加载，正在重试连接内容脚本...`
+          : `步骤 ${step}：注册后续页面仍在加载，正在等待页面恢复...`,
       });
 
-      if (landingState === 'verification_page') {
+      if (landingState !== 'password_page') {
         return {
           ready: true,
           state: landingState,
@@ -149,6 +243,10 @@
       };
     }
 
+    async function ensureSignupPostEmailPageReadyInTab(tabId, step = 2, options = {}) {
+      return ensureSignupPostIdentityPageReadyInTab(tabId, step, options);
+    }
+
     async function ensureSignupPasswordPageReadyInTab(tabId, step = 2, options = {}) {
       const result = await ensureSignupPostEmailPageReadyInTab(tabId, step, options);
       if (result.state !== 'password_page') {
@@ -170,20 +268,32 @@
         logMessage: `步骤 ${step}：认证页仍在切换，正在等待页面恢复后继续确认提交流程...`,
       });
 
-      const result = await sendToContentScriptResilient('signup-page', {
-        type: 'PREPARE_SIGNUP_VERIFICATION',
-        step,
-        source: 'background',
-        payload: {
-          password: password || '',
-          prepareSource: 'step3_finalize',
-          prepareLogLabel: '步骤 3 收尾',
-        },
-      }, {
-        timeoutMs: 30000,
-        retryDelayMs: 700,
-        logMessage: `步骤 ${step}：密码已提交，正在确认是否进入下一页面，必要时自动恢复重试页...`,
-      });
+      let result;
+      try {
+        result = await sendToContentScriptResilient('signup-page', {
+          type: 'PREPARE_SIGNUP_VERIFICATION',
+          step,
+          source: 'background',
+          payload: {
+            password: password || '',
+            prepareSource: 'step3_finalize',
+            prepareLogLabel: '步骤 3 收尾',
+          },
+        }, {
+          timeoutMs: 30000,
+          retryDelayMs: 700,
+          logMessage: `步骤 ${step}：密码已提交，正在确认是否进入下一页面，必要时自动恢复重试页...`,
+        });
+      } catch (error) {
+        if (isRetryableContentScriptTransportError(error)) {
+          const message = `步骤 ${step}：认证页在提交后切换过程中页面通信超时，未能重新就绪，暂时无法确认是否进入下一页面。请重试当前轮。`;
+          if (typeof addLog === 'function') {
+            await addLog(message, 'warn');
+          }
+          throw new Error(message);
+        }
+        throw error;
+      }
 
       if (result?.error) {
         throw new Error(result.error);
@@ -192,8 +302,52 @@
       return result || {};
     }
 
-    async function resolveSignupEmailForFlow(state) {
+    function getPreservedPhoneIdentityForEmailResolution(state = {}, options = {}) {
+      if (!Boolean(options?.preserveAccountIdentity)) {
+        return null;
+      }
+      const accountIdentifierType = String(state?.accountIdentifierType || '').trim().toLowerCase();
+      const signupPhoneNumber = String(
+        state?.signupPhoneNumber
+        || (accountIdentifierType === 'phone' ? state?.accountIdentifier : '')
+        || state?.signupPhoneCompletedActivation?.phoneNumber
+        || state?.signupPhoneActivation?.phoneNumber
+        || ''
+      ).trim();
+      if (accountIdentifierType !== 'phone' && !signupPhoneNumber) {
+        return null;
+      }
+      return {
+        accountIdentifierType: 'phone',
+        accountIdentifier: signupPhoneNumber || String(state?.accountIdentifier || '').trim(),
+        signupPhoneNumber,
+        signupPhoneActivation: state?.signupPhoneActivation || null,
+        signupPhoneCompletedActivation: state?.signupPhoneCompletedActivation || null,
+        signupPhoneVerificationRequestedAt: state?.signupPhoneVerificationRequestedAt ?? null,
+        signupPhoneVerificationPurpose: state?.signupPhoneVerificationPurpose || '',
+      };
+    }
+
+    async function persistResolvedSignupEmail(resolvedEmail, state = {}, options = {}) {
+      if (resolvedEmail === state.email && !options?.preserveAccountIdentity) {
+        return;
+      }
+      const preservedPhoneIdentity = getPreservedPhoneIdentityForEmailResolution(state, options);
+      if (preservedPhoneIdentity && typeof setState === 'function') {
+        await setState({
+          email: resolvedEmail,
+          ...preservedPhoneIdentity,
+        });
+        return;
+      }
+      if (resolvedEmail !== state.email) {
+        await setEmailState(resolvedEmail);
+      }
+    }
+
+    async function resolveSignupEmailForFlow(state, options = {}) {
       let resolvedEmail = state.email;
+      let generatedEmailAlreadyPersisted = false;
       if (isHotmailProvider(state)) {
         const account = await ensureHotmailAccountForFlow({
           allowAllocate: true,
@@ -217,14 +371,17 @@
         if (!isReusableGeneratedAliasEmail?.(state, resolvedEmail)) {
           resolvedEmail = buildGeneratedAliasEmail(state);
         }
+      } else if (!resolvedEmail && typeof fetchGeneratedEmail === 'function') {
+        resolvedEmail = await fetchGeneratedEmail(state, options);
+        generatedEmailAlreadyPersisted = true;
       }
 
       if (!resolvedEmail) {
         throw new Error('缺少邮箱地址，请先在侧边栏粘贴邮箱。');
       }
 
-      if (resolvedEmail !== state.email) {
-        await setEmailState(resolvedEmail);
+      if (!generatedEmailAlreadyPersisted || options?.preserveAccountIdentity) {
+        await persistResolvedSignupEmail(resolvedEmail, state, options);
       }
 
       return resolvedEmail;
@@ -232,6 +389,7 @@
 
     return {
       ensureSignupEntryPageReady,
+      ensureSignupPostIdentityPageReadyInTab,
       ensureSignupPostEmailPageReadyInTab,
       finalizeSignupPasswordSubmitInTab,
       ensureSignupPasswordPageReadyInTab,

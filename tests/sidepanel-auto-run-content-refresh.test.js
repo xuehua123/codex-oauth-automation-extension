@@ -48,8 +48,17 @@ function extractFunction(name) {
   return sidepanelSource.slice(start, end);
 }
 
-function createApi({ refreshImpl } = {}) {
-  const bundle = extractFunction('startAutoRunFromCurrentSettings');
+function createApi({
+  refreshImpl,
+  runCount = 3,
+  persistImpl,
+} = {}) {
+  const bundle = [
+    extractFunction('normalizePendingAutoRunStartRunCount'),
+    extractFunction('registerPendingAutoRunStartRunCount'),
+    extractFunction('clearPendingAutoRunStartRunCount'),
+    extractFunction('startAutoRunFromCurrentSettings'),
+  ].join('\n');
 
   return new Function(`
 const events = [];
@@ -62,6 +71,9 @@ const inputAutoDelayEnabled = { checked: false };
 const inputAutoDelayMinutes = { value: '30' };
 const btnAutoRun = { disabled: false, innerHTML: '' };
 const inputRunCount = { disabled: false };
+let runCountValue = ${Math.max(1, Number(runCount) || 1)};
+let pendingAutoRunStartTotalRuns = 0;
+let pendingAutoRunStartExpiresAt = 0;
 const chrome = {
   runtime: {
     async sendMessage(message) {
@@ -75,7 +87,18 @@ const console = {
     events.push({ type: 'warn', args });
   },
 };
-function getRunCountValue() { return 3; }
+async function persistCurrentSettingsForAction() {
+  events.push({ type: 'sync-settings' });
+  ${persistImpl ? `return (${persistImpl})(events, {
+    setRunCount(value) {
+      runCountValue = Math.max(1, Number(value) || 1);
+    },
+    getRunCount() {
+      return runCountValue;
+    },
+  });` : ''}
+}
+function getRunCountValue() { return Math.max(1, Number(runCountValue) || 1); }
 function normalizeAutoRunThreadIntervalMinutes(value) { return Number(value) || 0; }
 function shouldOfferAutoModeChoice() { return false; }
 async function openAutoStartChoiceDialog() { throw new Error('should not be called'); }
@@ -89,6 +112,9 @@ function normalizeAutoDelayMinutes(value) { return Number(value) || 30; }
 async function refreshContributionContentHint() {
   events.push({ type: 'refresh' });
   ${refreshImpl ? 'return (' + refreshImpl + ')();' : 'return null;'}
+}
+async function ensureGpcApiKeyReadyForStart() {
+  return true;
 }
 ${bundle}
 return {
@@ -108,9 +134,9 @@ test('startAutoRunFromCurrentSettings refreshes contribution content hint before
   assert.equal(result, true);
   assert.deepEqual(
     api.getEvents().map((entry) => entry.type),
-    ['refresh', 'send']
+    ['refresh', 'sync-settings', 'send']
   );
-  assert.equal(api.getEvents()[1].message.type, 'AUTO_RUN');
+  assert.equal(api.getEvents()[2].message.type, 'AUTO_RUN');
 });
 
 test('startAutoRunFromCurrentSettings continues auto run when contribution content refresh fails', async () => {
@@ -124,8 +150,101 @@ test('startAutoRunFromCurrentSettings continues auto run when contribution conte
   assert.equal(result, true);
   assert.deepEqual(
     events.map((entry) => entry.type),
-    ['refresh', 'warn', 'send']
+    ['refresh', 'warn', 'sync-settings', 'send']
   );
   assert.match(String(events[1].args[0]), /Failed to refresh contribution content hint before auto run/);
-  assert.equal(events[2].message.type, 'AUTO_RUN');
+  assert.equal(events[3].message.type, 'AUTO_RUN');
+});
+
+test('startAutoRunFromCurrentSettings does not block auto run when contribution content has updates', async () => {
+  const api = createApi({
+    refreshImpl: `async () => ({
+      promptVersion: 'questionnaire:2026-04-23T00:00:00Z',
+      items: [{ slug: 'questionnaire', isVisible: true }],
+    })`,
+  });
+
+  const result = await api.startAutoRunFromCurrentSettings();
+
+  assert.equal(result, true);
+  assert.deepEqual(
+    api.getEvents().map((entry) => entry.type),
+    ['refresh', 'sync-settings', 'send']
+  );
+});
+
+test('startAutoRunFromCurrentSettings freezes run count before async settings sync can repaint it', async () => {
+  const api = createApi({
+    runCount: 20,
+    persistImpl: `(events, controls) => {
+      controls.setRunCount(1);
+      events.push({ type: 'stale-status-reset', runCount: controls.getRunCount() });
+    }`,
+  });
+
+  const result = await api.startAutoRunFromCurrentSettings();
+  const events = api.getEvents();
+
+  assert.equal(result, true);
+  assert.deepEqual(
+    events.map((entry) => entry.type),
+    ['refresh', 'sync-settings', 'stale-status-reset', 'send']
+  );
+  assert.equal(events[3].message.payload.totalRuns, 20);
+});
+
+test('persistCurrentSettingsForAction forces a silent save even when settings are not marked dirty', async () => {
+  const bundle = [
+    extractFunction('waitForSettingsSaveIdle'),
+    extractFunction('saveSettings'),
+    extractFunction('persistCurrentSettingsForAction'),
+  ].join('\n');
+
+  const api = new Function(`
+let settingsAutoSaveTimer = 123;
+let clearedTimer = null;
+let settingsSaveInFlight = false;
+let settingsDirty = false;
+let settingsSaveRevision = 0;
+let phonePersistCalls = 0;
+const saveCalls = [];
+function clearTimeout(value) {
+  clearedTimer = value;
+}
+async function persistSignupPhoneInputForAction() {
+  phonePersistCalls += 1;
+}
+function updateSaveButtonState() {}
+function collectSettingsPayload() {
+  return { luckmailApiKey: 'autofilled-key' };
+}
+function syncLatestState() {}
+function updatePanelModeUI() {}
+function updateMailProviderUI() {}
+function updateButtonStates() {}
+function markSettingsDirty() {}
+function applySettingsState() {}
+const chrome = {
+  runtime: {
+    async sendMessage(message) {
+      saveCalls.push(message.payload);
+      return { state: { luckmailApiKey: message.payload.luckmailApiKey } };
+    },
+  },
+};
+${bundle}
+return {
+  persistCurrentSettingsForAction,
+  getSnapshot() {
+    return { clearedTimer, phonePersistCalls, saveCalls };
+  },
+};
+`)();
+
+  await api.persistCurrentSettingsForAction();
+  const snapshot = api.getSnapshot();
+
+  assert.equal(snapshot.clearedTimer, 123);
+  assert.equal(snapshot.phonePersistCalls, 1);
+  assert.deepStrictEqual(snapshot.saveCalls, [{ luckmailApiKey: 'autofilled-key' }]);
 });

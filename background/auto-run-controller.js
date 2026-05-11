@@ -14,6 +14,7 @@
       cancelPendingCommands,
       clearStopRequest,
       createAutoRunSessionId,
+      ensureHotmailMailboxReadyForAutoRunRound,
       getAutoRunStatusPayload,
       getErrorMessage,
       getFirstUnfinishedStep,
@@ -22,7 +23,13 @@
       getState,
       hasSavedProgress,
       isAddPhoneAuthFailure,
+      isGpcTaskEndedFailure,
+      isPhoneSmsPlatformRateLimitFailure,
+      isPlusCheckoutNonFreeTrialFailure,
+      isCodex2ApiLoginOnlyMode,
+      isOpenAiAccountDisabledFailure,
       isRestartCurrentAttemptError,
+      isStep4Route405RecoveryLimitFailure,
       isSignupUserAlreadyExistsFailure,
       isStopError,
       launchAutoRunTimerPlan,
@@ -80,6 +87,95 @@
       return Math.max(0, Number(summary?.attempts || 0) - 1);
     }
 
+    function normalizeRecordStep(value) {
+      const step = Math.floor(Number(value) || 0);
+      return step > 0 ? step : null;
+    }
+
+    function extractStepFromRecordStatus(status = '') {
+      const match = String(status || '').trim().toLowerCase().match(/^step(\d+)_(?:failed|stopped)$/);
+      if (!match) {
+        return null;
+      }
+      return normalizeRecordStep(match[1]);
+    }
+
+    function getKnownStepIdsFromState(state = {}) {
+      const ids = new Set();
+      for (const key of Object.keys(state?.stepStatuses || {})) {
+        const step = normalizeRecordStep(key);
+        if (step) {
+          ids.add(step);
+        }
+      }
+
+      const currentStep = normalizeRecordStep(state?.currentStep);
+      if (currentStep) {
+        ids.add(currentStep);
+      }
+
+      return Array.from(ids).sort((left, right) => left - right);
+    }
+
+    function inferRecordStepFromState(state = {}, preferredStatuses = []) {
+      const statuses = state?.stepStatuses || {};
+      const preferredStatusSet = new Set(preferredStatuses.map((item) => String(item || '').trim()).filter(Boolean));
+      const stepIds = getKnownStepIdsFromState(state);
+      const currentStep = normalizeRecordStep(state?.currentStep);
+
+      if (currentStep && preferredStatusSet.has(String(statuses[currentStep] || '').trim())) {
+        return currentStep;
+      }
+
+      const matchingSteps = stepIds
+        .filter((step) => preferredStatusSet.has(String(statuses[step] || '').trim()))
+        .sort((left, right) => right - left);
+      if (matchingSteps.length) {
+        return matchingSteps[0];
+      }
+
+      if (currentStep) {
+        const currentStatus = String(statuses[currentStep] || '').trim();
+        if (!['', 'pending', 'completed', 'manual_completed', 'skipped'].includes(currentStatus)) {
+          return currentStep;
+        }
+      }
+
+      return null;
+    }
+
+    function inferRecordStepFromError(errorLike = null) {
+      if (!errorLike || typeof errorLike !== 'object') {
+        return null;
+      }
+
+      return normalizeRecordStep(errorLike.failedStep)
+        || normalizeRecordStep(errorLike.step)
+        || normalizeRecordStep(errorLike.currentStep);
+    }
+
+    function resolveAutoRunAccountRecordStatus(status, state = {}, errorLike = null) {
+      const normalizedStatus = String(status || '').trim().toLowerCase();
+      const explicitStep = extractStepFromRecordStatus(normalizedStatus);
+      if (explicitStep) {
+        return normalizedStatus;
+      }
+
+      if (normalizedStatus === 'failed') {
+        const failedStep = inferRecordStepFromError(errorLike)
+          || inferRecordStepFromState(state, ['failed', 'running']);
+        return failedStep ? `step${failedStep}_failed` : status;
+      }
+
+      if (normalizedStatus === 'stopped') {
+        const stoppedStep = inferRecordStepFromError(errorLike)
+          || inferRecordStepFromState(state, ['stopped', 'running']);
+        return stoppedStep ? `step${stoppedStep}_stopped` : status;
+      }
+
+      return status;
+    }
+
     function formatAutoRunFailureReasons(reasons = []) {
       if (!Array.isArray(reasons) || !reasons.length) {
         return '未知错误';
@@ -94,6 +190,44 @@
       return Array.from(counts.entries())
         .map(([reason, count]) => (count > 1 ? `${reason}（${count}次）` : reason))
         .join('；');
+    }
+
+    function isPhoneNumberSupplyExhaustedFailure(errorLike) {
+      const message = String(
+        typeof errorLike === 'string'
+          ? errorLike
+          : (errorLike?.message || errorLike || '')
+      ).trim();
+      if (!message) {
+        return false;
+      }
+      const hasGlobalNoSupplySignal = /Step\s*9:\s*all\s+provider\s+candidates\s+failed\s+to\s+acquire\s+number|(?:HeroSMS|5sim|NexSMS)\s+no\s+numbers\s+available\s+across|no\s+numbers\s+within\s+maxPrice|no\s+free\s+phones|numbers?\s+not\s+found/i.test(message);
+      if (!hasGlobalNoSupplySignal) {
+        return false;
+      }
+      const hasRecoverableStep9RotationSignal = /phone\s+verification\s+did\s+not\s+succeed\s+after\s+\d+\s+number\s+replacements|sms_timeout_after_|route_405_retry_loop|resend_throttled|activation_not_found|order\s+not\s+found/i.test(message);
+      if (hasRecoverableStep9RotationSignal) {
+        return false;
+      }
+      return true;
+    }
+
+    function shouldKeepCustomMailProviderPoolEmail(state = {}) {
+      return String(state?.mailProvider || '').trim().toLowerCase() === 'custom'
+        && Array.isArray(state?.customMailProviderPool)
+        && state.customMailProviderPool.length > 0;
+    }
+
+    function isPhoneNumberSupplyExhaustedFailure(error) {
+      const text = String(
+        typeof getErrorMessage === 'function'
+          ? getErrorMessage(error)
+          : (error?.message || error || '')
+      ).trim();
+      if (!text) {
+        return false;
+      }
+      return /no\s+numbers\s+available\s+across|all provider candidates failed to acquire number|no\s+free\s+phones|numbers?\s+not\s+found|no\s+numbers\s+within\s+maxprice|countries\s+are\s+empty|均无可用号码|暂无可用号码|无可用号码|接码号池暂无|\bNO_NUMBERS\b/i.test(text);
     }
 
     async function logAutoRunFinalSummary(totalRuns, roundSummaries = []) {
@@ -124,7 +258,9 @@
               const retryCount = getAutoRunRoundRetryCount(item);
               const finalReason = item.finalFailureReason || item.failureReasons[item.failureReasons.length - 1] || '未知错误';
               const reasonSummary = formatAutoRunFailureReasons(item.failureReasons);
-              return `第 ${item.round} 轮（重试 ${retryCount} 次，最终原因：${finalReason}；失败记录：${reasonSummary}）`;
+              return !reasonSummary || reasonSummary === finalReason
+                ? `第 ${item.round} 轮（重试 ${retryCount} 次，最终原因：${finalReason}）`
+                : `第 ${item.round} 轮（重试 ${retryCount} 次，最终原因：${finalReason}；失败记录：${reasonSummary}）`;
             })
             .join('；')}`,
           'error'
@@ -305,7 +441,7 @@
 
       let successfulRuns = roundSummaries.filter((item) => item.status === 'success').length;
       const initialState = await getState();
-      const initialPhase = continueCurrentOnFirstAttempt && getRunningSteps(initialState.stepStatuses).length
+      const initialPhase = continueCurrentOnFirstAttempt && getRunningSteps(initialState.stepStatuses, initialState).length
         ? 'waiting_step'
         : 'running';
       const showResumePosition = continueCurrentOnFirstAttempt || resumeCurrentRun > 1 || resumeAttemptRun > 1;
@@ -328,8 +464,12 @@
         const resumingCurrentRound = continueCurrentOnFirstAttempt && targetRun === resumeCurrentRun;
         let attemptRun = resumingCurrentRound ? resumeAttemptRun : 1;
         let reuseExistingProgress = resumingCurrentRound;
+        const currentRoundState = await getState();
+        const codex2ApiLoginOnlyMode = typeof isCodex2ApiLoginOnlyMode === 'function'
+          && isCodex2ApiLoginOnlyMode(currentRoundState);
+        const keepSameEmailUntilAddPhone = autoRunSkipFailures && shouldKeepCustomMailProviderPoolEmail(currentRoundState);
         const maxAttemptsForRound = autoRunSkipFailures
-          ? AUTO_RUN_MAX_RETRIES_PER_ROUND + 1
+          ? (keepSameEmailUntilAddPhone ? Number.MAX_SAFE_INTEGER : AUTO_RUN_MAX_RETRIES_PER_ROUND + 1)
           : Math.max(1, attemptRun);
 
         while (attemptRun <= maxAttemptsForRound) {
@@ -343,18 +483,18 @@
 
           if (reuseExistingProgress) {
             let currentState = await getState();
-            if (getRunningSteps(currentState.stepStatuses).length) {
+            if (getRunningSteps(currentState.stepStatuses, currentState).length) {
               currentState = await waitForRunningStepsToFinish({
                 currentRun: targetRun,
                 totalRuns,
                 attemptRun,
               });
             }
-            const resumeStep = getFirstUnfinishedStep(currentState.stepStatuses);
-            if (resumeStep && hasSavedProgress(currentState.stepStatuses)) {
+            const resumeStep = getFirstUnfinishedStep(currentState.stepStatuses, currentState);
+            if (resumeStep && hasSavedProgress(currentState.stepStatuses, currentState)) {
               startStep = resumeStep;
               useExistingProgress = true;
-            } else if (hasSavedProgress(currentState.stepStatuses)) {
+            } else if (hasSavedProgress(currentState.stepStatuses, currentState)) {
               await addLog('检测到当前流程已处理完成，本轮将改为从步骤 1 重新开始。', 'info');
             }
           }
@@ -365,11 +505,15 @@
               vpsUrl: prevState.vpsUrl,
               vpsPassword: prevState.vpsPassword,
               customPassword: prevState.customPassword,
+              plusModeEnabled: prevState.plusModeEnabled,
+              paypalEmail: prevState.paypalEmail,
+              paypalPassword: prevState.paypalPassword,
               autoRunSkipFailures: prevState.autoRunSkipFailures,
               autoRunFallbackThreadIntervalMinutes: prevState.autoRunFallbackThreadIntervalMinutes,
               autoRunDelayEnabled: prevState.autoRunDelayEnabled,
               autoRunDelayMinutes: prevState.autoRunDelayMinutes,
               autoStepDelaySeconds: prevState.autoStepDelaySeconds,
+              signupMethod: prevState.signupMethod,
               mailProvider: prevState.mailProvider,
               emailGenerator: prevState.emailGenerator,
               gmailBaseEmail: prevState.gmailBaseEmail,
@@ -380,6 +524,7 @@
               inbucketMailbox: prevState.inbucketMailbox,
               cloudflareDomain: prevState.cloudflareDomain,
               cloudflareDomains: prevState.cloudflareDomains,
+              reusablePhoneActivation: prevState.reusablePhoneActivation,
               autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
               autoRunSessionId: sessionId,
               tabRegistry: {},
@@ -404,7 +549,7 @@
             forceFreshTabsNextRun = false;
           }
 
-          const appendRoundRecordIfNeeded = async (status, reason = '') => {
+          const appendRoundRecordIfNeeded = async (status, reason = '', errorLike = null) => {
             if (roundRecordAppended) {
               return;
             }
@@ -413,7 +558,9 @@
               return;
             }
 
-            const record = await appendAccountRunRecord(status, null, reason);
+            const recordState = await getState();
+            const recordStatus = resolveAutoRunAccountRecordStatus(status, recordState, errorLike);
+            const record = await appendAccountRunRecord(recordStatus, recordState, reason);
             if (record) {
               roundRecordAppended = true;
             }
@@ -427,6 +574,15 @@
               attemptRun,
               sessionId,
             });
+
+            if (!useExistingProgress && startStep === 1 && typeof ensureHotmailMailboxReadyForAutoRunRound === 'function') {
+              await ensureHotmailMailboxReadyForAutoRunRound({
+                targetRun,
+                totalRuns,
+                attemptRun,
+                sessionId,
+              });
+            }
 
             await runAutoSequenceFromStep(startStep, {
               targetRun,
@@ -446,7 +602,7 @@
           } catch (err) {
             if (isStopError(err)) {
               stoppedEarly = true;
-              await appendRoundRecordIfNeeded('stopped', getErrorMessage(err));
+              await appendRoundRecordIfNeeded('stopped', getErrorMessage(err), err);
               await addLog(`第 ${targetRun}/${totalRuns} 轮已被用户停止`, 'warn');
               await broadcastAutoRunStatus('stopped', {
                 currentRun: targetRun,
@@ -459,10 +615,35 @@
 
             const reason = getErrorMessage(err);
             roundSummary.failureReasons.push(reason);
-            const blockedByAddPhone = typeof isAddPhoneAuthFailure === 'function' && isAddPhoneAuthFailure(err);
+            const blockedByPhoneSmsRateLimit = typeof isPhoneSmsPlatformRateLimitFailure === 'function'
+              && isPhoneSmsPlatformRateLimitFailure(err);
+            const blockedByPhoneNoSupply = !blockedByPhoneSmsRateLimit
+              && isPhoneNumberSupplyExhaustedFailure(err);
+            const blockedByAddPhone = !blockedByPhoneSmsRateLimit
+              && !blockedByPhoneNoSupply
+              && typeof isAddPhoneAuthFailure === 'function'
+              && isAddPhoneAuthFailure(err);
+            const blockedByPlusNonFreeTrial = typeof isPlusCheckoutNonFreeTrialFailure === 'function'
+              && isPlusCheckoutNonFreeTrialFailure(err);
+            const blockedByGpcTaskEnded = typeof isGpcTaskEndedFailure === 'function'
+              ? isGpcTaskEndedFailure(err)
+              : /GPC_TASK_ENDED::/i.test(err?.message || String(err || ''));
             const blockedBySignupUserAlreadyExists = typeof isSignupUserAlreadyExistsFailure === 'function'
+              && !keepSameEmailUntilAddPhone
               && isSignupUserAlreadyExistsFailure(err);
-            const canRetry = !blockedByAddPhone && !blockedBySignupUserAlreadyExists && autoRunSkipFailures && attemptRun < maxAttemptsForRound;
+            const blockedByStep4Route405 = typeof isStep4Route405RecoveryLimitFailure === 'function'
+              && isStep4Route405RecoveryLimitFailure(err);
+            const blockedByOpenAiAccountDisabled = typeof isOpenAiAccountDisabledFailure === 'function'
+              && isOpenAiAccountDisabledFailure(err);
+            const canRetry = !blockedByAddPhone
+              && !blockedByPhoneNoSupply
+              && !blockedByPlusNonFreeTrial
+              && !blockedByGpcTaskEnded
+              && !blockedBySignupUserAlreadyExists
+              && !blockedByStep4Route405
+              && !blockedByOpenAiAccountDisabled
+              && autoRunSkipFailures
+              && attemptRun < maxAttemptsForRound;
 
             await setState({
               autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
@@ -474,7 +655,7 @@
               await setState({
                 autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
               });
-              await appendRoundRecordIfNeeded('failed', reason);
+              await appendRoundRecordIfNeeded('failed', reason, err);
               cancelPendingCommands('当前轮因认证流程进入 add-phone 已终止。');
               await broadcastStopToContentScripts();
               if (!autoRunSkipFailures) {
@@ -503,13 +684,118 @@
               break;
             }
 
+            if (blockedByPhoneNoSupply) {
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason, err);
+              cancelPendingCommands('当前轮因接码号池暂无可用号码已终止。');
+              await broadcastStopToContentScripts();
+              if (!autoRunSkipFailures) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(`第 ${targetRun}/${totalRuns} 轮接码号池暂无可用号码，本轮将直接失败并跳过剩余重试。`, 'warn');
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因接码号池暂无可用号码提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因接码号池暂无可用号码提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
+            if (blockedByPlusNonFreeTrial) {
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason, err);
+              cancelPendingCommands('当前轮因 Plus 免费试用资格不可用已终止。');
+              await broadcastStopToContentScripts();
+              if (!autoRunSkipFailures) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮检测到 Plus 今日应付金额非 0，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(`第 ${targetRun}/${totalRuns} 轮没有 Plus 免费试用资格，本轮将直接失败并跳过剩余重试。`, 'warn');
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因 Plus 今日应付金额非 0 提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因 Plus 今日应付金额非 0 提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
+            if (blockedByGpcTaskEnded) {
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason, err);
+              cancelPendingCommands('当前轮因 GPC 任务已结束。');
+              await broadcastStopToContentScripts();
+              if (!autoRunSkipFailures) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮 GPC 任务已结束，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(`第 ${targetRun}/${totalRuns} 轮 GPC 任务已结束，本轮将直接失败并跳过剩余重试。`, 'warn');
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因 GPC 任务结束提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因 GPC 任务结束提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
             if (blockedBySignupUserAlreadyExists) {
               roundSummary.status = 'failed';
               roundSummary.finalFailureReason = reason;
               await setState({
                 autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
               });
-              await appendRoundRecordIfNeeded('failed', reason);
+              await appendRoundRecordIfNeeded('failed', reason, err);
               cancelPendingCommands('当前轮因 user_already_exists 已终止。');
               await broadcastStopToContentScripts();
               if (!autoRunSkipFailures) {
@@ -538,6 +824,82 @@
               break;
             }
 
+            if (blockedByOpenAiAccountDisabled) {
+              const shouldAdvanceAfterDisabledAccount = autoRunSkipFailures || codex2ApiLoginOnlyMode;
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason);
+              cancelPendingCommands('当前轮因 OpenAI 账号已禁用/停用已终止。');
+              await broadcastStopToContentScripts();
+              if (!shouldAdvanceAfterDisabledAccount) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(
+                codex2ApiLoginOnlyMode
+                  ? `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，Codex2API 仅登录模式将记录失败并继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，本轮将直接失败并跳过剩余重试。`,
+                'warn'
+              );
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因账号已禁用/停用提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因账号已禁用/停用提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
+            if (blockedByStep4Route405) {
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason, err);
+              cancelPendingCommands('当前轮因步骤 4 连续 405 错误已终止。');
+              await broadcastStopToContentScripts();
+              if (!autoRunSkipFailures) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮步骤 4 连续 405 恢复失败，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(`第 ${targetRun}/${totalRuns} 轮步骤 4 连续 405 恢复失败，本轮将直接失败并跳过剩余重试。`, 'warn');
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因步骤 4 连续 405 提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因步骤 4 连续 405 提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
             if (canRetry) {
               const retryIndex = attemptRun;
               if (isRestartCurrentAttemptError(err)) {
@@ -555,7 +917,9 @@
               });
               forceFreshTabsNextRun = true;
               await addLog(
-                `自动重试：${Math.round(AUTO_RUN_RETRY_DELAY_MS / 1000)} 秒后开始第 ${targetRun}/${totalRuns} 轮第 ${attemptRun + 1} 次尝试（第 ${retryIndex}/${AUTO_RUN_MAX_RETRIES_PER_ROUND} 次重试）。`,
+                keepSameEmailUntilAddPhone
+                  ? `自动重试：${Math.round(AUTO_RUN_RETRY_DELAY_MS / 1000)} 秒后继续使用当前邮箱，开始第 ${targetRun}/${totalRuns} 轮第 ${attemptRun + 1} 次尝试。`
+                  : `自动重试：${Math.round(AUTO_RUN_RETRY_DELAY_MS / 1000)} 秒后开始第 ${targetRun}/${totalRuns} 轮第 ${attemptRun + 1} 次尝试（第 ${retryIndex}/${AUTO_RUN_MAX_RETRIES_PER_ROUND} 次重试）。`,
                 'warn'
               );
               try {
@@ -563,7 +927,7 @@
               } catch (sleepError) {
                 if (isStopError(sleepError)) {
                   stoppedEarly = true;
-                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError));
+                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError), sleepError);
                   await addLog(`第 ${targetRun}/${totalRuns} 轮已被用户停止`, 'warn');
                   await broadcastAutoRunStatus('stopped', {
                     currentRun: targetRun,
@@ -587,7 +951,7 @@
               } catch (sleepError) {
                 if (isStopError(sleepError)) {
                   stoppedEarly = true;
-                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError));
+                  await appendRoundRecordIfNeeded('stopped', getErrorMessage(sleepError), sleepError);
                   await addLog(`第 ${targetRun}/${totalRuns} 轮已被用户停止`, 'warn');
                   await broadcastAutoRunStatus('stopped', {
                     currentRun: targetRun,
@@ -609,7 +973,7 @@
             await setState({
               autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
             });
-            await appendRoundRecordIfNeeded('failed', reason);
+            await appendRoundRecordIfNeeded('failed', reason, err);
             if (!autoRunSkipFailures) {
               cancelPendingCommands('当前轮执行失败。');
               await broadcastStopToContentScripts();
@@ -724,6 +1088,7 @@
       handleAutoRunLoopUnhandledError,
       logAutoRunFinalSummary,
       normalizeAutoRunRoundSummary,
+      resolveAutoRunAccountRecordStatus,
       serializeAutoRunRoundSummaries,
       skipAutoRunCountdown,
       startAutoRunLoop,

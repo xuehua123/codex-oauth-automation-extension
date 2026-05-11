@@ -27,14 +27,33 @@
         'hotmail-api': 'Hotmail（API对接/本地助手）',
         'luckmail-api': 'LuckMail（API 购邮）',
         'cloudflare-temp-email': 'Cloudflare Temp Email',
+        'cloudmail': 'Cloud Mail',
       };
       return labels[source] || source || '未知来源';
     }
 
-    async function addLog(message, level = 'info') {
+    function normalizeLogStep(value) {
+      const step = Math.floor(Number(value) || 0);
+      return step > 0 ? step : null;
+    }
+
+    function buildLogEntry(message, level = 'info', options = {}) {
+      const normalizedOptions = options && typeof options === 'object' ? options : {};
+      const step = normalizeLogStep(normalizedOptions.step);
+      const stepKey = String(normalizedOptions.stepKey || '').trim();
+      return {
+        message: String(message || ''),
+        level,
+        timestamp: Date.now(),
+        step,
+        stepKey,
+      };
+    }
+
+    async function addLog(message, level = 'info', options = {}) {
       const state = await getState();
       const logs = state.logs || [];
-      const entry = { message, level, timestamp: Date.now() };
+      const entry = buildLogEntry(message, level, options);
       logs.push(entry);
       if (logs.length > 500) logs.splice(0, logs.length - 500);
       await setState({ logs });
@@ -53,21 +72,25 @@
     }
 
     function getErrorMessage(error) {
-      return String(typeof error === 'string' ? error : error?.message || '');
+      return String(typeof error === 'string' ? error : error?.message || '')
+        .replace(/^GPC_TASK_ENDED::/i, '')
+        .replace(/^AUTO_RUN_STEP_IDLE_RESTART::/i, '');
     }
 
     function isVerificationMailPollingError(error) {
       const message = getErrorMessage(error);
-      return /未在 .*邮箱中找到新的匹配邮件|未在 Hotmail 收件箱中找到新的匹配验证码|邮箱轮询结束，但未获取到验证码|无法获取新的(?:注册|登录)验证码|页面未能重新就绪|页面通信异常|did not respond in \d+s/i.test(message);
+      return /未在 .*邮箱中找到新的匹配邮件|未在 Hotmail 收件箱中找到新的匹配验证码|邮箱轮询结束，但未获取到验证码|无法获取新的(?:注册|登录)验证码|页面未能重新就绪|页面通信异常|did not respond in \d+s|405\s+method\s+not\s+allowed|route\s+error.*405|did\s+not\s+provide\s+an?\s+[`'"]?action|post\s+request\s+to\s+["']?\/(?:email|phone)-verification/i.test(message);
     }
 
     function isAddPhoneAuthFailure(error) {
       const message = getErrorMessage(error);
-      return /https:\/\/auth\.openai\.com\/add-phone(?:[/?#]|$)|\badd-phone\b|添加手机号|手机号码|手机号页|手机号页面|手机号|phone\s+number|telephone/i.test(message);
+      if (/\u624b\u673a\u53f7\u8f93\u5165\u6a21\u5f0f|phone\s+entry/i.test(message)) {
+        return false;
+      }
+      return /https:\/\/auth\.openai\.com\/(?:add-phone|phone-verification)(?:[/?#]|$)|\badd-phone\b|phone-verification|\u6dfb\u52a0\u624b\u673a\u53f7|\u624b\u673a\u53f7\u7801|\u624b\u673a\u9a8c\u8bc1\u7801\u9875|\u624b\u673a\u9a8c\u8bc1\u9875|\u8fdb\u5165\u624b\u673a\u53f7\u9875\u9762|\u624b\u673a\u53f7\u9875|\u624b\u673a\u53f7\u9875\u9762|phone\s+number|telephone/i.test(message);
     }
 
     function getLoginAuthStateLabel(state) {
-      state = state === 'oauth_consent_page' ? 'unknown' : state;
       switch (state) {
         case 'verification_page':
           return '登录验证码页';
@@ -77,10 +100,16 @@
           return '邮箱输入页';
         case 'login_timeout_error_page':
           return '登录超时报错页';
+        case 'account_disabled_page':
+          return '账号禁用页';
         case 'oauth_consent_page':
           return 'OAuth 授权页';
         case 'add_phone_page':
           return '手机号页';
+        case 'add_email_page':
+          return '添加邮箱页';
+        case 'phone_verification_page':
+          return '手机验证码页';
         default:
           return '未知页面';
       }
@@ -88,12 +117,17 @@
 
     function isRestartCurrentAttemptError(error) {
       const message = String(typeof error === 'string' ? error : error?.message || '');
-      return /当前邮箱已存在，需要重新开始新一轮/.test(message);
+      return /当前邮箱已存在，需要重新开始新一轮|SIGNUP_PHONE_PASSWORD_MISMATCH::/i.test(message);
     }
 
     function isSignupUserAlreadyExistsFailure(error) {
       const message = getErrorMessage(error);
       return /SIGNUP_USER_ALREADY_EXISTS::|user_already_exists/i.test(message);
+    }
+
+    function isOpenAiAccountDisabledFailure(error) {
+      const message = getErrorMessage(error);
+      return /OPENAI_ACCOUNT_DISABLED::|(?:your|this|openai|chatgpt)?\s*(?:account|user)\s+(?:has\s+been|was|is)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:we|openai)\s+(?:have|has)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)\s+(?:your|this)?\s*(?:account|user)|(?:你的|您的|此|该)?(?:账号|账户)(?:已被|已经|被|已)?(?:禁用|停用|封禁|暂停|锁定|不可用)|(?:禁用|停用|封禁|暂停|锁定)(?:你的|您的|此|该)?(?:账号|账户)/i.test(message);
     }
 
     function isStep9RecoverableAuthError(error) {
@@ -166,6 +200,7 @@
       getSourceLabel,
       hasSavedProgress,
       isLegacyStep9RecoverableAuthError,
+      isOpenAiAccountDisabledFailure,
       isRestartCurrentAttemptError,
       isSignupUserAlreadyExistsFailure,
       isStep9RecoverableAuthError,

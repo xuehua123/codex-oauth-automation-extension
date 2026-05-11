@@ -205,7 +205,7 @@ test('step 10 explains callback upgrade hint with user-friendly reason', () => {
   assert.match(explanation.userMessage, /回调提交阶段/);
 });
 
-test('step 10 requests browser switch when success badge and callback upgrade failure coexist', () => {
+test('step 10 warns about CPA multithread cleanup when success and callback failure coexist', () => {
   const api = createApi();
   const diagnostics = api.buildStep9StatusDiagnostics(
     [
@@ -231,5 +231,6 @@ test('step 10 requests browser switch when success badge and callback upgrade fa
   );
 
   assert.equal(api.isStep10BrowserSwitchRequiredConflict(diagnostics), true);
-  assert.match(api.getStep10BrowserSwitchRequiredMessage(diagnostics), /更换浏览器后重新进行注册登录/);
+  assert.match(api.getStep10BrowserSwitchRequiredMessage(diagnostics), /CPA 项目无法使用多线程/);
+  assert.match(api.getStep10BrowserSwitchRequiredMessage(diagnostics), /单线程注册/);
 });

@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const {
+  getIcloudForwardMailConfig,
+  normalizeIcloudForwardMailProvider,
+  normalizeIcloudTargetMailboxType,
+} = require('../mail-provider-utils.js');
 
 const source = fs.readFileSync('background.js', 'utf8');
 
@@ -51,6 +56,41 @@ function extractFunction(name) {
   return source.slice(start, end);
 }
 
+function createGetMailConfigApi() {
+  const bundle = extractFunction('getMailConfig');
+  return new Function('shared', `
+const ICLOUD_PROVIDER = 'icloud';
+const GMAIL_PROVIDER = 'gmail';
+const HOTMAIL_PROVIDER = 'hotmail-api';
+const LUCKMAIL_PROVIDER = 'luckmail-api';
+const CLOUDFLARE_TEMP_EMAIL_PROVIDER = 'cloudflare-temp-email';
+const getSharedIcloudForwardMailConfig = shared.getIcloudForwardMailConfig;
+const normalizeIcloudTargetMailboxType = shared.normalizeIcloudTargetMailboxType;
+const normalizeIcloudForwardMailProvider = shared.normalizeIcloudForwardMailProvider;
+function normalizeIcloudHost(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'icloud.com' || normalized === 'icloud.com.cn' ? normalized : '';
+}
+function normalizeInbucketOrigin(value) { return String(value || '').trim(); }
+function getConfiguredIcloudHostPreference(state) {
+  const normalized = String(state?.icloudHostPreference || '').trim().toLowerCase();
+  return normalized === 'icloud.com' || normalized === 'icloud.com.cn' ? normalized : '';
+}
+function getIcloudLoginUrlForHost(host) {
+  return host === 'icloud.com.cn' ? 'https://www.icloud.com.cn/' : 'https://www.icloud.com/';
+}
+function getIcloudMailUrlForHost(host) {
+  return host === 'icloud.com.cn' ? 'https://www.icloud.com.cn/mail/' : 'https://www.icloud.com/mail/';
+}
+${bundle}
+return { getMailConfig };
+`)({
+    getIcloudForwardMailConfig,
+    normalizeIcloudForwardMailProvider,
+    normalizeIcloudTargetMailboxType,
+  });
+}
+
 test('normalizeMailProvider keeps icloud provider', () => {
   const bundle = extractFunction('normalizeMailProvider');
 const api = new Function(`
@@ -99,10 +139,10 @@ return { getMailConfig };
 
   assert.deepEqual(api.getMailConfig({
     mailProvider: 'icloud',
-    icloudHostPreference: 'icloud.com.cn',
+    icloudHostPreference: 'icloud.com',
   }), {
     source: 'icloud-mail',
-    url: 'https://www.icloud.com.cn/mail/',
+    url: 'https://www.icloud.com/mail/',
     label: 'iCloud 邮箱',
     navigateOnReuse: true,
   });
@@ -138,10 +178,10 @@ return { getMailConfig };
   assert.deepEqual(api.getMailConfig({
     mailProvider: 'icloud',
     icloudHostPreference: 'auto',
-    preferredIcloudHost: 'icloud.com.cn',
+    preferredIcloudHost: 'icloud.com',
   }), {
     source: 'icloud-mail',
-    url: 'https://www.icloud.com.cn/mail/',
+    url: 'https://www.icloud.com/mail/',
     label: 'iCloud 邮箱',
     navigateOnReuse: true,
   });
@@ -172,7 +212,7 @@ return { getMailConfig };
     source: 'mail-2925',
     url: 'https://2925.com/#/mailList',
     label: '2925 邮箱',
-    inject: ['content/utils.js', 'content/mail-2925.js'],
+    inject: ['content/utils.js', 'content/operation-delay.js', 'content/mail-2925.js'],
     injectSource: 'mail-2925',
   });
 });

@@ -15,6 +15,7 @@
       isActionEnabled,
       isVisibleElement,
       log,
+      performOperationWithDelay: injectedPerformOperationWithDelay,
       routeErrorPattern = null,
       simulateClick,
       sleep,
@@ -71,22 +72,54 @@
         : false;
       const maxCheckAttemptsBlocked = /max_check_attempts/i.test(text);
       const userAlreadyExistsBlocked = /user_already_exists/i.test(text);
+      const fetchFailedMatched = /failed\s+to\s+fetch|network\s+error|fetch\s+failed/i.test(text);
 
-      if (!titleMatched && !detailMatched && !routeErrorMatched && !maxCheckAttemptsBlocked && !userAlreadyExistsBlocked) {
+      if (!titleMatched && !detailMatched && !routeErrorMatched && !fetchFailedMatched && !maxCheckAttemptsBlocked && !userAlreadyExistsBlocked) {
         return null;
       }
 
       return {
         path: pathname,
         url: location.href,
+        title,
+        pageText: text,
+        errorText: text.slice(0, 500),
         retryButton,
         retryEnabled: isActionEnabled(retryButton),
         titleMatched,
         detailMatched,
         routeErrorMatched,
+        fetchFailedMatched,
         maxCheckAttemptsBlocked,
         userAlreadyExistsBlocked,
       };
+    }
+
+    function getRetryClickDelayMs(clickAttempt, options = {}) {
+      const baseMs = Math.max(0, Number(options.retryClickDelayBaseMs) || 0);
+      const incrementMs = Math.max(0, Number(options.retryClickDelayIncrementMs) || 0);
+      const maxMs = Math.max(0, Number(options.retryClickDelayMaxMs) || 0);
+      if (!baseMs && !incrementMs) {
+        return 0;
+      }
+
+      const attemptIndex = Math.max(0, Number(clickAttempt) - 1);
+      const delayMs = baseMs + (attemptIndex * incrementMs);
+      return maxMs > 0 ? Math.min(delayMs, maxMs) : delayMs;
+    }
+
+    function throwForTerminalRetryState(retryState) {
+      if (retryState?.maxCheckAttemptsBlocked) {
+        throw new Error(
+          'CF_SECURITY_BLOCKED::您已触发Cloudflare 安全防护系统，已完全停止流程，请不要短时间内多次进行重新发送验证码，连续刷新、反复点击重试会加重风控；请先关闭页面等待 15-30 分钟，让系统的临时限制自动解除。或者更换浏览器'
+        );
+      }
+
+      if (retryState?.userAlreadyExistsBlocked) {
+        throw new Error(
+          'SIGNUP_USER_ALREADY_EXISTS::步骤 4：检测到 user_already_exists，说明当前用户已存在，当前轮将直接停止。'
+        );
+      }
     }
 
     async function waitForRetryPageRecoveryAfterClick(options = {}) {
@@ -120,6 +153,10 @@
     }
 
     async function recoverAuthRetryPage(options = {}) {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      const performOperationWithDelay = injectedPerformOperationWithDelay
+        || rootScope.CodexOperationDelay?.performOperationWithDelay
+        || (async (_metadata, operation) => operation());
       const {
         logLabel = '',
         maxClickAttempts = 5,
@@ -128,6 +165,9 @@
         step = null,
         timeoutMs = 12000,
         waitAfterClickMs = 3000,
+        retryClickDelayBaseMs = 0,
+        retryClickDelayIncrementMs = 0,
+        retryClickDelayMaxMs = 0,
       } = options;
       const maxIdlePolls = timeoutMs > 0
         ? Math.max(1, Math.ceil(timeoutMs / Math.max(1, pollIntervalMs)))
@@ -140,7 +180,7 @@
           throwIfStopped();
         }
 
-        const retryState = getAuthTimeoutErrorPageState({ pathPatterns });
+        let retryState = getAuthTimeoutErrorPageState({ pathPatterns });
         if (!retryState) {
           return {
             recovered: clickCount > 0,
@@ -149,19 +189,38 @@
           };
         }
 
-        if (retryState.maxCheckAttemptsBlocked) {
-          throw new Error(
-            'CF_SECURITY_BLOCKED::您已触发Cloudflare 安全防护系统，已完全停止流程，请不要短时间内多次进行重新发送验证码，连续刷新、反复点击重试会加重风控；请先关闭页面等待 15-30 分钟，让系统的临时限制自动解除。或者更换浏览器'
-          );
-        }
-
-        if (retryState.userAlreadyExistsBlocked) {
-          throw new Error(
-            'SIGNUP_USER_ALREADY_EXISTS::步骤 4：检测到 user_already_exists，说明当前用户已存在，当前轮将直接停止。'
-          );
-        }
+        throwForTerminalRetryState(retryState);
 
         if (retryState.retryButton && retryState.retryEnabled) {
+          const nextClickAttempt = clickCount + 1;
+          const retryDelayMs = getRetryClickDelayMs(nextClickAttempt, {
+            retryClickDelayBaseMs,
+            retryClickDelayIncrementMs,
+            retryClickDelayMaxMs,
+          });
+          if (retryDelayMs > 0) {
+            if (typeof log === 'function') {
+              const prefix = logLabel || `步骤 ${step || '?'}：检测到重试页，正在点击“重试”恢复`;
+              log(`${prefix}：为避免快速重复触发风控，先等待 ${Math.ceil(retryDelayMs / 1000)} 秒后再重试（第 ${nextClickAttempt} 次）...`, 'warn');
+            }
+            await sleep(retryDelayMs);
+            if (typeof throwIfStopped === 'function') {
+              throwIfStopped();
+            }
+            retryState = getAuthTimeoutErrorPageState({ pathPatterns });
+            if (!retryState) {
+              return {
+                recovered: clickCount > 0,
+                clickCount,
+                url: location.href,
+              };
+            }
+            throwForTerminalRetryState(retryState);
+            if (!retryState.retryButton || !retryState.retryEnabled) {
+              continue;
+            }
+          }
+
           idlePollCount = 0;
           clickCount += 1;
           if (typeof log === 'function') {
@@ -171,7 +230,9 @@
           if (typeof humanPause === 'function') {
             await humanPause(300, 800);
           }
-          simulateClick(retryState.retryButton);
+          await performOperationWithDelay({ stepKey: options.stepKey || '', kind: 'click', label: 'auth-retry-click' }, async () => {
+            simulateClick(retryState.retryButton);
+          });
           const recoveryResult = await waitForRetryPageRecoveryAfterClick({
             pathPatterns,
             pollIntervalMs,

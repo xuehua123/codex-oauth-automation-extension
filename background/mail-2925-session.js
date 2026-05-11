@@ -32,17 +32,15 @@
     const MAIL2925_SOURCE = 'mail-2925';
     const MAIL2925_URL = 'https://2925.com/#/mailList';
     const MAIL2925_LOGIN_URL = 'https://2925.com/login/';
-    const MAIL2925_INJECT = ['content/utils.js', 'content/mail-2925.js'];
+    const MAIL2925_INJECT = ['content/utils.js', 'content/operation-delay.js', 'content/mail-2925.js'];
     const MAIL2925_INJECT_SOURCE = 'mail-2925';
     const MAIL2925_COOKIE_DOMAINS = [
       '2925.com',
       'www.2925.com',
-      'mail2.xiyouji.com',
     ];
     const MAIL2925_COOKIE_ORIGINS = [
       'https://2925.com',
       'https://www.2925.com',
-      'https://mail2.xiyouji.com',
     ];
     const MAIL2925_LIMIT_ERROR_PREFIX = 'MAIL2925_LIMIT_REACHED::';
     const MAIL2925_THREAD_TERMINATED_ERROR_PREFIX = 'MAIL2925_THREAD_TERMINATED::';
@@ -537,6 +535,16 @@
         }
       }
 
+      if (typeof ensureContentScriptReadyOnTab === 'function') {
+        await ensureContentScriptReadyOnTab(MAIL2925_SOURCE, tabId, {
+          inject: MAIL2925_INJECT,
+          injectSource: MAIL2925_INJECT_SOURCE,
+          timeoutMs: 20000,
+          retryDelayMs: 800,
+          logMessage: '步骤 0：2925 登录页内容脚本未就绪，正在等待页面稳定后继续登录...',
+        });
+      }
+
       if (!forceRelogin && !isMail2925LoginUrl(openedUrl) && !normalizedExpectedMailboxEmail) {
         await addLog('2925：当前邮箱页未跳转到登录页，将直接复用已登录会话。', 'info');
         return buildSuccessPayload();
@@ -550,16 +558,6 @@
         account = await ensureMail2925AccountForFlow({
           allowAllocate: true,
           preferredAccountId: accountId,
-        });
-      }
-
-      if (typeof ensureContentScriptReadyOnTab === 'function') {
-        await ensureContentScriptReadyOnTab(MAIL2925_SOURCE, tabId, {
-          inject: MAIL2925_INJECT,
-          injectSource: MAIL2925_INJECT_SOURCE,
-          timeoutMs: 20000,
-          retryDelayMs: 800,
-          logMessage: '步骤 0：2925 登录页内容脚本未就绪，正在等待页面稳定后继续登录...',
         });
       }
 

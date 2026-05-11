@@ -171,6 +171,9 @@ function extractVerificationCode(text) {
   const cnMatch = normalized.match(/(?:验证码|代码)[^0-9]{0,16}(\d{6})/i);
   if (cnMatch) return cnMatch[1];
 
+  const openAiLoginMatch = normalized.match(/(?:chatgpt\s+log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
+  if (openAiLoginMatch) return openAiLoginMatch[1];
+
   const enMatch = normalized.match(/(?:verification\s+code|temporary\s+verification\s+code|your\s+chatgpt\s+code|code(?:\s+is)?)[^0-9]{0,16}(\d{6})/i);
   if (enMatch) return enMatch[1];
 

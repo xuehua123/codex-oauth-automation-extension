@@ -45,7 +45,9 @@ test('step 4 passes a fixed 10-minute lookback window to 2925 mailbox polling', 
     reuseOrCreateTab: async (source, url) => {
       tabReuses.push({ source, url });
     },
+    sendToContentScript: async () => ({}),
     sendToContentScriptResilient: async () => ({}),
+    isRetryableContentScriptTransportError: () => false,
     shouldUseCustomRegistrationEmail: () => false,
     STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
     throwIfStopped: () => {},
@@ -100,7 +102,9 @@ test('step 4 does not request a fresh code first for Cloudflare temp mail', asyn
       capturedOptions = options;
     },
     reuseOrCreateTab: async () => {},
+    sendToContentScript: async () => ({}),
     sendToContentScriptResilient: async () => ({}),
+    isRetryableContentScriptTransportError: () => false,
     shouldUseCustomRegistrationEmail: () => false,
     STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS: 25000,
     throwIfStopped: () => {},

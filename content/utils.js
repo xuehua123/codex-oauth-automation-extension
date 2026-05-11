@@ -2,13 +2,21 @@
 
 const getActivationStrategy = self.MultiPageActivationUtils?.getActivationStrategy;
 
-const SCRIPT_SOURCE = (() => {
-  if (window.__MULTIPAGE_SOURCE) return window.__MULTIPAGE_SOURCE;
-  const url = location.href;
-  const hostname = location.hostname;
+function detectScriptSource({
+  injectedSource,
+  url = '',
+  hostname = '',
+} = {}) {
+  if (injectedSource) return injectedSource;
   if (url.includes('auth0.openai.com') || url.includes('auth.openai.com') || url.includes('accounts.openai.com')) return 'signup-page';
   if (hostname === 'mail.qq.com' || hostname === 'wx.mail.qq.com') return 'qq-mail';
-  if (hostname === 'mail.163.com' || hostname.endsWith('.mail.163.com') || hostname === 'webmail.vip.163.com') return 'mail-163';
+  if (
+    hostname === 'mail.163.com'
+    || hostname.endsWith('.mail.163.com')
+    || hostname === 'webmail.vip.163.com'
+    || hostname === 'mail.126.com'
+    || hostname.endsWith('.mail.126.com')
+  ) return 'mail-163';
   if (hostname === 'mail.google.com') return 'gmail-mail';
   if (hostname === 'www.icloud.com' || hostname === 'www.icloud.com.cn') return 'icloud-mail';
   if (url.includes('duckduckgo.com/email/settings/autofill')) return 'duck-mail';
@@ -16,7 +24,19 @@ const SCRIPT_SOURCE = (() => {
   if (url.includes("2925.com")) return "mail-2925";
   // VPS panel — detected dynamically since URL is configurable
   return 'vps-panel';
+}
+
+const SCRIPT_SOURCE = (() => {
+  return detectScriptSource({
+    injectedSource: window.__MULTIPAGE_SOURCE,
+    url: location.href,
+    hostname: location.hostname,
+  });
 })();
+
+function getRuntimeScriptSource() {
+  return window.__MULTIPAGE_SOURCE || SCRIPT_SOURCE;
+}
 
 const LOG_PREFIX = `[MultiPage:${SCRIPT_SOURCE}]`;
 const STOP_ERROR_MESSAGE = '流程已被用户停止。';
@@ -35,7 +55,8 @@ if (!window.__MULTIPAGE_UTILS_LISTENER_READY__) {
     if (message.type === 'PING') {
       sendResponse({
         ok: true,
-        source: SCRIPT_SOURCE,
+        source: getRuntimeScriptSource(),
+        plusCheckoutReady: Boolean(window.__MULTIPAGE_PLUS_CHECKOUT_READY__),
       });
     }
   });
@@ -241,17 +262,30 @@ function fillSelect(el, value) {
   log(`已选择 [${el.name || el.id || '未知'}] = ${value}`);
 }
 
+function normalizeLogStep(value) {
+  const step = Math.floor(Number(value) || 0);
+  return step > 0 ? step : null;
+}
+
 /**
  * Send a log message to Side Panel via Background.
  * @param {string} message
  * @param {string} level - 'info' | 'ok' | 'warn' | 'error'
+ * @param {{ step?: number, stepKey?: string }} options
  */
-function log(message, level = 'info') {
+function log(message, level = 'info', options = {}) {
+  const step = normalizeLogStep(options?.step);
   chrome.runtime.sendMessage({
     type: 'LOG',
-    source: SCRIPT_SOURCE,
-    step: null,
-    payload: { message, level, timestamp: Date.now() },
+    source: getRuntimeScriptSource(),
+    step,
+    payload: {
+      message: String(message || ''),
+      level,
+      timestamp: Date.now(),
+      step,
+      stepKey: String(options?.stepKey || '').trim(),
+    },
     error: null,
   });
 }
@@ -263,7 +297,7 @@ function reportReady() {
   console.log(LOG_PREFIX, '内容脚本已就绪');
   const message = {
     type: 'CONTENT_SCRIPT_READY',
-    source: SCRIPT_SOURCE,
+    source: getRuntimeScriptSource(),
     step: null,
     payload: {},
     error: null,
@@ -284,10 +318,10 @@ function reportReady() {
  */
 function reportComplete(step, data = {}) {
   console.log(LOG_PREFIX, `步骤 ${step} 已完成`, data);
-  log(`步骤 ${step} 已成功完成`, 'ok');
+  log('已成功完成', 'ok', { step });
   const message = {
     type: 'STEP_COMPLETE',
-    source: SCRIPT_SOURCE,
+    source: getRuntimeScriptSource(),
     step,
     payload: data,
     error: null,
@@ -315,10 +349,9 @@ function reportComplete(step, data = {}) {
  */
 function reportError(step, errorMessage) {
   console.error(LOG_PREFIX, `步骤 ${step} 失败: ${errorMessage}`);
-  log(`步骤 ${step} 失败：${errorMessage}`, 'error');
   const message = {
     type: 'STEP_ERROR',
-    source: SCRIPT_SOURCE,
+    source: getRuntimeScriptSource(),
     step,
     payload: {},
     error: errorMessage,
@@ -405,9 +438,20 @@ async function humanPause(min = 250, max = 850) {
   await sleep(duration);
 }
 
-// Auto-report ready on load
-// Skip ready signal from child iframes of mail pages to avoid overwriting the top frame's registration
-const _isMailChildFrame = (SCRIPT_SOURCE === 'qq-mail' || SCRIPT_SOURCE === 'mail-163' || SCRIPT_SOURCE === 'gmail-mail' || SCRIPT_SOURCE === 'mail-2925' || SCRIPT_SOURCE === 'inbucket-mail') && window !== window.top;
-if (!_isMailChildFrame) {
+function shouldReportReadyForFrame(source, isChildFrame) {
+  if (!isChildFrame) return true;
+  return ![
+    'qq-mail',
+    'mail-163',
+    'gmail-mail',
+    'mail-2925',
+    'inbucket-mail',
+    'plus-checkout',
+  ].includes(source);
+}
+
+// Auto-report ready on load. Child frames are probed explicitly by frameId, so
+// they should not overwrite the tab-level registration or spam the side panel.
+if (shouldReportReadyForFrame(getRuntimeScriptSource(), window !== window.top)) {
   reportReady();
 }

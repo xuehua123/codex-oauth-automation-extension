@@ -48,6 +48,7 @@ const helperBundle = [
   extractFunction(helperSource, 'parseUrlSafely'),
   extractFunction(helperSource, 'isSignupPageHost'),
   extractFunction(helperSource, 'isSignupEntryHost'),
+  extractFunction(helperSource, 'is163MailHost'),
   extractFunction(helperSource, 'matchesSourceUrlFamily'),
 ].join('\n');
 
@@ -152,6 +153,11 @@ return {
     api.matchesSourceUrlFamily('signup-page', 'https://chat.openai.com/', 'https://auth.openai.com/authorize'),
     true,
     'signup-page family should include legacy chat.openai.com'
+  );
+  assert.strictEqual(
+    api.matchesSourceUrlFamily('mail-163', 'https://mail.126.com/js6/main.jsp', 'https://mail.163.com/js6/main.jsp'),
+    true,
+    'mail-163 family should include mail.126.com'
   );
 
   api.reset({

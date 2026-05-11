@@ -37,11 +37,16 @@
 
     function normalizeRecordContext(context = {}, finalStatus = '') {
       const verificationCodeUrl = normalizeText(context?.verificationCodeUrl);
+      const importTarget = normalizeImportTarget(context?.importTarget);
+      const importedToPanel = finalStatus === 'success' && Boolean(context?.importedToPanel);
+      if (!verificationCodeUrl && !importTarget && !importedToPanel) {
+        return {};
+      }
       return {
         verificationCodeUrl,
         verificationCodeNote: verificationCodeUrl ? normalizeText(context?.verificationCodeNote) : '',
-        importTarget: normalizeImportTarget(context?.importTarget),
-        importedToPanel: finalStatus === 'success' && Boolean(context?.importedToPanel),
+        importTarget,
+        importedToPanel,
       };
     }
 
@@ -53,6 +58,9 @@
       if (normalized === 'success') {
         return 'success';
       }
+      if (normalized === 'running' || /_running$/.test(normalized)) {
+        return 'running';
+      }
       if (normalized === 'failed' || /_failed$/.test(normalized)) {
         return 'failed';
       }
@@ -62,7 +70,7 @@
       return '';
     }
 
-    function extractRecordStep(status = '', detail = '') {
+    function extractRecordStepFromStatus(status = '') {
       const normalizedStatus = String(status || '').trim().toLowerCase();
       const statusMatch = normalizedStatus.match(/^step(\d+)_(?:failed|stopped)$/);
       if (statusMatch) {
@@ -70,6 +78,21 @@
         return Number.isInteger(step) && step > 0 ? step : null;
       }
 
+      return null;
+    }
+
+    function extractRecordStepFromDetailPrefix(detail = '') {
+      const text = String(detail || '').trim();
+      const detailMatch = text.match(/^(?:Step\s+(\d+)|步骤\s*(\d+))\s*(?::|：|失败|停止|已|\b)/i);
+      if (!detailMatch) {
+        return null;
+      }
+
+      const step = Number(detailMatch[1] || detailMatch[2]);
+      return Number.isInteger(step) && step > 0 ? step : null;
+    }
+
+    function extractAnyRecordStepFromDetail(detail = '') {
       const text = String(detail || '').trim();
       const detailMatch = text.match(/(?:Step\s+(\d+)|步骤\s*(\d+))/i);
       if (!detailMatch) {
@@ -78,6 +101,76 @@
 
       const step = Number(detailMatch[1] || detailMatch[2]);
       return Number.isInteger(step) && step > 0 ? step : null;
+    }
+
+    function extractRecordStep(status = '', detail = '') {
+      return extractRecordStepFromStatus(status) || extractRecordStepFromDetailPrefix(detail);
+    }
+
+    function parseFailureLabelStep(label = '') {
+      const match = String(label || '').trim().match(/^步骤\s*(\d+)\s*(?:失败|停止)$/);
+      if (!match) {
+        return null;
+      }
+      const step = Number(match[1]);
+      return Number.isInteger(step) && step > 0 ? step : null;
+    }
+
+    function shouldIgnorePersistedFailedStepCandidate(candidate, failureDetail = '') {
+      if (!Number.isInteger(candidate) || candidate <= 0) {
+        return true;
+      }
+
+      const text = String(failureDetail || '').trim();
+      if (!text) {
+        return false;
+      }
+
+      const leadingStep = extractRecordStepFromDetailPrefix(text);
+      if (Number.isInteger(leadingStep) && leadingStep > 0) {
+        return leadingStep !== candidate;
+      }
+
+      const incidentalStep = extractAnyRecordStepFromDetail(text);
+      return incidentalStep === candidate;
+    }
+
+    function resolveNormalizedFailedStep(record = {}, failureDetail = '') {
+      const explicitStatusStep = extractRecordStepFromStatus(record.finalStatus || record.status || '');
+      if (Number.isInteger(explicitStatusStep) && explicitStatusStep > 0) {
+        return explicitStatusStep;
+      }
+
+      const detailStep = extractRecordStepFromDetailPrefix(failureDetail);
+      if (Number.isInteger(detailStep) && detailStep > 0) {
+        return detailStep;
+      }
+
+      const failedStepCandidate = Number(record.failedStep);
+      if (Number.isInteger(failedStepCandidate)
+        && failedStepCandidate > 0
+        && !shouldIgnorePersistedFailedStepCandidate(failedStepCandidate, failureDetail)) {
+        return failedStepCandidate;
+      }
+
+      return null;
+    }
+
+    function resolveFailureLabel(finalStatus, rawFailureLabel = '', computedFailureLabel = '', failedStep = null) {
+      const rawLabel = String(rawFailureLabel || '').trim();
+      if (finalStatus === 'stopped') {
+        return computedFailureLabel;
+      }
+      if (finalStatus !== 'failed') {
+        return rawLabel || computedFailureLabel;
+      }
+
+      const rawStep = parseFailureLabelStep(rawLabel);
+      if (Number.isInteger(rawStep) && rawStep > 0) {
+        return rawStep === failedStep ? rawLabel : computedFailureLabel;
+      }
+
+      return rawLabel || computedFailureLabel;
     }
 
     function isPhoneVerificationFailure(detail = '') {
@@ -94,6 +187,9 @@
     function buildFailureLabel(finalStatus, failedStep, failureDetail = '') {
       if (finalStatus === 'success') {
         return '流程完成';
+      }
+      if (finalStatus === 'running') {
+        return '正在运行';
       }
       if (finalStatus === 'stopped') {
         if (Number.isInteger(failedStep) && failedStep > 0) {
@@ -113,8 +209,99 @@
       return '流程失败';
     }
 
-    function buildRecordId(email = '') {
-      return String(email || '').trim().toLowerCase();
+    function normalizeAccountIdentifierType(value = '') {
+      return String(value || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email';
+    }
+
+    function normalizeAccountIdentifierValue(value = '', identifierType = 'email') {
+      const normalizedValue = String(value || '').trim();
+      if (!normalizedValue) {
+        return '';
+      }
+      return normalizeAccountIdentifierType(identifierType) === 'phone'
+        ? normalizedValue
+        : normalizedValue.toLowerCase();
+    }
+
+    function getActivationPhoneNumber(activation = null) {
+      if (!activation || typeof activation !== 'object' || Array.isArray(activation)) {
+        return '';
+      }
+      return String(
+        activation.phoneNumber
+        ?? activation.number
+        ?? activation.phone
+        ?? ''
+      ).trim();
+    }
+
+    function resolveStatePhoneNumber(state = {}) {
+      const identifierType = String(state?.accountIdentifierType || '').trim().toLowerCase();
+      const accountIdentifierPhone = identifierType === 'phone'
+        ? String(state?.accountIdentifier || '').trim()
+        : '';
+
+      return String(
+        state?.phoneNumber
+        || state?.signupPhoneNumber
+        || accountIdentifierPhone
+        || getActivationPhoneNumber(state?.signupPhoneCompletedActivation)
+        || getActivationPhoneNumber(state?.signupPhoneActivation)
+        || getActivationPhoneNumber(state?.currentPhoneActivation)
+        || ''
+      ).trim();
+    }
+
+    function normalizePhoneRecordKey(value = '') {
+      const rawValue = String(value || '').trim();
+      const digits = rawValue.replace(/\D+/g, '');
+      return digits || rawValue.toLowerCase();
+    }
+
+    function resolveRecordIdentity(record = {}) {
+      const rawEmail = String(record.email || '').trim().toLowerCase();
+      const rawPhoneNumber = String(record.phoneNumber ?? record.phone ?? record.number ?? '').trim();
+      const rawIdentifierType = String(record.accountIdentifierType || '').trim().toLowerCase();
+      const inferredIdentifierType = rawIdentifierType === 'phone'
+        ? 'phone'
+        : (rawIdentifierType === 'email'
+          ? 'email'
+          : ((!rawEmail && rawPhoneNumber) ? 'phone' : 'email'));
+      const rawAccountIdentifier = String(
+        record.accountIdentifier
+        || (inferredIdentifierType === 'phone' ? rawPhoneNumber : rawEmail)
+        || ''
+      ).trim();
+      const accountIdentifierType = rawAccountIdentifier
+        ? normalizeAccountIdentifierType(inferredIdentifierType)
+        : (rawEmail ? 'email' : (rawPhoneNumber ? 'phone' : ''));
+      const accountIdentifier = normalizeAccountIdentifierValue(
+        rawAccountIdentifier || (accountIdentifierType === 'phone' ? rawPhoneNumber : rawEmail),
+        accountIdentifierType || inferredIdentifierType
+      );
+      const email = rawEmail || (accountIdentifierType === 'email' ? accountIdentifier : '');
+      const phoneNumber = rawPhoneNumber || (accountIdentifierType === 'phone' ? accountIdentifier : '');
+
+      return {
+        email,
+        phoneNumber,
+        accountIdentifierType,
+        accountIdentifier,
+      };
+    }
+
+    function buildRecordId(identifier = '', identifierType = 'email') {
+      const normalizedIdentifierType = normalizeAccountIdentifierType(identifierType);
+      const normalizedIdentifier = normalizeAccountIdentifierValue(identifier, normalizedIdentifierType);
+      if (!normalizedIdentifier) {
+        return '';
+      }
+      if (normalizedIdentifierType === 'phone' && /^phone:/i.test(normalizedIdentifier)) {
+        return normalizedIdentifier.toLowerCase();
+      }
+      return normalizedIdentifierType === 'phone'
+        ? `phone:${normalizedIdentifier.toLowerCase()}`
+        : normalizedIdentifier;
     }
 
     function normalizeSource(value = '') {
@@ -163,11 +350,15 @@
         return null;
       }
 
-      const email = String(record.email || '').trim();
-      const password = String(record.password || '').trim();
+      const identity = resolveRecordIdentity(record);
+      const email = identity.email;
+      const phoneNumber = identity.phoneNumber;
+      const accountIdentifierType = identity.accountIdentifierType;
+      const accountIdentifier = identity.accountIdentifier;
+      const password = String(record.password ?? '').trim();
       const finalStatus = normalizeFinalStatus(record.finalStatus || record.status || '');
 
-      if (!email || !password || !finalStatus) {
+      if (!accountIdentifier || !finalStatus) {
         return null;
       }
 
@@ -175,10 +366,9 @@
       const failureDetail = finalStatus === 'failed' || finalStatus === 'stopped'
         ? String(record.failureDetail || record.reason || '').trim()
         : '';
-      const failedStepCandidate = Number(record.failedStep);
-      const failedStep = Number.isInteger(failedStepCandidate) && failedStepCandidate > 0
-        ? failedStepCandidate
-        : extractRecordStep(record.finalStatus || record.status || '', failureDetail);
+      const failedStep = finalStatus === 'failed' || finalStatus === 'stopped'
+        ? resolveNormalizedFailedStep(record, failureDetail)
+        : null;
       const autoRunContext = normalizeAutoRunContext(record.autoRunContext);
       const retryCount = normalizeRetryCount(
         record.retryCount !== undefined
@@ -189,21 +379,30 @@
       const computedFailureLabel = buildFailureLabel(finalStatus, failedStep, failureDetail);
       const rawFailureLabel = String(record.failureLabel || '').trim();
       const recordContext = normalizeRecordContext(record, finalStatus);
+      const hasRecordContext = Object.keys(recordContext).length > 0;
+      const modeFlags = (!hasRecordContext || Boolean(record.plusModeEnabled) || Boolean(record.contributionMode))
+        ? {
+            plusModeEnabled: Boolean(record.plusModeEnabled),
+            contributionMode: Boolean(record.contributionMode),
+          }
+        : {};
 
       return {
-        recordId: String(record.recordId || '').trim() || buildRecordId(email),
+        recordId: String(record.recordId || '').trim() || buildRecordId(accountIdentifier, accountIdentifierType),
+        accountIdentifierType,
+        accountIdentifier,
         email,
+        phoneNumber,
         password,
         finalStatus,
         finishedAt,
         retryCount,
-        failureLabel: finalStatus === 'stopped'
-          ? computedFailureLabel
-          : (rawFailureLabel || computedFailureLabel),
+        failureLabel: resolveFailureLabel(finalStatus, rawFailureLabel, computedFailureLabel, failedStep),
         failureDetail,
         failedStep: Number.isInteger(failedStep) && failedStep > 0 ? failedStep : null,
         source,
         autoRunContext: source === 'auto' ? autoRunContext : null,
+        ...modeFlags,
         ...recordContext,
       };
     }
@@ -238,11 +437,20 @@
     }
 
     function buildAccountRunHistoryRecord(state = {}, status = '', reason = '') {
-      const email = String(state.email || '').trim();
-      const password = String(state.password || state.customPassword || '').trim() || '无';
+      const identity = resolveRecordIdentity({
+        accountIdentifierType: state.accountIdentifierType,
+        accountIdentifier: state.accountIdentifier,
+        email: state.email,
+        phoneNumber: resolveStatePhoneNumber(state),
+      });
+      const email = identity.email;
+      const phoneNumber = identity.phoneNumber;
+      const accountIdentifierType = identity.accountIdentifierType;
+      const accountIdentifier = identity.accountIdentifier;
+      const password = String(state.password || state.customPassword || '').trim();
       const finalStatus = normalizeFinalStatus(status);
 
-      if (!email || !finalStatus) {
+      if (!accountIdentifier || !finalStatus) {
         return null;
       }
 
@@ -264,10 +472,20 @@
           : null,
         finalStatus
       );
+      const hasRecordContext = Object.keys(recordContext).length > 0;
+      const modeFlags = (!hasRecordContext || Boolean(state.plusModeEnabled) || Boolean(state.contributionMode))
+        ? {
+            plusModeEnabled: Boolean(state.plusModeEnabled),
+            contributionMode: Boolean(state.contributionMode),
+          }
+        : {};
 
       return {
-        recordId: buildRecordId(email),
+        recordId: buildRecordId(accountIdentifier, accountIdentifierType),
+        accountIdentifierType,
+        accountIdentifier,
         email,
+        phoneNumber,
         password,
         finalStatus,
         finishedAt,
@@ -277,6 +495,7 @@
         failedStep: Number.isInteger(failedStep) && failedStep > 0 ? failedStep : null,
         source,
         autoRunContext,
+        ...modeFlags,
         ...recordContext,
       };
     }
@@ -289,10 +508,23 @@
 
       const recordId = String(record.recordId || '').trim();
       const emailKey = String(record.email || '').trim().toLowerCase();
+      const phoneKey = normalizePhoneRecordKey(record.phoneNumber);
+      const identifierKey = buildRecordId(
+        record.accountIdentifier || record.email || record.phoneNumber,
+        record.accountIdentifierType || (phoneKey && !emailKey ? 'phone' : 'email')
+      );
       const nextHistory = normalizedHistory.filter((item) => {
         const itemRecordId = String(item.recordId || '').trim();
         const itemEmailKey = String(item.email || '').trim().toLowerCase();
-        return itemRecordId !== recordId && itemEmailKey !== emailKey;
+        const itemPhoneKey = normalizePhoneRecordKey(item.phoneNumber);
+        const itemIdentifierKey = buildRecordId(
+          item.accountIdentifier || item.email || item.phoneNumber,
+          item.accountIdentifierType || (itemPhoneKey && !itemEmailKey ? 'phone' : 'email')
+        );
+        return itemRecordId !== recordId
+          && itemIdentifierKey !== identifierKey
+          && (!emailKey || itemEmailKey !== emailKey)
+          && (!phoneKey || itemPhoneKey !== phoneKey);
       });
 
       nextHistory.unshift(record);
@@ -315,7 +547,12 @@
       }
 
       const selectedIds = new Set(normalizedIds);
-      const nextHistory = normalizedHistory.filter((record) => !selectedIds.has(buildRecordId(record.recordId || record.email)));
+      const nextHistory = normalizedHistory.filter((record) => !selectedIds.has(buildRecordId(
+        record.recordId || record.accountIdentifier || record.email || record.phoneNumber,
+        String(record.recordId || '').startsWith('phone:') || String(record.accountIdentifierType || '').trim().toLowerCase() === 'phone'
+          ? 'phone'
+          : 'email'
+      )));
 
       return {
         deletedCount: normalizedHistory.length - nextHistory.length,
@@ -341,6 +578,8 @@
         summary.total += 1;
         if (record.finalStatus === 'success') {
           summary.success += 1;
+        } else if (record.finalStatus === 'running') {
+          summary.running += 1;
         } else if (record.finalStatus === 'failed') {
           summary.failed += 1;
         } else if (record.finalStatus === 'stopped') {
@@ -351,6 +590,7 @@
       }, {
         total: 0,
         success: 0,
+        running: 0,
         failed: 0,
         stopped: 0,
         retryTotal: 0,
@@ -368,9 +608,6 @@
 
     function shouldSyncAccountRunHistorySnapshot(state = {}) {
       if (Boolean(state.contributionMode)) {
-        return false;
-      }
-      if (!Boolean(state.accountRunHistoryTextEnabled)) {
         return false;
       }
 
@@ -400,7 +637,7 @@
           body: JSON.stringify(buildAccountRunHistorySnapshotPayload(records)),
         });
       } catch (err) {
-        throw new Error(`账号记录快照同步失败：无法连接本地 helper（${getErrorMessage(err)}）`);
+        return '';
       }
 
       let payload = null;

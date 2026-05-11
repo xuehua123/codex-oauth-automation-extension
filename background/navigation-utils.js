@@ -19,6 +19,7 @@
 
     function normalizeSub2ApiUrl(rawUrl) {
       const input = (rawUrl || '').trim() || DEFAULT_SUB2API_URL;
+      if (!input) return '';
       const withProtocol = /^https?:\/\//i.test(input) ? input : `https://${input}`;
       const parsed = new URL(withProtocol);
       if (!parsed.pathname || parsed.pathname === '/') {
@@ -72,7 +73,7 @@
       const parsed = parseUrlSafely(rawUrl);
       if (!parsed) return false;
       return isSignupPageHost(parsed.hostname)
-        && /\/create-account\/password(?:[/?#]|$)/i.test(parsed.pathname || '');
+        && /\/(?:create-account|log-in)\/password(?:[/?#]|$)/i.test(parsed.pathname || '');
     }
 
     function isSignupEmailVerificationPageUrl(rawUrl) {
@@ -85,6 +86,8 @@
     function is163MailHost(hostname = '') {
       return hostname === 'mail.163.com'
         || hostname.endsWith('.mail.163.com')
+        || hostname === 'mail.126.com'
+        || hostname.endsWith('.mail.126.com')
         || hostname === 'webmail.vip.163.com';
     }
 
@@ -130,6 +133,9 @@
           return is163MailHost(candidate.hostname);
         case 'gmail-mail':
           return candidate.hostname === 'mail.google.com';
+        case 'icloud-mail':
+          return candidate.hostname === 'www.icloud.com'
+            || candidate.hostname === 'www.icloud.com.cn';
         case 'inbucket-mail':
           return Boolean(reference)
             && candidate.origin === reference.origin

@@ -68,6 +68,20 @@ test('normalizeLuckmailTokenCode and normalizeLuckmailTokenMail extract verifica
 
   assert.equal(normalizedMail.verification_code, '654321');
   assert.equal(extractLuckmailVerificationCode('你的验证码为 778899'), '778899');
+  assert.equal(
+    extractLuckmailVerificationCode('ChatGPT Log-in Code\nIf that was you, enter this code:\n\n982219'),
+    '982219'
+  );
+
+  const suspiciousLoginMail = normalizeLuckmailTokenMail({
+    message_id: 'mail-3',
+    from: 'noreply@openai.com',
+    subject: 'ChatGPT Log-in Code',
+    body: 'We noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219',
+    received_at: '2026-04-14T10:02:00Z',
+  });
+
+  assert.equal(suspiciousLoginMail.verification_code, '982219');
 });
 
 test('normalizeLuckmailProjectName and isLuckmailPurchaseForProject match openai case-insensitively', () => {

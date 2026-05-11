@@ -162,6 +162,7 @@ const chrome = {
 };
 
 function cancelPendingCommands() {}
+function abortActiveIcloudRequests() {}
 function getPendingAutoRunTimerPlan() {
   return null;
 }
