@@ -178,6 +178,8 @@ test('background auto-run jumps directly into steps 7-10 for Codex2API login-onl
     extractFunction('isAddPhoneAuthFailure'),
     extractFunction('isAddPhoneAuthUrl'),
     extractFunction('isAddPhoneAuthState'),
+    extractFunction('isOpenAiAccountDisabledFailure'),
+    extractFunction('isOpenAiAccountDisabledAuthState'),
     extractFunction('getPostStep6AutoRestartDecision'),
     extractFunction('isCodex2ApiLoginOnlyMode'),
     extractFunction('runAutoSequenceFromStep'),
@@ -187,6 +189,7 @@ test('background auto-run jumps directly into steps 7-10 for Codex2API login-onl
 const AUTO_STEP_DELAYS = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0 };
 const FINAL_OAUTH_CHAIN_START_STEP = 7;
 const LOG_PREFIX = '[test]';
+const SIGNUP_METHOD_PHONE = 'phone';
 const chrome = {
   tabs: {
     update: async () => {},
@@ -202,6 +205,9 @@ async function ensureAutoEmailReady() {
   events.ensureCalls += 1;
 }
 async function broadcastAutoRunStatus() {}
+async function ensureResolvedSignupMethodForRun() {
+  return 'email';
+}
 async function getState() {
   return {
     panelMode: 'codex2api',
@@ -220,6 +226,15 @@ function isStepDoneStatus(status) {
 }
 async function executeStepAndWait(step) {
   events.steps.push(step);
+}
+async function executeStepAndWaitWithAutoRunIdleLogWatchdog(step) {
+  events.steps.push(step);
+}
+async function runAutoStepActionWithIdleLogWatchdog(_step, action) {
+  return action();
+}
+function isAutoRunStepIdleRestartError() {
+  return false;
 }
 async function getTabId() {
   return 0;

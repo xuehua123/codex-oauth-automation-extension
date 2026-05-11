@@ -83,6 +83,8 @@ const window = {
 let currentPlusModeEnabled = false;
 let currentPlusPaymentMethod = 'paypal';
 let currentSignupMethod = 'email';
+let currentPanelMode = 'cpa';
+let currentCodex2ApiLoginOnlyMode = false;
 const DEFAULT_SIGNUP_METHOD = 'email';
 let stepDefinitions = [];
 let STEP_IDS = [];
@@ -106,7 +108,13 @@ return {
   assert.deepEqual(api.getStepIds(), [7]);
   assert.deepEqual(api.calls[0], {
     type: 'getSteps',
-    options: { plusModeEnabled: true, plusPaymentMethod: 'gopay', signupMethod: 'email' },
+    options: {
+      plusModeEnabled: true,
+      plusPaymentMethod: 'gopay',
+      signupMethod: 'email',
+      panelMode: 'cpa',
+      codex2apiLoginOnlyMode: false,
+    },
   });
   assert.deepEqual(api.calls[1], { type: 'render', stepIds: [7] });
 });
@@ -124,7 +132,7 @@ test('sidepanel signup method UI syncs shared step definitions with the selected
 
 test('sidepanel applies restored signup method when rebuilding shared step definitions on load', () => {
   const source = extractFunction('applySettingsState');
-  assert.match(source, /syncStepDefinitionsForMode\(Boolean\(state\?\.plusModeEnabled\),\s*\{/);
+  assert.match(source, /syncStepDefinitionsForMode\(\s*state\?\.panelMode,\s*Boolean\(state\?\.codex2apiLoginOnlyMode\),\s*Boolean\(state\?\.plusModeEnabled\),\s*state\?\.plusPaymentMethod,/);
   assert.match(source, /signupMethod:\s*state\?\.signupMethod/);
 });
 
@@ -187,6 +195,8 @@ const window = {
 let currentPlusModeEnabled = false;
 let currentPlusPaymentMethod = 'paypal';
 let currentSignupMethod = 'email';
+let currentPanelMode = 'cpa';
+let currentCodex2ApiLoginOnlyMode = false;
 const DEFAULT_SIGNUP_METHOD = 'email';
 let stepDefinitions = [];
 let STEP_IDS = [];
@@ -210,7 +220,13 @@ return {
   assert.deepEqual(api.getStepIds(), [13]);
   assert.deepEqual(api.calls[0], {
     type: 'getSteps',
-    options: { plusModeEnabled: true, plusPaymentMethod: 'gpc-helper', signupMethod: 'email' },
+    options: {
+      plusModeEnabled: true,
+      plusPaymentMethod: 'gpc-helper',
+      signupMethod: 'email',
+      panelMode: 'cpa',
+      codex2apiLoginOnlyMode: false,
+    },
   });
 });
 

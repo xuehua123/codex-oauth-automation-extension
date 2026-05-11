@@ -100,6 +100,8 @@
           return '邮箱输入页';
         case 'login_timeout_error_page':
           return '登录超时报错页';
+        case 'account_disabled_page':
+          return '账号禁用页';
         case 'oauth_consent_page':
           return 'OAuth 授权页';
         case 'add_phone_page':
@@ -121,6 +123,11 @@
     function isSignupUserAlreadyExistsFailure(error) {
       const message = getErrorMessage(error);
       return /SIGNUP_USER_ALREADY_EXISTS::|user_already_exists/i.test(message);
+    }
+
+    function isOpenAiAccountDisabledFailure(error) {
+      const message = getErrorMessage(error);
+      return /OPENAI_ACCOUNT_DISABLED::|(?:your|this|openai|chatgpt)?\s*(?:account|user)\s+(?:has\s+been|was|is)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:we|openai)\s+(?:have|has)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)\s+(?:your|this)?\s*(?:account|user)|(?:你的|您的|此|该)?(?:账号|账户)(?:已被|已经|被|已)?(?:禁用|停用|封禁|暂停|锁定|不可用)|(?:禁用|停用|封禁|暂停|锁定)(?:你的|您的|此|该)?(?:账号|账户)/i.test(message);
     }
 
     function isStep9RecoverableAuthError(error) {
@@ -193,6 +200,7 @@
       getSourceLabel,
       hasSavedProgress,
       isLegacyStep9RecoverableAuthError,
+      isOpenAiAccountDisabledFailure,
       isRestartCurrentAttemptError,
       isSignupUserAlreadyExistsFailure,
       isStep9RecoverableAuthError,

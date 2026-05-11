@@ -9,6 +9,10 @@
       getLoginAuthStateLabel,
       getOAuthFlowStepTimeoutMs,
       getState,
+      isOpenAiAccountDisabledFailure = (error) => {
+        const message = String(typeof error === 'string' ? error : error?.message || '').trim();
+        return /OPENAI_ACCOUNT_DISABLED::|(?:your|this|openai|chatgpt)?\s*(?:account|user)\s+(?:has\s+been|was|is)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:we|openai)\s+(?:have|has)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)\s+(?:your|this)?\s*(?:account|user)|(?:你的|您的|此|该)?(?:账号|账户)(?:已被|已经|被|已)?(?:禁用|停用|封禁|暂停|锁定|不可用)|(?:禁用|停用|封禁|暂停|锁定)(?:你的|您的|此|该)?(?:账号|账户)/i.test(message);
+      },
       isAddPhoneAuthFailure = (error) => {
         const message = String(typeof error === 'string' ? error : error?.message || '');
         if (/\u624b\u673a\u53f7\u8f93\u5165\u6a21\u5f0f|phone\s+entry/i.test(message)) {
@@ -295,6 +299,13 @@
               completionStep
             );
             return;
+          }
+          if (isOpenAiAccountDisabledFailure(err)) {
+            await addLog(
+              `步骤 7：检测到当前账号已被禁用/停用，不再重试，当前轮将记录失败并跳过。原因：${getErrorMessage(err)}`,
+              'error'
+            );
+            throw err;
           }
           if (isManagementSecretConfigError(err)) {
             await addLog(

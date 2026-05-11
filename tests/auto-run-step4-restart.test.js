@@ -59,6 +59,8 @@ const bundle = [
   "const AUTO_RUN_STEP_IDLE_RESTART_ERROR_PREFIX = 'AUTO_RUN_STEP_IDLE_RESTART::';",
   extractFunction('isAddPhoneAuthUrl'),
   extractFunction('isAddPhoneAuthState'),
+  extractFunction('isOpenAiAccountDisabledFailure'),
+  extractFunction('isOpenAiAccountDisabledAuthState'),
   extractFunction('isMail2925ThreadTerminatedError'),
   extractFunction('isSignupPhonePasswordMismatchFailure'),
   extractFunction('getSignupPhonePasswordMismatchRestartPayload'),

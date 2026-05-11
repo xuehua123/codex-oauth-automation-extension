@@ -66,6 +66,8 @@ const bundle = [
   extractFunction('startAutoRunStepIdleLogWatchdog'),
   extractFunction('runAutoStepActionWithIdleLogWatchdog'),
   extractFunction('executeStepAndWaitWithAutoRunIdleLogWatchdog'),
+  extractFunction('isOpenAiAccountDisabledFailure'),
+  extractFunction('isOpenAiAccountDisabledAuthState'),
   extractFunction('getPostStep6AutoRestartDecision'),
   extractFunction('runAutoSequenceFromStep'),
 ].join('\n');

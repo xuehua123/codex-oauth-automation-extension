@@ -34,13 +34,13 @@
 
   function extractVerificationCode(text) {
     const source = String(text || '');
-    const matchCn = source.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})/i);
+    const matchCn = source.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})(?!\d)/i);
     if (matchCn) return matchCn[1];
 
-    const matchOpenAiLogin = source.match(/(?:chatgpt\s+log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
+    const matchOpenAiLogin = source.match(/(?:enter\s+this\s+(?:temporary\s+verification\s+)?code(?:\s+to\s+continue)?|if\s+that\s+was\s+you,\s*enter\s+this\s+code)[^0-9]{0,80}(\d{6})(?!\d)/i);
     if (matchOpenAiLogin) return matchOpenAiLogin[1];
 
-    const matchEn = source.match(/code(?:\s+is|[\s:])+(\d{6})/i);
+    const matchEn = source.match(/(?:verification\s+code|code)(?:\s+is|[\s:])+(\d{6})(?!\d)/i);
     if (matchEn) return matchEn[1];
 
     const matchStandalone = source.match(/\b(\d{6})\b/);
@@ -48,14 +48,9 @@
   }
 
   function extractVerificationCodeFromMessage(message = {}) {
-    const sender = firstNonEmptyString([
-      message?.from?.emailAddress?.address,
-      message?.sender,
-      message?.from,
-    ]);
     const subject = firstNonEmptyString([message?.subject]);
     const preview = firstNonEmptyString([message?.bodyPreview, message?.preview, message?.text]);
-    return extractVerificationCode([subject, preview, sender].filter(Boolean).join(' '));
+    return extractVerificationCode([subject, preview].filter(Boolean).join(' '));
   }
 
   function getLatestHotmailMessage(messages) {
@@ -147,7 +142,7 @@
     const sender = normalizeText(message?.from?.emailAddress?.address);
     const subject = normalizeText(message?.subject);
     const preview = String(message?.bodyPreview || '');
-    const combinedText = [subject, sender, preview].filter(Boolean).join(' ');
+    const combinedText = [subject, preview].filter(Boolean).join(' ');
     const code = extractVerificationCode(combinedText);
     const excludedCodes = new Set((filters.excludeCodes || []).filter(Boolean));
     if (code && excludedCodes.has(code)) {
@@ -253,7 +248,9 @@
         emailAddress: {
           address: normalizeMailAddress(
             message.from_email
+            || message.from_address
             || message.sender_email
+            || message.sender_address
             || message.from
             || message.sender
             || message.emailAddress
@@ -264,9 +261,10 @@
         message.bodyPreview,
         message.preview,
         message.snippet,
+        message.text_content,
         message.text,
         message.body,
-        stripHtmlTags(message.html || message.content || ''),
+        stripHtmlTags(message.html_content || message.html || message.content || ''),
       ]),
       receivedDateTime: firstNonEmptyString([
         message.receivedDateTime,

@@ -356,6 +356,58 @@ test('step 7 propagates fatal errors from shared add-phone verification', async 
   assert.equal(events.completions, 0);
 });
 
+test('step 7 exits internal retry loop immediately when OpenAI account is disabled', async () => {
+  const source = fs.readFileSync('background/steps/oauth-login.js', 'utf8');
+  const globalScope = {};
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundStep7;`)(globalScope);
+
+  const events = {
+    refreshCalls: 0,
+    sendCalls: 0,
+    completed: 0,
+    logs: [],
+  };
+
+  const executor = api.createStep7Executor({
+    addLog: async (message, level = 'info') => {
+      events.logs.push({ message, level });
+    },
+    completeStepFromBackground: async () => {
+      events.completed += 1;
+    },
+    getErrorMessage: (error) => error?.message || String(error || ''),
+    getLoginAuthStateLabel: (state) => state || 'unknown',
+    getState: async () => ({ email: 'user@example.com', password: 'secret' }),
+    isStep6RecoverableResult: (result) => result?.step6Outcome === 'recoverable',
+    isStep6SuccessResult: (result) => result?.step6Outcome === 'success',
+    refreshOAuthUrlBeforeStep6: async () => {
+      events.refreshCalls += 1;
+      return `https://oauth.example/${events.refreshCalls}`;
+    },
+    reuseOrCreateTab: async () => {},
+    sendToContentScriptResilient: async () => {
+      events.sendCalls += 1;
+      throw new Error('OPENAI_ACCOUNT_DISABLED::步骤 7：检测到当前 OpenAI 账号已被禁用/停用。');
+    },
+    STEP6_MAX_ATTEMPTS: 3,
+    throwIfStopped: () => {},
+  });
+
+  await assert.rejects(
+    () => executor.executeStep7({ email: 'user@example.com', password: 'secret' }),
+    /OPENAI_ACCOUNT_DISABLED/
+  );
+
+  assert.equal(events.refreshCalls, 1, 'disabled account should stop further OAuth refresh attempts');
+  assert.equal(events.sendCalls, 1, 'disabled account should stop after the first failed login attempt');
+  assert.equal(events.completed, 0);
+  assert.ok(events.logs.some(({ message }) => /账号已被禁用\/停用，不再重试/.test(message)));
+  assert.ok(
+    !events.logs.some(({ message }) => /准备重试/.test(message)),
+    'disabled account failure should not be logged as an internal retryable attempt'
+  );
+});
+
 test('step 7 starts a new oauth timeout window for each refreshed oauth url', async () => {
   const source = fs.readFileSync('background/steps/oauth-login.js', 'utf8');
   const globalScope = {};

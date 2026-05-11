@@ -68,6 +68,10 @@ async function getLoginAuthStateFromContent() {
   };
 }
 
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
 ${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
 
 return {
@@ -100,6 +104,10 @@ async function getLoginAuthStateFromContent() {
   };
 }
 
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
 ${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
 
 return {
@@ -128,6 +136,10 @@ async function getLoginAuthStateFromContent() {
   };
 }
 
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
 ${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
 
 return {
@@ -144,6 +156,70 @@ return {
 
   const result = await api.run({ allowAddEmailPage: true });
   assert.equal(result.state, 'add_email_page');
+});
+
+test('ensureStep8VerificationPageReady sends bounded backoff options for operation timed out recovery', async () => {
+  const api = new Function(`
+const sentRecoveries = [];
+const logs = [];
+
+function getLoginAuthStateLabel(state) {
+  return state === 'login_timeout_error_page' ? 'login timeout page' : 'unknown page';
+}
+
+let inspectCalls = 0;
+async function getLoginAuthStateFromContent() {
+  inspectCalls += 1;
+  if (inspectCalls === 1) {
+    return {
+      state: 'login_timeout_error_page',
+      url: 'https://auth.openai.com/email-verification',
+      errorText: 'Operation timed out',
+    };
+  }
+  return {
+    state: 'verification_page',
+    url: 'https://auth.openai.com/email-verification',
+  };
+}
+
+async function sendToContentScriptResilient(source, message, options) {
+  sentRecoveries.push({ source, message, options });
+  return { recovered: true, clickCount: 1 };
+}
+
+async function addLog(message, level) {
+  logs.push({ message, level });
+}
+
+function getErrorMessage(error) {
+  return String(error?.message || error || '');
+}
+
+function isOpenAiAccountDisabledAuthState() {
+  return false;
+}
+
+${extractFunction(backgroundSource, 'ensureStep8VerificationPageReady')}
+
+return {
+  async run() {
+    const result = await ensureStep8VerificationPageReady({});
+    return { result, sentRecoveries, logs };
+  },
+};
+`)();
+
+  const snapshot = await api.run();
+
+  assert.equal(snapshot.result.state, 'verification_page');
+  assert.equal(snapshot.sentRecoveries.length, 1);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayBaseMs, 1000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayIncrementMs, 1000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.retryClickDelayMaxMs, 5000);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.maxClickAttempts, 5);
+  assert.equal(snapshot.sentRecoveries[0].message.payload.timeoutMs, 45000);
+  assert.equal(snapshot.sentRecoveries[0].options.timeoutMs, 50000);
 });
 
 test('step 8 reruns step 7 when auth page enters login timeout retry state', async () => {

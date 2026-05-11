@@ -258,6 +258,7 @@ const HOTMAIL_MAILBOXES = ['INBOX', 'Junk'];
 const STOP_ERROR_MESSAGE = '流程已被用户停止。';
 const CLOUDFLARE_SECURITY_BLOCK_ERROR_PREFIX = 'CF_SECURITY_BLOCKED::';
 const CLOUDFLARE_SECURITY_BLOCK_USER_MESSAGE = '您已触发Cloudflare 安全防护系统，已完全停止流程，请不要短时间内多次进行重新发送验证码，连续刷新、反复点击重试会加重风控；请先关闭页面等待 15-30 分钟，让系统的临时限制自动解除。或者更换浏览器';
+const OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX = 'OPENAI_ACCOUNT_DISABLED::';
 const BROWSER_SWITCH_REQUIRED_ERROR_PREFIX = 'BROWSER_SWITCH_REQUIRED::';
 const HUMAN_STEP_DELAY_MIN = 700;
 const HUMAN_STEP_DELAY_MAX = 2200;
@@ -521,13 +522,19 @@ function getSignupMethodForStepDefinitions(state = {}) {
 function getStepDefinitionsForState(state = {}) {
   const rootScope = typeof self !== 'undefined' ? self : globalThis;
   if (rootScope.MultiPageStepDefinitions?.getSteps) {
-    return rootScope.MultiPageStepDefinitions.getSteps({
-      panelMode: normalizePanelMode(state?.panelMode),
-      codex2apiLoginOnlyMode: Boolean(state?.codex2apiLoginOnlyMode),
+    const normalizedPanelMode = typeof normalizePanelMode === 'function'
+      ? normalizePanelMode(state?.panelMode)
+      : String(state?.panelMode || '').trim().toLowerCase();
+    const stepOptions = {
       plusModeEnabled: isPlusModeState(state),
       plusPaymentMethod: normalizePlusPaymentMethod(state?.plusPaymentMethod),
       signupMethod: getSignupMethodForStepDefinitions(state),
-    });
+    };
+    if (state?.panelMode !== undefined || state?.codex2apiLoginOnlyMode !== undefined) {
+      stepOptions.panelMode = normalizedPanelMode || 'cpa';
+      stepOptions.codex2apiLoginOnlyMode = Boolean(state?.codex2apiLoginOnlyMode);
+    }
+    return rootScope.MultiPageStepDefinitions.getSteps(stepOptions);
   }
   if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
@@ -5548,7 +5555,15 @@ async function pollCloudflareTempEmailVerificationCode(step, state, pollPayload 
 function normalizeTempmailPublicInboxEmails(payload = {}) {
   const emails = Array.isArray(payload?.data?.emails)
     ? payload.data.emails
-    : (Array.isArray(payload?.emails) ? payload.emails : []);
+    : (
+      Array.isArray(payload?.data)
+        ? payload.data
+        : (
+          Array.isArray(payload?.emails)
+            ? payload.emails
+            : (Array.isArray(payload) ? payload : [])
+        )
+    );
   return normalizeHotmailMailApiMessages(emails);
 }
 
@@ -5645,6 +5660,92 @@ async function fetchIkonaOniPublicInboxEmails(targetEmail, state = {}) {
   return normalizeTempmailPublicInboxEmails(payload);
 }
 
+function decodeTempmailPublicHtmlText(value = '') {
+  return String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const numeric = Number(code);
+      return Number.isFinite(numeric) ? String.fromCharCode(numeric) : ' ';
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+      const numeric = Number.parseInt(code, 16);
+      return Number.isFinite(numeric) ? String.fromCharCode(numeric) : ' ';
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchTempmailPublicEmailViewText(messageId, baseUrl = TEMPMAIL_PUBLIC_INBOX_BASE_URL) {
+  const normalizedId = String(messageId || '').trim();
+  if (!normalizedId) {
+    return '';
+  }
+  const normalizedBaseUrl = String(baseUrl || TEMPMAIL_PUBLIC_INBOX_BASE_URL).replace(/\/+$/, '') || TEMPMAIL_PUBLIC_INBOX_BASE_URL;
+
+  const response = await fetch(`${normalizedBaseUrl}/view/${encodeURIComponent(normalizedId)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'text/html,application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    const details = bodyText ? `，${bodyText.slice(0, 180)}` : '';
+    throw new Error(`TempMail 公共收件箱邮件详情请求失败：status ${response.status}${details}`);
+  }
+
+  return decodeTempmailPublicHtmlText(await response.text());
+}
+
+async function enrichTempmailPublicMessagesWithViewText(messages = {}, options = {}) {
+  const list = Array.isArray(messages) ? messages : [];
+  const enrichedMessages = [];
+  const errors = [];
+  const baseUrl = options?.baseUrl || TEMPMAIL_PUBLIC_INBOX_BASE_URL;
+  for (const message of list.slice(0, 10)) {
+    const existingText = [message?.subject, message?.bodyPreview].filter(Boolean).join(' ');
+    if (/\b\d{6}\b/.test(existingText)) {
+      enrichedMessages.push(message);
+      continue;
+    }
+
+    const messageId = String(message?.id || '').trim();
+    if (!messageId) {
+      enrichedMessages.push(message);
+      continue;
+    }
+
+    try {
+      const viewText = await fetchTempmailPublicEmailViewText(messageId, baseUrl);
+      enrichedMessages.push({
+        ...message,
+        bodyPreview: [message.bodyPreview, viewText].filter(Boolean).join(' '),
+      });
+    } catch (err) {
+      errors.push(`${messageId}: ${err.message}`);
+      enrichedMessages.push(message);
+    }
+  }
+
+  if (list.length > enrichedMessages.length) {
+    enrichedMessages.push(...list.slice(enrichedMessages.length));
+  }
+
+  return {
+    messages: enrichedMessages,
+    errors,
+  };
+}
+
 async function pollIkonaOniVerificationCode(step, state, pollPayload = {}) {
   const targetEmail = String(
     pollPayload.targetEmail
@@ -5679,7 +5780,16 @@ async function pollIkonaOniVerificationCode(step, state, pollPayload = {}) {
         lastError = new Error(`步骤 ${step}：Ikona-Oni API 暂未找到匹配验证码（${attempt}/${maxAttempts}）。`);
       } else {
         const messages = await fetchIkonaOniPublicInboxEmails(targetEmail, state);
-        const matchResult = pickVerificationMessageWithTimeFallback(messages, {
+        const enrichedResult = await enrichTempmailPublicMessagesWithViewText(messages, {
+          baseUrl: normalizeIkonaOniBaseUrl(state?.ikonaOniBaseUrl),
+        });
+        if (enrichedResult.errors.length) {
+          await addLog(
+            `步骤 ${step}：Ikona-Oni 公开收件箱读取邮件详情失败 ${enrichedResult.errors.length} 封，继续用列表信息匹配。样本：${enrichedResult.errors.slice(0, 2).join('；')}`,
+            'warn'
+          );
+        }
+        const matchResult = pickVerificationMessageWithTimeFallback(enrichedResult.messages, {
           afterTimestamp: pollPayload.filterAfterTimestamp || 0,
           senderFilters: pollPayload.senderFilters || [],
           subjectFilters: pollPayload.subjectFilters || [],
@@ -5742,7 +5852,14 @@ async function pollTempmailPublicVerificationCode(step, state, pollPayload = {})
     throwIfStopped();
     try {
       const messages = await fetchTempmailPublicInboxEmails(targetEmail);
-      const matchResult = pickVerificationMessageWithTimeFallback(messages, {
+      const enrichedResult = await enrichTempmailPublicMessagesWithViewText(messages);
+      if (enrichedResult.errors.length) {
+        await addLog(
+          `步骤 ${step}：TempMail 公共收件箱读取邮件详情失败 ${enrichedResult.errors.length} 封，继续用列表信息匹配。样本：${enrichedResult.errors.slice(0, 2).join('；')}`,
+          'warn'
+        );
+      }
+      const matchResult = pickVerificationMessageWithTimeFallback(enrichedResult.messages, {
         afterTimestamp: pollPayload.filterAfterTimestamp || 0,
         senderFilters: pollPayload.senderFilters || [],
         subjectFilters: pollPayload.subjectFilters || [],
@@ -7999,6 +8116,7 @@ function getLoginAuthStateLabel(state) {
     case 'email_page': return '邮箱输入页';
     case 'phone_entry_page': return '手机号输入页';
     case 'login_timeout_error_page': return '登录超时报错页';
+    case 'account_disabled_page': return '账号禁用页';
     case 'oauth_consent_page': return 'OAuth 授权页';
     case 'add_phone_page': return '手机号页';
     case 'add_email_page': return '添加邮箱页';
@@ -8152,6 +8270,14 @@ function isPlusCheckoutRestartRequiredFailure(error) {
 function isGoPayCheckoutRestartRequiredFailure(error) {
   const message = getErrorMessage(error);
   return /GOPAY_RESTART_FROM_STEP6::|GOPAY_RETRY_REQUIRED::/i.test(message);
+}
+
+function isOpenAiAccountDisabledFailure(error) {
+  if (typeof loggingStatus !== 'undefined' && loggingStatus?.isOpenAiAccountDisabledFailure) {
+    return loggingStatus.isOpenAiAccountDisabledFailure(error);
+  }
+  const message = getErrorMessage(error);
+  return /OPENAI_ACCOUNT_DISABLED::|(?:your|this|openai|chatgpt)?\s*(?:account|user)\s+(?:has\s+been|was|is)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:we|openai)\s+(?:have|has)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)\s+(?:your|this)?\s*(?:account|user)|(?:你的|您的|此|该)?(?:账号|账户)(?:已被|已经|被|已)?(?:禁用|停用|封禁|暂停|锁定|不可用)|(?:禁用|停用|封禁|暂停|锁定)(?:你的|您的|此|该)?(?:账号|账户)/i.test(message);
 }
 
 function isStep9RecoverableAuthError(error) {
@@ -10583,6 +10709,8 @@ const autoRunController = self.MultiPageBackgroundAutoRunController?.createAutoR
   isPhoneSmsPlatformRateLimitFailure,
   isPlusCheckoutNonFreeTrialFailure,
   isGpcTaskEndedFailure,
+  isCodex2ApiLoginOnlyMode,
+  isOpenAiAccountDisabledFailure,
   isRestartCurrentAttemptError,
   isStep4Route405RecoveryLimitFailure,
   isSignupUserAlreadyExistsFailure,
@@ -11672,6 +11800,7 @@ const step7Executor = self.MultiPageBackgroundStep7?.createStep7Executor({
   getState,
   getTabId,
   isAddPhoneAuthFailure,
+  isOpenAiAccountDisabledFailure,
   isStep6RecoverableResult,
   isStep6SuccessResult,
   phoneVerificationHelpers,
@@ -12379,6 +12508,12 @@ function isAddPhoneAuthState(authState = {}) {
     || isAddPhoneAuthUrl(authState?.url);
 }
 
+function isOpenAiAccountDisabledAuthState(authState = {}) {
+  return authState?.state === 'account_disabled_page'
+    || Boolean(authState?.accountDisabledBlocked)
+    || isOpenAiAccountDisabledFailure(authState?.errorText || authState?.message || '');
+}
+
 async function getPostStep6AutoRestartDecision(step, error) {
   const resolveStepKey = (stepId, state) => {
     if (typeof getStepExecutionKeyForState === 'function') {
@@ -12517,6 +12652,17 @@ async function getPostStep6AutoRestartDecision(step, error) {
     };
   }
 
+  if (isOpenAiAccountDisabledAuthState(authState) || isOpenAiAccountDisabledFailure(errorMessage)) {
+    return {
+      shouldRestart: false,
+      blockedByAddPhone: false,
+      forcedByPhoneVerificationTimeout: false,
+      restartStep: authChainStartStep,
+      errorMessage,
+      authState,
+    };
+  }
+
   return {
     shouldRestart: true,
     blockedByAddPhone: false,
@@ -12576,14 +12722,25 @@ async function ensureStep8VerificationPageReady(options = {}) {
     throw new Error(`${CLOUDFLARE_SECURITY_BLOCK_ERROR_PREFIX}${CLOUDFLARE_SECURITY_BLOCK_USER_MESSAGE}`);
   }
 
+  if (isOpenAiAccountDisabledAuthState(pageState)) {
+    const detailPart = pageState.errorText ? ` 页面提示：${String(pageState.errorText).slice(0, 220)}` : '';
+    const urlPart = pageState.url ? ` URL: ${pageState.url}` : '';
+    throw new Error(`${OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX}步骤 ${visibleStep}：检测到当前 OpenAI 账号已被禁用/停用，当前账号不可恢复重试，应记录失败并跳过。${detailPart}${urlPart}`.trim());
+  }
+
   if (pageState.state === 'login_timeout_error_page') {
     let recovered = false;
     try {
       const recoverPayload = {
         flow: 'login',
-        logLabel: `步骤 ${visibleStep}：检测到登录超时报错，正在点击“重试”恢复当前页面`,
+        logLabel: `步骤 ${visibleStep}：检测到登录超时报错，正在按退避节奏点击“重试”恢复当前页面`,
+        maxClickAttempts: 5,
+        retryClickDelayBaseMs: 1000,
+        retryClickDelayIncrementMs: 1000,
+        retryClickDelayMaxMs: 5000,
         step: visibleStep,
-        timeoutMs: 12000,
+        timeoutMs: 45000,
+        waitAfterClickMs: 3000,
       };
       const recoverMessage = {
         type: 'RECOVER_AUTH_RETRY_PAGE',
@@ -12591,7 +12748,7 @@ async function ensureStep8VerificationPageReady(options = {}) {
         payload: recoverPayload,
       };
       let recoverResult = null;
-      const recoverTimeoutMs = 15000;
+      const recoverTimeoutMs = 50000;
       if (typeof sendToContentScriptResilient === 'function') {
         recoverResult = await sendToContentScriptResilient(
           'signup-page',
@@ -12600,7 +12757,7 @@ async function ensureStep8VerificationPageReady(options = {}) {
             timeoutMs: recoverTimeoutMs,
             responseTimeoutMs: recoverTimeoutMs,
             retryDelayMs: 700,
-            logMessage: '认证页进入重试/超时报错状态，正在尝试点击“重试”恢复...',
+            logMessage: `步骤 ${visibleStep}：认证页进入重试/超时报错状态，正在按退避节奏尝试点击“重试”恢复...`,
             logStep: visibleStep,
             logStepKey: 'fetch-login-code',
           }
@@ -12652,6 +12809,11 @@ async function ensureStep8VerificationPageReady(options = {}) {
       }
       if (pageState.maxCheckAttemptsBlocked) {
         throw new Error(`${CLOUDFLARE_SECURITY_BLOCK_ERROR_PREFIX}${CLOUDFLARE_SECURITY_BLOCK_USER_MESSAGE}`);
+      }
+      if (isOpenAiAccountDisabledAuthState(pageState)) {
+        const detailPart = pageState.errorText ? ` 页面提示：${String(pageState.errorText).slice(0, 220)}` : '';
+        const urlPart = pageState.url ? ` URL: ${pageState.url}` : '';
+        throw new Error(`${OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX}步骤 ${visibleStep}：检测到当前 OpenAI 账号已被禁用/停用，当前账号不可恢复重试，应记录失败并跳过。${detailPart}${urlPart}`.trim());
       }
       if (pageState.state === 'add_phone_page' || pageState.state === 'phone_verification_page') {
         const urlPart = pageState.url ? ` URL: ${pageState.url}` : '';

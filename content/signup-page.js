@@ -2685,6 +2685,8 @@ const SIGNUP_USER_ALREADY_EXISTS_ERROR_PREFIX = 'SIGNUP_USER_ALREADY_EXISTS::';
 const SIGNUP_PHONE_PASSWORD_MISMATCH_ERROR_PREFIX = 'SIGNUP_PHONE_PASSWORD_MISMATCH::';
 const AUTH_MAX_CHECK_ATTEMPTS_ERROR_PREFIX = 'AUTH_MAX_CHECK_ATTEMPTS::';
 const STEP8_EMAIL_IN_USE_ERROR_PREFIX = 'STEP8_EMAIL_IN_USE::';
+const OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX = 'OPENAI_ACCOUNT_DISABLED::';
+const OPENAI_ACCOUNT_DISABLED_PATTERN = /account[_\s-]*(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:your|this|openai|chatgpt)?\s*(?:account|user)\s+(?:has\s+been|was|is)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)|(?:we|openai)\s+(?:have|has)\s+(?:deactivated|disabled|suspended|banned|blocked|terminated|locked)\s+(?:your|this)?\s*(?:account|user)|(?:你的|您的|此|该)?(?:账号|账户)(?:已被|已经|被|已)?(?:禁用|停用|封禁|暂停|锁定|不可用)|(?:禁用|停用|封禁|暂停|锁定)(?:你的|您的|此|该)?(?:账号|账户)/i;
 const SIGNUP_EMAIL_EXISTS_PATTERN = /与此电子邮件地址相关联的帐户已存在|account\s+associated\s+with\s+this\s+email\s+address\s+already\s+exists|email\s+address.*already\s+exists/i;
 const SIGNUP_PHONE_PASSWORD_MISMATCH_PATTERN = /incorrect\s+phone\s+number\s+or\s+password|phone\s+number\s+or\s+password|与此(?:电话|手机)号码相关联的帐户已存在|account\s+associated\s+with\s+this\s+phone\s+number\s+already\s+exists/i;
 
@@ -2800,6 +2802,49 @@ function getSignupPasswordFieldErrorText() {
   }
 
   return '';
+}
+
+function getAccountDisabledAuthPageState(source = null) {
+  const text = String(source?.errorText || source?.pageText || source?.pageTextExcerpt || source?.text || document.body?.innerText || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const title = String(source?.title || document.title || '');
+  const combinedText = `${title} ${text}`.replace(/\s+/g, ' ').trim();
+  if (!combinedText || !OPENAI_ACCOUNT_DISABLED_PATTERN.test(combinedText)) {
+    return null;
+  }
+
+  return {
+    state: 'account_disabled_page',
+    url: source?.url || location.href,
+    path: source?.path || location.pathname || '',
+    accountDisabledBlocked: true,
+    errorText: combinedText.slice(0, 500),
+  };
+}
+
+function createOpenAiAccountDisabledError(snapshot = null) {
+  const detail = String(snapshot?.errorText || '').trim();
+  const detailPart = detail ? ` 页面提示：${detail.slice(0, 220)}` : '';
+  const urlPart = snapshot?.url ? ` URL: ${snapshot.url}` : ` URL: ${location.href}`;
+  return new Error(
+    `${OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX}步骤 7：检测到当前 OpenAI 账号已被禁用/停用，当前账号不可恢复重试，应记录失败并跳过。${detailPart}${urlPart}`
+  );
+}
+
+function throwIfAccountDisabledAuthPageVisible(step) {
+  const state = getAccountDisabledAuthPageState();
+  if (!state) {
+    return;
+  }
+
+  const visibleStep = Number(step) || 7;
+  const detail = String(state.errorText || '').trim();
+  const detailPart = detail ? ` 页面提示：${detail.slice(0, 220)}` : '';
+  const urlPart = state.url ? ` URL: ${state.url}` : ` URL: ${location.href}`;
+  throw new Error(
+    `${OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX}步骤 ${visibleStep}：检测到当前 OpenAI 账号已被禁用/停用，当前账号不可恢复重试，应记录失败并跳过。${detailPart}${urlPart}`
+  );
 }
 
 function isStep5Ready() {
@@ -3430,6 +3475,9 @@ function getAuthTimeoutErrorPageState(options = {}) {
   return {
     path,
     url: location.href,
+    title: document.title || '',
+    pageText: text,
+    errorText: text.slice(0, 500),
     retryButton,
     retryEnabled: isActionEnabled(retryButton),
     titleMatched,
@@ -3490,6 +3538,9 @@ async function recoverCurrentAuthRetryPage(payload = {}) {
     step = null,
     timeoutMs = 12000,
     waitAfterClickMs = 3000,
+    retryClickDelayBaseMs = 0,
+    retryClickDelayIncrementMs = 0,
+    retryClickDelayMaxMs = 0,
   } = payload;
   const resolvedPathPatterns = Array.isArray(pathPatterns)
     ? pathPatterns
@@ -3503,6 +3554,9 @@ async function recoverCurrentAuthRetryPage(payload = {}) {
       stepKey: step === 8 || flow === 'login' ? 'oauth-login' : 'fetch-signup-code',
       timeoutMs,
       waitAfterClickMs,
+      retryClickDelayBaseMs,
+      retryClickDelayIncrementMs,
+      retryClickDelayMaxMs,
     });
   }
 
@@ -3511,9 +3565,20 @@ async function recoverCurrentAuthRetryPage(payload = {}) {
     : Number.POSITIVE_INFINITY;
   let clickCount = 0;
   let idlePollCount = 0;
+  const getRetryClickDelayMs = (clickAttempt) => {
+    const baseMs = Math.max(0, Number(retryClickDelayBaseMs) || 0);
+    const incrementMs = Math.max(0, Number(retryClickDelayIncrementMs) || 0);
+    const maxMs = Math.max(0, Number(retryClickDelayMaxMs) || 0);
+    if (!baseMs && !incrementMs) {
+      return 0;
+    }
+    const attemptIndex = Math.max(0, Number(clickAttempt) - 1);
+    const delayMs = baseMs + (attemptIndex * incrementMs);
+    return maxMs > 0 ? Math.min(delayMs, maxMs) : delayMs;
+  };
   while (clickCount < maxClickAttempts) {
     throwIfStopped();
-    const retryState = getAuthTimeoutErrorPageState({ pathPatterns: resolvedPathPatterns });
+    let retryState = getAuthTimeoutErrorPageState({ pathPatterns: resolvedPathPatterns });
     if (!retryState) {
       return {
         recovered: clickCount > 0,
@@ -3529,6 +3594,31 @@ async function recoverCurrentAuthRetryPage(payload = {}) {
       throw createSignupUserAlreadyExistsError();
     }
     if (retryState.retryButton && retryState.retryEnabled) {
+      const nextClickAttempt = clickCount + 1;
+      const retryDelayMs = getRetryClickDelayMs(nextClickAttempt);
+      if (retryDelayMs > 0) {
+        log(`${logLabel || `步骤 ${step || '?'}：检测到重试页，正在点击“重试”恢复`}：为避免快速重复触发风控，先等待 ${Math.ceil(retryDelayMs / 1000)} 秒后再重试（第 ${nextClickAttempt} 次）...`, 'warn');
+        await sleep(retryDelayMs);
+        throwIfStopped();
+        retryState = getAuthTimeoutErrorPageState({ pathPatterns: resolvedPathPatterns });
+        if (!retryState) {
+          return {
+            recovered: clickCount > 0,
+            clickCount,
+            url: location.href,
+          };
+        }
+        if (retryState.maxCheckAttemptsBlocked) {
+          throw new Error('CF_SECURITY_BLOCKED::您已触发Cloudflare 安全防护系统，已完全停止流程，请不要短时间内多次进行重新发送验证码，连续刷新、反复点击重试会加重风控；请先关闭页面等待 15-30 分钟，让系统的临时限制自动解除。或者更换浏览器');
+        }
+        if (retryState.userAlreadyExistsBlocked) {
+          throw createSignupUserAlreadyExistsError();
+        }
+        if (!retryState.retryButton || !retryState.retryEnabled) {
+          continue;
+        }
+      }
+
       idlePollCount = 0;
       clickCount += 1;
       log(`${logLabel || `步骤 ${step || '?'}：检测到重试页，正在点击“重试”恢复`}（第 ${clickCount} 次）...`, 'warn');
@@ -4064,6 +4154,7 @@ function findLoginMoreOptionsTrigger() {
 
 function inspectLoginAuthState() {
   const retryState = getLoginTimeoutErrorPageState();
+  const accountDisabledState = getAccountDisabledAuthPageState();
   const verificationTarget = getVerificationCodeTarget();
   const passwordInput = getLoginPasswordInput();
   const emailInput = getLoginEmailInput();
@@ -4090,6 +4181,8 @@ function inspectLoginAuthState() {
     detailMatched: Boolean(retryState?.detailMatched),
     maxCheckAttemptsBlocked: Boolean(retryState?.maxCheckAttemptsBlocked),
     emailInUseBlocked: Boolean(retryState?.emailInUseBlocked),
+    accountDisabledBlocked: Boolean(accountDisabledState?.accountDisabledBlocked),
+    errorText: accountDisabledState?.errorText || '',
     verificationTarget,
     passwordInput,
     emailInput,
@@ -4106,6 +4199,13 @@ function inspectLoginAuthState() {
     oauthConsentPage,
     consentReady,
   };
+
+  if (accountDisabledState) {
+    return {
+      ...baseState,
+      ...accountDisabledState,
+    };
+  }
 
   if (retryState) {
     return {
@@ -4200,6 +4300,8 @@ function serializeLoginAuthState(snapshot) {
     detailMatched: Boolean(snapshot?.detailMatched),
     maxCheckAttemptsBlocked: Boolean(snapshot?.maxCheckAttemptsBlocked),
     emailInUseBlocked: Boolean(snapshot?.emailInUseBlocked),
+    accountDisabledBlocked: Boolean(snapshot?.accountDisabledBlocked),
+    errorText: snapshot?.errorText || '',
     hasVerificationTarget: Boolean(snapshot?.verificationTarget),
     hasPasswordInput: Boolean(snapshot?.passwordInput),
     hasEmailInput: Boolean(snapshot?.emailInput),
@@ -4233,6 +4335,8 @@ function getLoginAuthStateLabel(snapshot) {
       return '手机验证码页';
     case 'login_timeout_error_page':
       return '登录超时报错页';
+    case 'account_disabled_page':
+      return '账号禁用页';
     case 'oauth_consent_page':
       return 'OAuth 授权页';
     case 'entry_page':
@@ -4564,6 +4668,8 @@ function throwForStep6FatalState(snapshot, visibleStep = 7) {
       return;
     case 'add_phone_page':
       throw new Error(`当前页面已进入手机号页面，未经过登录验证码页，无法完成步骤 ${visibleStep}。URL: ${snapshot.url}`);
+    case 'account_disabled_page':
+      throw createOpenAiAccountDisabledError(snapshot);
     case 'unknown':
       throw new Error(`无法识别当前登录页面状态。URL: ${snapshot?.url || location.href}`);
     default:
@@ -4806,9 +4912,30 @@ async function waitForVerificationSubmitOutcome(step, timeout, options = {}) {
   const start = Date.now();
   let recoveryCount = 0;
   const maxRecoveryCount = 2;
+  let lastDiagnosticAt = 0;
+  let lastDiagnosticKey = '';
 
   while (Date.now() - start < resolvedTimeout) {
     throwIfStopped();
+
+    if (step === 8) {
+      if (typeof throwIfAccountDisabledAuthPageVisible === 'function') {
+        throwIfAccountDisabledAuthPageVisible(step);
+      }
+      const now = Date.now();
+      const diagnosticState = typeof inspectLoginAuthState === 'function'
+        ? inspectLoginAuthState()
+        : { state: 'unknown', url: location.href };
+      const diagnosticKey = `${diagnosticState.state || 'unknown'}|${diagnosticState.url || location.href}`;
+      if (diagnosticKey !== lastDiagnosticKey || now - lastDiagnosticAt > 3000) {
+        lastDiagnosticAt = now;
+        lastDiagnosticKey = diagnosticKey;
+        log(
+          `步骤 ${step}：验证码提交后认证页状态采样：state=${diagnosticState.state || 'unknown'}，url=${diagnosticState.url || location.href}`,
+          'info'
+        );
+      }
+    }
 
     const retryFlow = step === 4 ? 'signup' : 'login';
     const retryState = getCurrentAuthRetryPageState(retryFlow);
@@ -4822,6 +4949,29 @@ async function waitForVerificationSubmitOutcome(step, timeout, options = {}) {
       throw createAuthMaxCheckAttemptsError();
     }
     if (retryState) {
+      if (step === 8) {
+        const retryTitle = String(retryState.title || document.title || '').replace(/\s+/g, ' ').trim();
+        const retryText = String(retryState.errorText || retryState.pageText || retryState.pageTextExcerpt || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (retryTitle || retryText) {
+          log(
+            `步骤 ${step}：验证码提交后认证重试页诊断：title=${retryTitle || '(空)'}，text=${(retryText || '(空)').slice(0, 260)}`,
+            'warn'
+          );
+        }
+        const disabledState = typeof getAccountDisabledAuthPageState === 'function'
+          ? getAccountDisabledAuthPageState(retryState)
+          : null;
+        if (disabledState) {
+          const detail = String(disabledState.errorText || '').trim();
+          const detailPart = detail ? ` 页面提示：${detail.slice(0, 220)}` : '';
+          const urlPart = disabledState.url ? ` URL: ${disabledState.url}` : ` URL: ${location.href}`;
+          throw new Error(
+            `${OPENAI_ACCOUNT_DISABLED_ERROR_PREFIX}步骤 ${step}：检测到当前 OpenAI 账号已被禁用/停用，当前账号不可恢复重试，应记录失败并跳过。${detailPart}${urlPart}`
+          );
+        }
+      }
       if (recoveryCount >= maxRecoveryCount) {
         throw new Error(`步骤 ${step}：验证码提交后连续进入认证重试页 ${maxRecoveryCount} 次，页面仍未恢复。URL: ${location.href}`);
       }
@@ -4871,7 +5021,11 @@ async function waitForVerificationSubmitOutcome(step, timeout, options = {}) {
       return { success: true, addPhonePage: true, url: location.href };
     }
 
-    await sleep(150);
+    await sleep(step === 8 ? 75 : 150);
+  }
+
+  if (step === 8 && typeof throwIfAccountDisabledAuthPageVisible === 'function') {
+    throwIfAccountDisabledAuthPageVisible(step);
   }
 
   if (step === 4) {
@@ -5287,6 +5441,10 @@ async function resolveStep6PostSubmitSnapshot(snapshot, options = {}) {
       action: 'recoverable',
       result: transition.result,
     };
+  }
+
+  if (normalizedSnapshot.state === 'account_disabled_page' || normalizedSnapshot.accountDisabledBlocked) {
+    throw createOpenAiAccountDisabledError(normalizedSnapshot);
   }
 
   if (normalizedSnapshot.state === 'phone_entry_page' && (allowPhoneAction || (final && allowFinalPhoneAction))) {

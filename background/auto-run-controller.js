@@ -26,6 +26,8 @@
       isGpcTaskEndedFailure,
       isPhoneSmsPlatformRateLimitFailure,
       isPlusCheckoutNonFreeTrialFailure,
+      isCodex2ApiLoginOnlyMode,
+      isOpenAiAccountDisabledFailure,
       isRestartCurrentAttemptError,
       isStep4Route405RecoveryLimitFailure,
       isSignupUserAlreadyExistsFailure,
@@ -463,6 +465,8 @@
         let attemptRun = resumingCurrentRound ? resumeAttemptRun : 1;
         let reuseExistingProgress = resumingCurrentRound;
         const currentRoundState = await getState();
+        const codex2ApiLoginOnlyMode = typeof isCodex2ApiLoginOnlyMode === 'function'
+          && isCodex2ApiLoginOnlyMode(currentRoundState);
         const keepSameEmailUntilAddPhone = autoRunSkipFailures && shouldKeepCustomMailProviderPoolEmail(currentRoundState);
         const maxAttemptsForRound = autoRunSkipFailures
           ? (keepSameEmailUntilAddPhone ? Number.MAX_SAFE_INTEGER : AUTO_RUN_MAX_RETRIES_PER_ROUND + 1)
@@ -629,11 +633,15 @@
               && isSignupUserAlreadyExistsFailure(err);
             const blockedByStep4Route405 = typeof isStep4Route405RecoveryLimitFailure === 'function'
               && isStep4Route405RecoveryLimitFailure(err);
+            const blockedByOpenAiAccountDisabled = typeof isOpenAiAccountDisabledFailure === 'function'
+              && isOpenAiAccountDisabledFailure(err);
             const canRetry = !blockedByAddPhone
               && !blockedByPhoneNoSupply
               && !blockedByPlusNonFreeTrial
               && !blockedByGpcTaskEnded
               && !blockedBySignupUserAlreadyExists
+              && !blockedByStep4Route405
+              && !blockedByOpenAiAccountDisabled
               && autoRunSkipFailures
               && attemptRun < maxAttemptsForRound;
 
@@ -810,6 +818,47 @@
                 targetRun < totalRuns
                   ? `第 ${targetRun}/${totalRuns} 轮因 user_already_exists/用户已存在提前结束，自动流程将继续下一轮。`
                   : `第 ${targetRun}/${totalRuns} 轮因 user_already_exists/用户已存在提前结束，已无后续轮次，本次自动运行结束。`,
+                'warn'
+              );
+              forceFreshTabsNextRun = true;
+              break;
+            }
+
+            if (blockedByOpenAiAccountDisabled) {
+              const shouldAdvanceAfterDisabledAccount = autoRunSkipFailures || codex2ApiLoginOnlyMode;
+              roundSummary.status = 'failed';
+              roundSummary.finalFailureReason = reason;
+              await setState({
+                autoRunRoundSummaries: serializeAutoRunRoundSummaries(totalRuns, roundSummaries),
+              });
+              await appendRoundRecordIfNeeded('failed', reason);
+              cancelPendingCommands('当前轮因 OpenAI 账号已禁用/停用已终止。');
+              await broadcastStopToContentScripts();
+              if (!shouldAdvanceAfterDisabledAccount) {
+                await addLog(
+                  `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，自动重试未开启，当前自动运行将停止。`,
+                  'warn'
+                );
+                stoppedEarly = true;
+                await broadcastAutoRunStatus('stopped', {
+                  currentRun: targetRun,
+                  totalRuns,
+                  attemptRun,
+                  sessionId: 0,
+                });
+                break;
+              }
+
+              await addLog(
+                codex2ApiLoginOnlyMode
+                  ? `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，Codex2API 仅登录模式将记录失败并继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮检测到账号已禁用/停用，本轮将直接失败并跳过剩余重试。`,
+                'warn'
+              );
+              await addLog(
+                targetRun < totalRuns
+                  ? `第 ${targetRun}/${totalRuns} 轮因账号已禁用/停用提前结束，自动流程将继续下一轮。`
+                  : `第 ${targetRun}/${totalRuns} 轮因账号已禁用/停用提前结束，已无后续轮次，本次自动运行结束。`,
                 'warn'
               );
               forceFreshTabsNextRun = true;

@@ -74,7 +74,12 @@ function createRecoveryApi(state) {
       state.pageText = 'Recovered login form';
     },
     sleep: async (ms = 0) => {
-      await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(5, ms))));
+      if (Array.isArray(state.sleepCalls)) {
+        state.sleepCalls.push(ms);
+      }
+      if (!state.skipRealSleep) {
+        await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(5, ms))));
+      }
       if (Array.isArray(state.events) && ms === 250) {
         state.events.push(`poll-sleep:${ms}`);
       }
@@ -101,6 +106,9 @@ test('auth page recovery detects retry page state', () => {
 
   assert.equal(Boolean(snapshot), true);
   assert.equal(snapshot.retryEnabled, true);
+  assert.equal(snapshot.title, 'Something went wrong');
+  assert.equal(snapshot.pageText, 'Something went wrong. Please try again.');
+  assert.equal(snapshot.errorText, 'Something went wrong. Please try again.');
   assert.equal(snapshot.titleMatched, true);
   assert.equal(snapshot.detailMatched, false);
   assert.equal(snapshot.routeErrorMatched, false);
@@ -161,6 +169,25 @@ test('auth page recovery detects failed-to-fetch retry page on email verificatio
 
   assert.equal(Boolean(snapshot), true);
   assert.equal(snapshot.fetchFailedMatched, true);
+});
+
+test('auth page recovery detects operation timed out as a recoverable retry page', () => {
+  const state = {
+    clickCount: 0,
+    pageText: 'An error occurred during authentication (Operation timed out). Please try again.',
+    pathname: '/email-verification',
+    retryVisible: true,
+    title: 'Oops, an error occurred!',
+  };
+  const api = createRecoveryApi(state);
+
+  const snapshot = api.getAuthTimeoutErrorPageState({
+    pathPatterns: [/\/email-verification(?:[/?#]|$)/i],
+  });
+
+  assert.equal(Boolean(snapshot), true);
+  assert.equal(snapshot.detailMatched, true);
+  assert.equal(snapshot.retryEnabled, true);
 });
 
 test('auth page recovery clicks retry and waits until page recovers', async () => {
@@ -259,6 +286,40 @@ test('auth page recovery can click retry twice before page recovers', async () =
   });
   assert.equal(state.clickCount, 2);
   assert.equal(state.retryVisible, false);
+});
+
+test('auth page recovery waits with incremental backoff before retry clicks', async () => {
+  const state = {
+    clickCount: 0,
+    pageText: 'An error occurred during authentication (Operation timed out). Please try again.',
+    retryVisible: true,
+    sleepCalls: [],
+    skipRealSleep: true,
+    onClick(currentState) {
+      if (currentState.clickCount >= 3) {
+        currentState.retryVisible = false;
+        currentState.pageText = 'Recovered login form';
+      }
+    },
+  };
+  const api = createRecoveryApi(state);
+
+  const result = await api.recoverAuthRetryPage({
+    logLabel: '步骤 8：检测到登录超时报错，正在按退避节奏点击“重试”恢复当前页面',
+    maxClickAttempts: 3,
+    pathPatterns: [/\/log-in(?:[/?#]|$)/i],
+    retryClickDelayBaseMs: 100,
+    retryClickDelayIncrementMs: 100,
+    retryClickDelayMaxMs: 250,
+    step: 8,
+    timeoutMs: 1000,
+    waitAfterClickMs: 0,
+  });
+
+  assert.equal(result.recovered, true);
+  assert.equal(result.clickCount, 3);
+  assert.equal(state.clickCount, 3);
+  assert.deepEqual(state.sleepCalls.slice(0, 3), [100, 200, 250]);
 });
 
 test('auth page recovery stops after five retry clicks when page does not recover', async () => {
