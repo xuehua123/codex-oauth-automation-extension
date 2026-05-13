@@ -326,7 +326,7 @@ return {
   assert.equal(api.rowPayPalAccount.style.display, 'none');
 });
 
-test('sidepanel hides GPC auto mode selector when API Key has no auto permission', () => {
+test('sidepanel keeps selected GPC auto mode when API Key has no auto permission', () => {
   const bundle = [
     extractFunction('normalizePlusPaymentMethod'),
     extractFunction('getSelectedPlusPaymentMethod'),
@@ -370,11 +370,11 @@ return { updatePlusModeUI, selectGpcHelperPhoneMode, plusPaymentMethodCaption, r
 
   api.updatePlusModeUI();
 
-  assert.equal(api.rows.rowGpcHelperPhoneMode.style.display, 'none');
-  assert.equal(api.selectGpcHelperPhoneMode.value, 'manual');
-  assert.equal(api.rows.rowGpcHelperPhone.style.display, '');
-  assert.equal(api.rows.rowGpcHelperOtpChannel.style.display, '');
-  assert.equal(api.rows.rowGpcHelperPin.style.display, '');
+  assert.equal(api.rows.rowGpcHelperPhoneMode.style.display, '');
+  assert.equal(api.selectGpcHelperPhoneMode.value, 'auto');
+  assert.equal(api.rows.rowGpcHelperPhone.style.display, 'none');
+  assert.equal(api.rows.rowGpcHelperOtpChannel.style.display, 'none');
+  assert.equal(api.rows.rowGpcHelperPin.style.display, 'none');
   assert.match(api.plusPaymentMethodCaption.textContent, /手动/);
 });
 
@@ -428,21 +428,13 @@ return {
   getSelectedPhoneMode() { return selectGpcHelperPhoneMode.value; },
   getPayloadPhoneMode() {
     return (() => {
-      const selectedGpcPhoneMode = normalizeGpcHelperPhoneModeValue(selectGpcHelperPhoneMode.value);
-      const preserveSelectedGpcAutoMode = shouldPreserveSelectedGpcAutoMode(latestState);
-      return (!preserveSelectedGpcAutoMode && isGpcAutoModePermissionDenied(latestState)) ? 'manual' : selectedGpcPhoneMode;
+      return normalizeGpcHelperPhoneModeValue(selectGpcHelperPhoneMode.value);
     })();
   },
   applyDataUpdated(payload) {
     syncLatestState(payload);
     if (payload.gopayHelperPhoneMode !== undefined) {
       selectGpcHelperPhoneMode.value = normalizeGpcHelperPhoneModeValue(payload.gopayHelperPhoneMode);
-    }
-    if (payload.gopayHelperAutoModeEnabled === false
-      && selectGpcHelperPhoneMode?.value === GPC_HELPER_PHONE_MODE_AUTO
-      && isGpcAutoModePermissionDenied(latestState)) {
-      selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
-      syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
     }
     updatePlusModeUI();
   },
@@ -580,6 +572,71 @@ return {
   assert.equal(api.getSaveCalls(), 0);
   assert.equal(api.getUpdateCalls(), 0);
   assert.deepEqual(api.getDialogs(), []);
+});
+
+test('sidepanel start check blocks unsupported GPC auto mode without rewriting selection', async () => {
+  const bundle = [
+    extractFunction('normalizeGpcAutoModePermissionValue'),
+    extractFunction('getGpcAutoModePermissionFromPayload'),
+    extractFunction('isGpcAutoModePermissionDenied'),
+    extractFunction('normalizeGpcRemainingUsesValue'),
+    extractFunction('ensureGpcApiKeyReadyForStart'),
+  ].join('\n');
+
+  const api = new Function(`
+let latestState = { gopayHelperPhoneMode: 'auto' };
+const GPC_HELPER_PHONE_MODE_AUTO = 'auto';
+const GPC_HELPER_PHONE_MODE_MANUAL = 'manual';
+const selectGpcHelperPhoneMode = { value: 'auto' };
+const dialogs = [];
+let saveCalls = 0;
+let updateCalls = 0;
+${bundle}
+function isGpcHelperCheckoutSelected() { return true; }
+function getSelectedGpcHelperPhoneMode() { return selectGpcHelperPhoneMode.value; }
+async function refreshGpcBalanceForStart() {
+  return {
+    gopayHelperRemainingUses: 998,
+    gopayHelperApiKeyStatus: 'active',
+    gopayHelperAutoModeEnabled: false,
+    gopayHelperBalancePayload: {
+      status: 'active',
+      remaining_uses: 998,
+      auto_mode_enabled: false,
+    },
+  };
+}
+async function showGpcStartBlockedDialog(message) {
+  dialogs.push(message);
+}
+function syncLatestState(nextState) {
+  latestState = { ...latestState, ...nextState };
+}
+function updatePlusModeUI() {
+  updateCalls += 1;
+}
+async function saveSettings() {
+  saveCalls += 1;
+}
+function showToast() {}
+return {
+  ensureGpcApiKeyReadyForStart,
+  selectGpcHelperPhoneMode,
+  getDialogs: () => dialogs.slice(),
+  getSaveCalls: () => saveCalls,
+  getUpdateCalls: () => updateCalls,
+  getPersistedPhoneMode: () => latestState.gopayHelperPhoneMode,
+};
+`)();
+
+  const allowed = await api.ensureGpcApiKeyReadyForStart();
+
+  assert.equal(allowed, false);
+  assert.equal(api.selectGpcHelperPhoneMode.value, 'auto');
+  assert.equal(api.getPersistedPhoneMode(), 'auto');
+  assert.equal(api.getSaveCalls(), 0);
+  assert.equal(api.getUpdateCalls(), 0);
+  assert.equal(api.getDialogs().length, 1);
 });
 
 test('sidepanel resolves pending GoPay manual confirmation from DATA_UPDATED state', async () => {

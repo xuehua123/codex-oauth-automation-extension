@@ -1410,7 +1410,7 @@
             throw new Error('自动流程运行中，当前不能手动修改邮箱。');
           }
           const email = String(message.payload?.email || '').trim() || null;
-          await setEmailStateSilently(email);
+          await setEmailStateSilently(email, { source: 'manual' });
           return { ok: true, email };
         }
 
@@ -1419,7 +1419,7 @@
           if (isAutoRunLockedState(state)) {
             throw new Error('自动流程运行中，当前不能手动修改邮箱。');
           }
-          await setEmailState(message.payload.email);
+          await setEmailState(message.payload.email, { source: 'manual' });
           await resumeAutoRun();
           return { ok: true, email: message.payload.email };
         }

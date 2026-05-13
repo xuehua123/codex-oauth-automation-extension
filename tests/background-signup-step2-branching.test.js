@@ -775,7 +775,6 @@ test('signup flow helper can generate an email on demand when add-email starts f
   assert.equal(fetchedStates[0].options.preserveAccountIdentity, true);
   assert.deepStrictEqual(setStateCalls, [
     {
-      email: 'duck.generated@example.com',
       accountIdentifierType: 'phone',
       accountIdentifier: '+447780579093',
       signupPhoneNumber: '+447780579093',
@@ -786,6 +785,72 @@ test('signup flow helper can generate an email on demand when add-email starts f
       },
       signupPhoneVerificationRequestedAt: null,
       signupPhoneVerificationPurpose: '',
+    },
+  ]);
+});
+
+test('signup flow helper delegates preserved phone identity email sync to the shared persistence helper when reusing an existing email', async () => {
+  const persistCalls = [];
+  let setEmailCalls = 0;
+  let setStateCalls = 0;
+
+  const helpers = signupFlowApi.createSignupFlowHelpers({
+    buildGeneratedAliasEmail: () => 'demo+saved@gmail.com',
+    chrome: { tabs: { get: async () => ({ id: 21, url: 'https://auth.openai.com/create-account/password' }) } },
+    ensureContentScriptReadyOnTab: async () => {},
+    ensureHotmailAccountForFlow: async () => ({}),
+    ensureLuckmailPurchaseForFlow: async () => ({}),
+    fetchGeneratedEmail: async () => {
+      throw new Error('should not generate a new email');
+    },
+    isGeneratedAliasProvider: () => true,
+    isReusableGeneratedAliasEmail: (_state, email) => email === 'demo+saved@gmail.com',
+    isHotmailProvider: () => false,
+    isLuckmailProvider: () => false,
+    isSignupEmailVerificationPageUrl: () => false,
+    isSignupPasswordPageUrl: () => true,
+    persistRegistrationEmailState: async (state, email, options) => {
+      persistCalls.push({ state, email, options });
+    },
+    reuseOrCreateTab: async () => 21,
+    sendToContentScriptResilient: async () => ({}),
+    setEmailState: async () => {
+      setEmailCalls += 1;
+    },
+    setState: async () => {
+      setStateCalls += 1;
+    },
+    SIGNUP_ENTRY_URL: 'https://chatgpt.com/',
+    SIGNUP_PAGE_INJECT_FILES: [],
+    waitForTabUrlMatch: async () => null,
+  });
+
+  const state = {
+    mailProvider: 'gmail',
+    email: 'demo+saved@gmail.com',
+    accountIdentifierType: 'phone',
+    accountIdentifier: '+447780579093',
+    signupPhoneNumber: '+447780579093',
+    signupPhoneCompletedActivation: {
+      activationId: 'signup-completed',
+      phoneNumber: '+447780579093',
+    },
+  };
+  const email = await helpers.resolveSignupEmailForFlow(state, {
+    preserveAccountIdentity: true,
+  });
+
+  assert.equal(email, 'demo+saved@gmail.com');
+  assert.equal(setEmailCalls, 0);
+  assert.equal(setStateCalls, 0);
+  assert.deepStrictEqual(persistCalls, [
+    {
+      state,
+      email: 'demo+saved@gmail.com',
+      options: {
+        source: 'flow',
+        preserveAccountIdentity: true,
+      },
     },
   ]);
 });

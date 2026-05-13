@@ -12,7 +12,6 @@ import argparse
 import datetime as dt
 import json
 import os
-import platform
 import re
 import shutil
 import sqlite3
@@ -51,7 +50,7 @@ STATE = {
 
 def is_macos() -> bool:
     override = os.environ.get("GPC_SMS_HELPER_ALLOW_NON_MAC", "").strip().lower()
-    return platform.system() == "Darwin" or override in {"1", "true", "yes"}
+    return sys.platform == "darwin" or override in {"1", "true", "yes"}
 
 
 def require_macos() -> None:

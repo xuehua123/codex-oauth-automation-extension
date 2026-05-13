@@ -505,7 +505,7 @@ test('GPC auto checkout only sends access token and API Key', async () => {
   assert.equal(Object.prototype.hasOwnProperty.call(helperPayload, 'pin'), false);
   const statePayload = events.find((event) => event.type === 'set-state')?.payload || {};
   assert.equal(statePayload.gopayHelperTaskId, 'task_auto');
-  assert.equal(statePayload.gopayHelperPhoneMode, 'auto');
+  assert.equal(Object.prototype.hasOwnProperty.call(statePayload, 'gopayHelperPhoneMode'), false);
   assert.equal(statePayload.gopayHelperTaskStatus, 'queued');
   assert.equal(events.find((event) => event.type === 'complete')?.step, 6);
 });
@@ -563,7 +563,7 @@ test('GPC auto checkout keeps running when balance payload omits auto mode permi
   assert.equal(helperPayload.phone_mode, 'auto');
   const statePayload = events.find((event) => event.type === 'set-state')?.payload || {};
   assert.equal(statePayload.gopayHelperTaskId, 'task_auto_unknown_permission');
-  assert.equal(statePayload.gopayHelperPhoneMode, 'auto');
+  assert.equal(Object.prototype.hasOwnProperty.call(statePayload, 'gopayHelperPhoneMode'), false);
   assert.equal(events.find((event) => event.type === 'complete')?.step, 6);
 });
 

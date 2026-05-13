@@ -960,7 +960,7 @@ test('GPC billing auto mode only polls until completed without OTP or PIN submis
   assert.equal(events.logs.some((entry) => entry.message === '步骤 7：GPC 任务状态：等待自动 OTP'), true);
   assert.equal(events.logs.some((entry) => /auto_otp_wait/.test(entry.message)), false);
   assert.equal(events.states.some((state) => state.plusManualConfirmationMethod === 'gopay-otp'), false);
-  assert.equal(events.states.some((state) => state.gopayHelperTaskId === 'task_auto' && state.gopayHelperPhoneMode === 'auto' && state.gopayHelperTaskStatus === 'completed'), true);
+  assert.equal(events.states.some((state) => state.gopayHelperTaskId === 'task_auto' && state.gopayHelperTaskStatus === 'completed'), true);
   assert.equal(events.completed[0].step, 7);
   assert.equal(events.completed[0].payload.plusCheckoutSource, 'gpc-helper');
 });

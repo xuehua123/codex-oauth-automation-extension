@@ -8,17 +8,15 @@
 
 一百五十个号，一个401：
 
-<table>
-  <tr>
-    <td align="center" width="100%">
-      <a href="https://apikey.qzz.io/" target="_blank" rel="noreferrer">
-        <img src="docs/images/交流群.jpg" alt="QQ交流群，便于大家交流" width="100%" />
-      </a><br />
-      <strong><a href="https://apikey.qzz.io/" target="_blank" rel="noreferrer">官网 / QQ交流群入口</a></strong><br />
-      点击进入官网，查看最新地址与交流入口
-    </td>
-  </tr>
-</table>
+<div align="center">
+
+# 交流群请进官网查看
+
+### <a href="https://apikey.qzz.io/" target="_blank" rel="noreferrer">点击进入官网查看最新地址与交流群入口</a>
+
+**最新地址、交流群入口、最新通知，统一以官网为准。**
+
+</div>
 
 ## Star History
 

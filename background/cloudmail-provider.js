@@ -17,12 +17,21 @@
       normalizeCloudMailDomain,
       normalizeCloudMailDomains,
       normalizeCloudMailMailApiMessages,
+      persistRegistrationEmailState = null,
       pickVerificationMessageWithTimeFallback,
       setEmailState = async () => {},
       setPersistentSettings = async () => {},
       sleepWithStop = async () => {},
       throwIfStopped = () => {},
     } = deps;
+
+    async function persistResolvedEmailState(state = null, email, options = {}) {
+      if (typeof persistRegistrationEmailState === 'function') {
+        await persistRegistrationEmailState(state, email, options);
+        return;
+      }
+      await setEmailState(email, options);
+    }
 
     function getCloudMailConfig(state = {}) {
       return {
@@ -185,7 +194,10 @@
           throw err;
         }
       }
-      await setEmailState(address);
+      await persistResolvedEmailState(latestState, address, {
+        source: 'generated:cloudmail',
+        preserveAccountIdentity: Boolean(options?.preserveAccountIdentity),
+      });
       await addLog(`Cloud Mail：已生成 ${address}`, 'ok');
       return address;
     }

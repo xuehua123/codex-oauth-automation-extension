@@ -33,6 +33,7 @@
       rerunStep7ForStep8Recovery,
       reuseOrCreateTab,
       sendToContentScriptResilient,
+      buildRegistrationEmailStateUpdates = null,
       phoneVerificationHelpers = null,
       setState,
       shouldUseCustomRegistrationEmail,
@@ -262,8 +263,15 @@
 
     async function resetStep8AfterEmailInUse(state, visibleStep) {
       const currentEmail = String(state?.email || '').trim();
+      const registrationEmailUpdates = typeof buildRegistrationEmailStateUpdates === 'function'
+        ? buildRegistrationEmailStateUpdates(state, {
+          currentEmail: null,
+          preservePrevious: true,
+          source: 'step8_recovery',
+        })
+        : { email: null };
       await setState({
-        email: null,
+        ...registrationEmailUpdates,
         step8VerificationTargetEmail: '',
         loginVerificationRequestedAt: null,
       });

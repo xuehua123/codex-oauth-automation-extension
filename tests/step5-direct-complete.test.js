@@ -875,3 +875,111 @@ return {
   });
   assert.equal(api.snapshot().recoverCalls, 1);
 });
+
+test('step 5 profile url helper treats about-you as profile page', () => {
+  const api = new Function(`
+${extractFunction('isSignupProfilePageUrl')}
+
+return {
+  run(url) {
+    return isSignupProfilePageUrl(url);
+  },
+};
+`)();
+
+  assert.equal(api.run('https://auth.openai.com/about-you'), true);
+  assert.equal(api.run('https://auth.openai.com/create-account/profile'), true);
+  assert.equal(api.run('https://chatgpt.com/about-you'), false);
+});
+
+test('step 5 recovers about-you auth retry page after profile submit', async () => {
+  const api = new Function(`
+let retryVisible = true;
+let recoverCalls = 0;
+const location = {
+  href: 'https://auth.openai.com/about-you',
+  pathname: '/about-you',
+};
+const document = {
+  querySelector() { return null; },
+  querySelectorAll() { return []; },
+};
+
+function throwIfStopped() {}
+function log() {}
+async function sleep() {}
+async function humanPause() {}
+function simulateClick() {}
+function isVisibleElement() { return true; }
+function isActionEnabled() { return true; }
+function getActionText(el) { return el?.textContent || ''; }
+function getSignupAuthRetryPathPatterns() { return []; }
+function getAuthTimeoutErrorPageState(options) {
+  const matchesAboutYou = Array.isArray(options?.pathPatterns)
+    && options.pathPatterns.some((pattern) => pattern.test(location.pathname));
+  if (!retryVisible || !matchesAboutYou) return null;
+  return {
+    retryEnabled: true,
+    userAlreadyExistsBlocked: false,
+    maxCheckAttemptsBlocked: false,
+  };
+}
+async function recoverCurrentAuthRetryPage() {
+  recoverCalls += 1;
+  retryVisible = false;
+  location.href = 'https://chatgpt.com/';
+  location.pathname = '/';
+}
+function createSignupUserAlreadyExistsError() { return new Error('user already exists'); }
+function createAuthMaxCheckAttemptsError() { return new Error('max_check_attempts'); }
+function getStep5ErrorText() { return ''; }
+function isStep5Ready() { return /^https:\\/\\/auth\\.openai\\.com\\//.test(location.href); }
+function isLikelyLoggedInChatgptHomeUrl() { return /^https:\\/\\/chatgpt\\.com\\//.test(location.href); }
+function isOAuthConsentPage() { return false; }
+function isAddPhonePageReady() { return false; }
+
+${extractFunction('isSignupProfilePageUrl')}
+${getStep5OutcomeBundle()}
+
+return {
+  run() {
+    return waitForStep5SubmitOutcome({ timeoutMs: 1000 });
+  },
+  snapshot() {
+    return { recoverCalls };
+  },
+};
+`)();
+
+  const result = await api.run();
+
+  assert.deepStrictEqual(result, {
+    state: 'logged_in_home',
+    url: 'https://chatgpt.com/',
+  });
+  assert.equal(api.snapshot().recoverCalls, 1);
+});
+
+test('step 5 does not treat unknown auth page as left_profile success', () => {
+  const api = new Function(`
+const location = {
+  href: 'https://auth.openai.com/unexpected-state',
+};
+
+function getStep5AuthRetryPageState() { return null; }
+function isLikelyLoggedInChatgptHomeUrl() { return false; }
+function isOAuthConsentPage() { return false; }
+function isAddPhonePageReady() { return false; }
+function isStep5ProfileStillVisible() { return false; }
+
+${extractFunction('getStep5PostSubmitSuccessState')}
+
+return {
+  run() {
+    return getStep5PostSubmitSuccessState();
+  },
+};
+`)();
+
+  assert.equal(api.run(), null);
+});

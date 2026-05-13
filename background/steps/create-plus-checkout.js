@@ -440,7 +440,6 @@
         gopayHelperTaskStatus: result.taskStatus,
         gopayHelperStatusText: result.statusText,
         gopayHelperRemoteStage: result.remoteStage,
-        gopayHelperPhoneMode: result.phoneMode || normalizeGpcHelperPhoneMode(state?.gopayHelperPhoneMode || state?.phoneMode),
         gopayHelperTaskPayload: result.responsePayload,
         gopayHelperTaskProgressSignature: '',
         gopayHelperTaskProgressAt: 0,

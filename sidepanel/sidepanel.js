@@ -110,6 +110,66 @@ const inputBrowserProxyEnabled = document.getElementById('input-browser-proxy-en
 const rowBrowserProxySpec = document.getElementById('row-browser-proxy-spec');
 const inputBrowserProxySpec = document.getElementById('input-browser-proxy-spec');
 const btnToggleBrowserProxySpec = document.getElementById('btn-toggle-browser-proxy-spec');
+const rowIpProxyEnabled = document.getElementById('row-ip-proxy-enabled');
+const inputIpProxyEnabled = document.getElementById('input-ip-proxy-enabled');
+const btnToggleIpProxySection = document.getElementById('btn-toggle-ip-proxy-section');
+const ipProxyEnabledStatus = document.getElementById('ip-proxy-enabled-status');
+const ipProxyEnabledStatusDot = document.getElementById('ip-proxy-enabled-status-dot');
+const ipProxyEnabledStatusText = document.getElementById('ip-proxy-enabled-status-text');
+const ipProxyEnabledButtons = Array.from(document.querySelectorAll('[data-ip-proxy-enabled]'));
+const rowIpProxyFold = document.getElementById('row-ip-proxy-fold');
+const rowIpProxyService = document.getElementById('row-ip-proxy-service');
+const selectIpProxyService = document.getElementById('select-ip-proxy-service');
+const btnIpProxyServiceLogin = document.getElementById('btn-ip-proxy-service-login');
+const rowIpProxyMode = document.getElementById('row-ip-proxy-mode');
+const ipProxyModeButtons = Array.from(document.querySelectorAll('[data-ip-proxy-mode]'));
+const rowIpProxyLayout = document.getElementById('row-ip-proxy-layout');
+const ipProxyLayout = document.getElementById('ip-proxy-layout');
+const ipProxyApiPanel = document.getElementById('ip-proxy-api-panel');
+const rowIpProxyApiUrl = document.getElementById('row-ip-proxy-api-url');
+const inputIpProxyApiUrl = document.getElementById('input-ip-proxy-api-url');
+const btnToggleIpProxyApiUrl = document.getElementById('btn-toggle-ip-proxy-api-url');
+const rowIpProxyAccountList = document.getElementById('row-ip-proxy-account-list');
+const inputIpProxyAccountList = document.getElementById('input-ip-proxy-account-list');
+const rowIpProxyAccountSessionPrefix = document.getElementById('row-ip-proxy-account-session-prefix');
+const inputIpProxyAccountSessionPrefix = document.getElementById('input-ip-proxy-account-session-prefix');
+const rowIpProxyAccountLifeMinutes = document.getElementById('row-ip-proxy-account-life-minutes');
+const inputIpProxyAccountLifeMinutes = document.getElementById('input-ip-proxy-account-life-minutes');
+const rowIpProxyPoolTargetCount = document.getElementById('row-ip-proxy-pool-target-count');
+const inputIpProxyPoolTargetCount = document.getElementById('input-ip-proxy-pool-target-count');
+const rowIpProxyAutoSyncEnabled = document.getElementById('row-ip-proxy-auto-sync-enabled');
+const inputIpProxyAutoSyncEnabled = document.getElementById('input-ip-proxy-auto-sync-enabled');
+const rowIpProxyAutoSyncInterval = document.getElementById('row-ip-proxy-auto-sync-interval');
+const inputIpProxyAutoSyncIntervalMinutes = document.getElementById('input-ip-proxy-auto-sync-interval-minutes');
+const rowIpProxyHost = document.getElementById('row-ip-proxy-host');
+const inputIpProxyHost = document.getElementById('input-ip-proxy-host');
+const rowIpProxyPort = document.getElementById('row-ip-proxy-port');
+const inputIpProxyPort = document.getElementById('input-ip-proxy-port');
+const rowIpProxyProtocol = document.getElementById('row-ip-proxy-protocol');
+const selectIpProxyProtocol = document.getElementById('select-ip-proxy-protocol');
+const rowIpProxyUsername = document.getElementById('row-ip-proxy-username');
+const inputIpProxyUsername = document.getElementById('input-ip-proxy-username');
+const btnToggleIpProxyUsername = document.getElementById('btn-toggle-ip-proxy-username');
+const rowIpProxyPassword = document.getElementById('row-ip-proxy-password');
+const inputIpProxyPassword = document.getElementById('input-ip-proxy-password');
+const btnToggleIpProxyPassword = document.getElementById('btn-toggle-ip-proxy-password');
+const rowIpProxyRegion = document.getElementById('row-ip-proxy-region');
+const inputIpProxyRegion = document.getElementById('input-ip-proxy-region');
+const rowIpProxyActions = document.getElementById('row-ip-proxy-actions');
+const ipProxyActionButtons = document.getElementById('ip-proxy-action-buttons');
+const ipProxyActionHint = document.getElementById('ip-proxy-action-hint');
+const btnIpProxyRefresh = document.getElementById('btn-ip-proxy-refresh');
+const btnIpProxyNext = document.getElementById('btn-ip-proxy-next');
+const btnIpProxyChange = document.getElementById('btn-ip-proxy-change');
+const btnIpProxyProbe = document.getElementById('btn-ip-proxy-probe');
+const btnIpProxyCheckIp = document.getElementById('btn-ip-proxy-check-ip');
+const ipProxyCurrent = document.getElementById('ip-proxy-current');
+const rowIpProxyRuntimeStatus = document.getElementById('row-ip-proxy-runtime-status');
+const ipProxyRuntimeStatus = document.getElementById('ip-proxy-runtime-status');
+const ipProxyRuntimeDot = document.getElementById('ip-proxy-runtime-dot');
+const ipProxyRuntimeText = document.getElementById('ip-proxy-runtime-text');
+const ipProxyRuntimeDetails = document.getElementById('ip-proxy-runtime-details');
+const ipProxyRuntimeDetailsText = document.getElementById('ip-proxy-runtime-details-text');
 const rowCodex2ApiUrl = document.getElementById('row-codex2api-url');
 const inputCodex2ApiUrl = document.getElementById('input-codex2api-url');
 const rowCodex2ApiAdminKey = document.getElementById('row-codex2api-admin-key');
@@ -3565,12 +3625,7 @@ function collectSettingsPayload() {
       ? selectGpcHelperPhoneMode.value
       : (latestState?.gopayHelperPhoneMode || 'manual')
   );
-  const preserveSelectedGpcAutoMode = typeof shouldPreserveSelectedGpcAutoMode === 'function'
-    ? shouldPreserveSelectedGpcAutoMode(latestState)
-    : false;
-  const effectiveGpcPhoneMode = (!preserveSelectedGpcAutoMode && typeof isGpcAutoModePermissionDenied === 'function' && isGpcAutoModePermissionDenied(latestState))
-    ? 'manual'
-    : selectedGpcPhoneMode;
+  const effectiveGpcPhoneMode = selectedGpcPhoneMode;
   const selectedGpcOtpChannel = normalizeGpcOtpChannelSafe(
     typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel
       ? selectGpcHelperOtpChannel.value
@@ -7558,12 +7613,8 @@ function updatePlusModeUI() {
       : (latestState?.gopayHelperPhoneMode || 'manual')
   );
   const gpcAutoModeDenied = isGpcAutoModePermissionDenied(latestState);
-  const gpcAutoModeEnabled = getGpcHelperAutoModeEnabled(latestState);
-  const preserveSelectedGpcAutoMode = typeof shouldPreserveSelectedGpcAutoMode === 'function'
-    ? shouldPreserveSelectedGpcAutoMode(latestState)
-    : false;
-  const effectiveGpcAutoModeDenied = gpcAutoModeDenied && !preserveSelectedGpcAutoMode;
-  const isGpcAutoMode = !effectiveGpcAutoModeDenied && gpcPhoneMode === GPC_HELPER_PHONE_MODE_AUTO;
+  const isGpcAutoMode = gpcPhoneMode === GPC_HELPER_PHONE_MODE_AUTO;
+  const gpcAutoModeBlocked = isGpcAutoMode && gpcAutoModeDenied;
   const gpcOtpChannel = normalizeGpcOtpChannelValue(
     typeof selectGpcHelperOtpChannel !== 'undefined' && selectGpcHelperOtpChannel
       ? selectGpcHelperOtpChannel.value
@@ -7578,7 +7629,7 @@ function updatePlusModeUI() {
     ? normalizePlusPaymentMethod(selectPlusPaymentMethod.value)
     : method;
   const gpcRowsVisible = enabled && selectedMethod === gpcValue;
-  const canShowGpcModeSelector = gpcRowsVisible && (gpcAutoModeEnabled || !effectiveGpcAutoModeDenied);
+  const canShowGpcModeSelector = gpcRowsVisible;
   const localSmsControlsVisible = gpcRowsVisible && !isGpcAutoMode;
   const effectiveLocalSmsEnabled = !isGpcAutoMode && localSmsEnabled;
   if (typeof selectPlusPaymentMethod !== 'undefined' && selectPlusPaymentMethod) {
@@ -7593,6 +7644,9 @@ function updatePlusModeUI() {
       : method === gopayValue
       ? 'GoPay 印尼订阅链路'
       : 'PayPal 订阅链路';
+  }
+  if (typeof plusPaymentMethodCaption !== 'undefined' && plusPaymentMethodCaption && method === gpcValue && gpcAutoModeBlocked) {
+    plusPaymentMethodCaption.textContent = 'GPC 自动订阅链路（需手动切换）';
   }
   [
     typeof rowPlusPaymentMethod !== 'undefined' ? rowPlusPaymentMethod : null,
@@ -7623,7 +7677,7 @@ function updatePlusModeUI() {
     rowGpcHelperPhoneMode.style.display = canShowGpcModeSelector ? '' : 'none';
   }
   if (typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode) {
-    selectGpcHelperPhoneMode.value = effectiveGpcAutoModeDenied ? GPC_HELPER_PHONE_MODE_MANUAL : gpcPhoneMode;
+    selectGpcHelperPhoneMode.value = gpcPhoneMode;
   }
   [
     typeof rowGpcHelperCountryCode !== 'undefined' ? rowGpcHelperCountryCode : null,
@@ -7929,13 +7983,7 @@ async function ensureGpcApiKeyReadyForStart(options = {}) {
   }
 
   if (selectedMode === GPC_HELPER_PHONE_MODE_AUTO && isGpcAutoModePermissionDenied(balanceState)) {
-    if (typeof selectGpcHelperPhoneMode !== 'undefined' && selectGpcHelperPhoneMode) {
-      selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
-    }
-    syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
-    updatePlusModeUI();
-    await saveSettings({ silent: true, force: true }).catch(() => {});
-    await showGpcStartBlockedDialog('当前 GPC API Key 未开通自动模式，已切回手动模式，不能以自动模式开启任务。');
+    await showGpcStartBlockedDialog('当前 GPC API Key 未开通自动模式，已保留你的当前选择。如需继续，请由你手动切换到手动模式后再开启任务。');
     return false;
   }
 
@@ -10686,6 +10734,7 @@ async function fetchGeneratedEmail(options = {}) {
       source: 'sidepanel',
       payload: {
         generateNew: true,
+        currentEmail: String(inputEmail?.value || '').trim(),
         generator: getSelectedEmailGenerator(),
         mailProvider: selectMailProvider.value,
         mail2925Mode: getSelectedMail2925Mode(),
@@ -12067,10 +12116,7 @@ btnGpcHelperBalance?.addEventListener('click', async () => {
     const selectedModeBeforeBalanceState = getSelectedGpcHelperPhoneMode();
     syncLatestState(nextState);
     if (nextAutoModeDenied && selectedModeBeforeBalanceState === GPC_HELPER_PHONE_MODE_AUTO) {
-      selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
-      syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
-      await saveSettings({ silent: true, force: true }).catch(() => {});
-      showToast('当前 API Key 未开通自动模式，已切回手动模式。', 'warn');
+      showToast('当前 API Key 未开通自动模式，已保留当前选择；如需继续请手动切换到手动模式。', 'warn');
     } else if (nextAutoModeDenied) {
       showToast('GPC 余额已更新，当前 API Key 只能使用手动模式。', 'success');
     } else if (nextAutoModeConfirmed) {
@@ -14144,13 +14190,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message.payload.gopayHelperPhoneMode !== undefined && selectGpcHelperPhoneMode) {
         selectGpcHelperPhoneMode.value = normalizeGpcHelperPhoneModeValue(message.payload.gopayHelperPhoneMode);
-      }
-      if (message.payload.gopayHelperAutoModeEnabled === false
-        && selectGpcHelperPhoneMode?.value === GPC_HELPER_PHONE_MODE_AUTO
-        && isGpcAutoModePermissionDenied(latestState)) {
-        selectGpcHelperPhoneMode.value = GPC_HELPER_PHONE_MODE_MANUAL;
-        syncLatestState({ gopayHelperPhoneMode: GPC_HELPER_PHONE_MODE_MANUAL });
-        showToast('当前 API Key 未开通自动模式，已切回手动模式。', 'warn', 2200);
       }
       if (message.payload.gopayHelperOtpChannel !== undefined && selectGpcHelperOtpChannel) {
         selectGpcHelperOtpChannel.value = normalizeGpcOtpChannelValue(message.payload.gopayHelperOtpChannel);

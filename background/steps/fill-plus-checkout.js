@@ -412,7 +412,6 @@
         gopayHelperTaskId: task.task_id,
         gopayHelperTaskStatus: task.status,
         gopayHelperStatusText: task.status_text,
-        gopayHelperPhoneMode: task.phone_mode,
         gopayHelperRemoteStage: task.remote_stage,
         gopayHelperApiWaitingFor: task.api_waiting_for,
         gopayHelperApiInputDeadlineAt: task.api_input_deadline_at,

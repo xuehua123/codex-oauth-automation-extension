@@ -175,7 +175,7 @@
         if (!['auth.openai.com', 'auth0.openai.com', 'accounts.openai.com'].includes(host)) {
           return false;
         }
-        return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile)(?:[/?#]|$)/i.test(String(parsed.pathname || ''));
+        return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile|about-you)(?:[/?#]|$)/i.test(String(parsed.pathname || ''));
       } catch {
         return false;
       }

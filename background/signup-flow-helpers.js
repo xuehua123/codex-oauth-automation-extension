@@ -18,7 +18,10 @@
       isLuckmailProvider,
       isSignupEmailVerificationPageUrl,
       isSignupPasswordPageUrl,
+      isSignupPhoneVerificationPageUrl = null,
+      isSignupProfilePageUrl = null,
       prepareSignupEntryForLoggedOutState,
+      persistRegistrationEmailState = null,
       reuseOrCreateTab,
       sendToContentScriptResilient,
       setEmailState,
@@ -129,7 +132,7 @@
     function fallbackSignupProfilePageUrl(rawUrl) {
       const parsed = parseUrlSafely(rawUrl);
       if (!parsed) return false;
-      return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile)(?:[/?#]|$)/i.test(parsed.pathname || '');
+      return /\/(?:create-account\/profile|u\/signup\/profile|signup\/profile|about-you)(?:[/?#]|$)/i.test(parsed.pathname || '');
     }
 
     function resolveSignupPostIdentityState(rawUrl) {
@@ -332,12 +335,22 @@
       if (resolvedEmail === state.email && !options?.preserveAccountIdentity) {
         return;
       }
+      const generatedEmailAlreadyPersisted = Boolean(options?.generatedEmailAlreadyPersisted);
+      if (typeof persistRegistrationEmailState === 'function') {
+        if (!generatedEmailAlreadyPersisted) {
+          await persistRegistrationEmailState(state, resolvedEmail, {
+            source: 'flow',
+            preserveAccountIdentity: Boolean(options?.preserveAccountIdentity),
+          });
+        }
+        return;
+      }
       const preservedPhoneIdentity = getPreservedPhoneIdentityForEmailResolution(state, options);
       if (preservedPhoneIdentity && typeof setState === 'function') {
-        await setState({
-          email: resolvedEmail,
-          ...preservedPhoneIdentity,
-        });
+        if (!generatedEmailAlreadyPersisted && resolvedEmail !== state.email) {
+          await setEmailState(resolvedEmail, { source: 'flow' });
+        }
+        await setState(preservedPhoneIdentity);
         return;
       }
       if (resolvedEmail !== state.email) {
@@ -381,7 +394,10 @@
       }
 
       if (!generatedEmailAlreadyPersisted || options?.preserveAccountIdentity) {
-        await persistResolvedSignupEmail(resolvedEmail, state, options);
+        await persistResolvedSignupEmail(resolvedEmail, state, {
+          ...options,
+          generatedEmailAlreadyPersisted,
+        });
       }
 
       return resolvedEmail;

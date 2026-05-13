@@ -783,3 +783,31 @@ test('auto-run does not restart GPC checkout when Plus account has no free-trial
   assert.deepStrictEqual(result.events.steps, [6, 7]);
   assert.equal(result.events.invalidations.length, 0);
 });
+
+test('auto-run does not restart GPC checkout when account already has a ChatGPT subscription', async () => {
+  const plusGpcSteps = {
+    6: { key: 'plus-checkout-create' },
+    7: { key: 'plus-checkout-billing' },
+    10: { key: 'oauth-login' },
+  };
+  const harness = createHarness({
+    startStep: 6,
+    failureStep: 7,
+    failureBudget: 1,
+    failureMessage: 'GPC_TASK_ENDED::该账号已经开通过ChatGPT订阅套餐，不能重复订阅。（checkout_order）',
+    stepDefinitions: plusGpcSteps,
+    finalOAuthChainStartStep: 10,
+    customState: {
+      stepStatuses: { 3: 'completed' },
+      plusPaymentMethod: 'gpc-helper',
+      plusCheckoutSource: 'gpc-helper',
+    },
+  });
+
+  const result = await harness.runAndCaptureError();
+
+  assert.ok(result?.error);
+  assert.deepStrictEqual(result.events.steps, [6, 7]);
+  assert.equal(result.events.invalidations.length, 0);
+  assert.ok(!result.events.logs.some(({ message }) => /回到步骤 6 重新创建 GPC 任务/.test(message)));
+});
