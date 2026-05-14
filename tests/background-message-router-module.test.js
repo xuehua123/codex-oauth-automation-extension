@@ -28,6 +28,20 @@ test('background free reusable phone setter does not depend on module-scoped pho
   assert.match(setterBlock, /maxUses:\s*Math\.max\(1,\s*Math\.floor\(Number\(record\.maxUses\)\s*\|\|\s*3\)\)/);
 });
 
+test('background defines phone activation router callbacks before wiring message router', () => {
+  const source = fs.readFileSync('background.js', 'utf8');
+  const routerStart = source.indexOf('const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter({');
+  const finalizeStart = source.indexOf('async function finalizePhoneActivationAfterSuccessfulFlow');
+  const clearStart = source.indexOf('async function clearFreeReusablePhoneActivation');
+
+  assert.ok(routerStart >= 0, 'expected message router initialization to exist');
+  assert.ok(finalizeStart >= 0, 'expected finalizePhoneActivationAfterSuccessfulFlow to exist');
+  assert.ok(clearStart >= 0, 'expected clearFreeReusablePhoneActivation to exist');
+  assert.ok(finalizeStart < routerStart, 'expected phone activation finalizer before message router wiring');
+  assert.ok(clearStart < routerStart, 'expected free reusable phone clearer before message router wiring');
+  assert.match(source.slice(routerStart, source.indexOf('});', routerStart)), /clearFreeReusablePhoneActivation,\s*[\s\S]*finalizePhoneActivationAfterSuccessfulFlow,/);
+});
+
 test('background free reusable phone setter can recover local HeroSMS activation id by phone number', () => {
   const source = fs.readFileSync('background.js', 'utf8');
   const setterStart = source.indexOf('async function setFreeReusablePhoneActivation');

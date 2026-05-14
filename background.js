@@ -8923,6 +8923,20 @@ async function finalizeIcloudListEntryAfterSuccessfulFlow(state) {
   return { handled: true, updated: true };
 }
 
+async function finalizePhoneActivationAfterSuccessfulFlow(state) {
+  if (typeof phoneVerificationHelpers?.finalizePendingPhoneActivationConfirmation !== 'function') {
+    return null;
+  }
+  return phoneVerificationHelpers.finalizePendingPhoneActivationConfirmation(state);
+}
+
+async function clearFreeReusablePhoneActivation() {
+  await setState({ freeReusablePhoneActivation: null });
+  broadcastDataUpdate({ freeReusablePhoneActivation: null });
+  await addLog('已清除白嫖复用手机号记录。', 'ok');
+  return { ok: true, freeReusablePhoneActivation: null };
+}
+
 function inferHeroSmsCountryFromPhoneNumber(phoneNumber = '') {
   const digits = String(phoneNumber || '').replace(/\D+/g, '');
   if (!digits) {
