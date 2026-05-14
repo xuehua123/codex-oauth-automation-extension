@@ -13298,6 +13298,62 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
 });
+const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.createPhoneVerificationHelpers({
+  addLog,
+  broadcastDataUpdate,
+  DEFAULT_FIVE_SIM_BASE_URL,
+  DEFAULT_FIVE_SIM_COUNTRY_ORDER,
+  DEFAULT_FIVE_SIM_OPERATOR,
+  DEFAULT_FIVE_SIM_PRODUCT,
+  DEFAULT_NEX_SMS_BASE_URL,
+  DEFAULT_NEX_SMS_COUNTRY_ORDER,
+  DEFAULT_NEX_SMS_SERVICE_CODE,
+  DEFAULT_HERO_SMS_BASE_URL,
+  DEFAULT_HERO_SMS_REUSE_ENABLED,
+  DEFAULT_PHONE_CODE_WAIT_SECONDS,
+  DEFAULT_PHONE_CODE_TIMEOUT_WINDOWS,
+  DEFAULT_PHONE_CODE_POLL_INTERVAL_SECONDS,
+  DEFAULT_PHONE_CODE_POLL_ROUNDS,
+  readAuthTabSnapshot,
+  ensureStep8SignupPageReady,
+  navigateAuthTabToAddPhone: async (tabId, options = {}) => {
+    const visibleStep = Math.floor(Number(options.visibleStep || options.step) || 0) || 9;
+    const requestedTimeoutMs = Number(options.timeoutMs);
+    const timeoutMs = Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+      ? requestedTimeoutMs
+      : await getOAuthFlowStepTimeoutMs(30000, {
+        step: visibleStep,
+        actionLabel: 'direct add-phone navigation',
+      });
+    await chrome.tabs.update(tabId, { url: 'https://auth.openai.com/add-phone', active: true });
+    await ensureStep8SignupPageReady(tabId, {
+      timeoutMs,
+      visibleStep,
+      logStepKey: options.logStepKey || 'phone-verification',
+      logMessage: options.logMessage || '步骤 9：认证页已失联，直接打开添加手机号页面后等待脚本恢复。',
+    });
+    return {
+      addPhonePage: true,
+      phoneVerificationPage: false,
+      url: 'https://auth.openai.com/add-phone',
+    };
+  },
+  generateRandomBirthday,
+  generateRandomName,
+  getOAuthFlowRemainingMs,
+  getOAuthFlowStepTimeoutMs,
+  getState,
+  HERO_SMS_COUNTRY_ID,
+  HERO_SMS_COUNTRY_LABEL,
+  HERO_SMS_SERVICE_CODE,
+  HERO_SMS_SERVICE_LABEL,
+  sendToContentScript,
+  sendToContentScriptResilient,
+  setState,
+  sleepWithStop,
+  throwIfStopped,
+  createFiveSimProvider: self.PhoneSmsFiveSimProvider?.createProvider,
+});
 const browserProxyManager = self.MultiPageBackgroundBrowserProxy?.createBrowserProxyManager({
   addLog,
   chrome,

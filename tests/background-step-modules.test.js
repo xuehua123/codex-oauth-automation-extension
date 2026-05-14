@@ -20,3 +20,18 @@ test('background imports step 1~10 modules', () => {
     assert.match(source, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 });
+
+test('background creates phone verification helpers before injecting them into step modules', () => {
+  const source = fs.readFileSync('background.js', 'utf8');
+
+  const helperCreateIndex = source.indexOf(
+    'const phoneVerificationHelpers = self.MultiPageBackgroundPhoneVerification?.createPhoneVerificationHelpers({'
+  );
+  const firstStepInjectionIndex = source.indexOf('  phoneVerificationHelpers,');
+
+  assert.notEqual(helperCreateIndex, -1);
+  assert.notEqual(firstStepInjectionIndex, -1);
+  assert.ok(helperCreateIndex < firstStepInjectionIndex);
+  assert.match(source, /'background\/phone-verification-flow\.js'/);
+  assert.match(source, /createFiveSimProvider: self\.PhoneSmsFiveSimProvider\?\.createProvider/);
+});
