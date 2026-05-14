@@ -9,16 +9,22 @@
       isRecoverableStep9AuthFailure,
       LOG_PREFIX,
       setState,
+      sourceRegistry = null,
       STOP_ERROR_MESSAGE,
     } = deps;
 
     function getSourceLabel(source) {
+      if (sourceRegistry?.getSourceLabel) {
+        return sourceRegistry.getSourceLabel(source);
+      }
       const labels = {
+        'openai-auth': '认证页',
         'gmail-mail': 'Gmail 邮箱',
         'sidepanel': '侧边栏',
         'signup-page': '认证页',
         'vps-panel': 'CPA 面板',
         'sub2api-panel': 'SUB2API 后台',
+        'codex2api-panel': 'Codex2API 后台',
         'qq-mail': 'QQ 邮箱',
         'mail-163': '163 邮箱',
         'mail-2925': '2925 邮箱',
@@ -28,6 +34,10 @@
         'luckmail-api': 'LuckMail（API 购邮）',
         'cloudflare-temp-email': 'Cloudflare Temp Email',
         'cloudmail': 'Cloud Mail',
+        'plus-checkout': 'Plus Checkout',
+        'paypal-flow': 'PayPal 授权页',
+        'gopay-flow': 'GoPay 授权页',
+        'unknown-source': '未知来源',
       };
       return labels[source] || source || '未知来源';
     }

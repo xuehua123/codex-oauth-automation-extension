@@ -73,6 +73,8 @@ const PERSISTED_SETTING_DEFAULTS = {
 };
 const PERSISTED_SETTING_KEYS = Object.keys(PERSISTED_SETTING_DEFAULTS);
 function normalizePanelMode(value) { return value === 'sub2api' ? 'sub2api' : 'cpa'; }
+function normalizeSignupMethod(value = '') { return String(value || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email'; }
+function resolveSignupMethod(state = {}) { return normalizeSignupMethod(state?.signupMethod); }
 function normalizeLocalCpaStep9Mode(value) { return value === 'bypass' ? 'bypass' : 'submit'; }
 function normalizeAutoRunFallbackThreadIntervalMinutes(value) { return Number(value) || 0; }
 function normalizeAutoRunDelayMinutes(value) { return Number(value) || 30; }
@@ -163,6 +165,8 @@ const PERSISTED_SETTING_DEFAULTS = {
 };
 const PERSISTED_SETTING_KEYS = Object.keys(PERSISTED_SETTING_DEFAULTS);
 function normalizePanelMode(value) { return value === 'sub2api' ? 'sub2api' : 'cpa'; }
+function normalizeSignupMethod(value = '') { return String(value || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email'; }
+function resolveSignupMethod(state = {}) { return normalizeSignupMethod(state?.signupMethod); }
 function normalizeLocalCpaStep9Mode(value) { return value === 'bypass' ? 'bypass' : 'submit'; }
 function normalizeAutoRunFallbackThreadIntervalMinutes(value) { return Number(value) || 0; }
 function normalizeAutoRunDelayMinutes(value) { return Number(value) || 30; }

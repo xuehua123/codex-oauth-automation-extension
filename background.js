@@ -1,6 +1,8 @@
 // background.js — Service Worker: orchestration, state, tab management, message routing
 
 importScripts(
+  'shared/source-registry.js',
+  'shared/flow-capabilities.js',
   'managed-alias-utils.js',
   'mail2925-utils.js',
   'paypal-utils.js',
@@ -16,10 +18,14 @@ importScripts(
   'background/paypal-account-store.js',
   'background/ip-proxy-provider-711proxy.js',
   'background/ip-proxy-core.js',
+  'background/sub2api-api.js',
   'background/panel-bridge.js',
   'background/registration-email-state.js',
+  'background/runtime-state.js',
   'background/generated-email-helpers.js',
   'background/signup-flow-helpers.js',
+  'background/mail-rule-registry.js',
+  'flows/openai/mail-rules.js',
   'background/message-router.js',
   'background/verification-flow.js',
   'background/auto-run-controller.js',
@@ -58,16 +64,23 @@ importScripts(
   'content/activation-utils.js'
 );
 
-const NORMAL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({ plusModeEnabled: false }) || [];
+const DEFAULT_ACTIVE_FLOW_ID = 'openai';
+const NORMAL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
+  plusModeEnabled: false,
+}) || [];
 const PLUS_PAYPAL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
   plusModeEnabled: true,
   plusPaymentMethod: 'paypal',
 }) || NORMAL_STEP_DEFINITIONS;
 const PLUS_GOPAY_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
   plusModeEnabled: true,
   plusPaymentMethod: 'gopay',
 }) || PLUS_PAYPAL_STEP_DEFINITIONS;
 const PLUS_GPC_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
   plusModeEnabled: true,
   plusPaymentMethod: 'gpc-helper',
 }) || PLUS_GOPAY_STEP_DEFINITIONS;
@@ -76,7 +89,9 @@ const CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.get
   codex2apiLoginOnlyMode: true,
 }) || NORMAL_STEP_DEFINITIONS.filter((definition) => Number(definition?.id) >= 7);
 const PLUS_STEP_DEFINITIONS = PLUS_PAYPAL_STEP_DEFINITIONS;
-const ALL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getAllSteps?.() || [
+const ALL_STEP_DEFINITIONS = self.MultiPageStepDefinitions?.getAllSteps?.({
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
+}) || [
   ...NORMAL_STEP_DEFINITIONS,
   ...PLUS_PAYPAL_STEP_DEFINITIONS,
   ...PLUS_GOPAY_STEP_DEFINITIONS,
@@ -87,6 +102,7 @@ const STEP_IDS = Array.from(new Set(ALL_STEP_DEFINITIONS
   .map((definition) => Number(definition?.id))
   .filter(Number.isFinite)))
   .sort((left, right) => left - right);
+const DEFAULT_STEP_STATUSES = Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending']));
 const NORMAL_STEP_IDS = NORMAL_STEP_DEFINITIONS
   .map((definition) => Number(definition?.id))
   .filter(Number.isFinite)
@@ -228,6 +244,11 @@ const {
   isRecoverableStep9AuthFailure,
 } = self.MultiPageActivationUtils;
 const registrationEmailStateHelpers = self.MultiPageRegistrationEmailState?.createRegistrationEmailStateHelpers?.() || null;
+const runtimeStateHelpers = self.MultiPageBackgroundRuntimeState?.createRuntimeStateHelpers?.({
+  DEFAULT_ACTIVE_FLOW_ID,
+  defaultStepStatuses: DEFAULT_STEP_STATUSES,
+  getStepDefinitionForState: (step, state) => getStepDefinitionForState(step, state),
+}) || null;
 const DEFAULT_REGISTRATION_EMAIL_STATE = registrationEmailStateHelpers?.DEFAULT_REGISTRATION_EMAIL_STATE || {
   current: '',
   previous: '',
@@ -290,6 +311,20 @@ function getPreservedPhoneIdentity(state = {}) {
     return registrationEmailStateHelpers.getPreservedPhoneIdentity(state);
   }
   return null;
+}
+
+function buildStateViewWithRuntimeState(state = {}) {
+  if (runtimeStateHelpers?.buildStateView) {
+    return runtimeStateHelpers.buildStateView(state);
+  }
+  return state;
+}
+
+function buildStatePatchWithRuntimeState(currentState = {}, updates = {}) {
+  if (runtimeStateHelpers?.buildSessionStatePatch) {
+    return runtimeStateHelpers.buildSessionStatePatch(currentState, updates);
+  }
+  return updates;
 }
 
 function statePatchHasChanges(state = {}, patch = {}) {
@@ -618,10 +653,13 @@ function getSignupMethodForStepDefinitions(state = {}) {
 function getStepDefinitionsForState(state = {}) {
   const rootScope = typeof self !== 'undefined' ? self : globalThis;
   if (rootScope.MultiPageStepDefinitions?.getSteps) {
+    const defaultFlowId = typeof DEFAULT_ACTIVE_FLOW_ID === 'string' ? DEFAULT_ACTIVE_FLOW_ID : 'openai';
+    const activeFlowId = String(state?.activeFlowId || '').trim().toLowerCase() || defaultFlowId;
     const normalizedPanelMode = typeof normalizePanelMode === 'function'
       ? normalizePanelMode(state?.panelMode)
       : String(state?.panelMode || '').trim().toLowerCase();
     const stepOptions = {
+      activeFlowId,
       plusModeEnabled: isPlusModeState(state),
       plusPaymentMethod: normalizePlusPaymentMethod(state?.plusPaymentMethod),
       signupMethod: getSignupMethodForStepDefinitions(state),
@@ -630,7 +668,14 @@ function getStepDefinitionsForState(state = {}) {
       stepOptions.panelMode = normalizedPanelMode || 'cpa';
       stepOptions.codex2apiLoginOnlyMode = Boolean(state?.codex2apiLoginOnlyMode);
     }
-    return rootScope.MultiPageStepDefinitions.getSteps(stepOptions);
+    const definitions = rootScope.MultiPageStepDefinitions.getSteps(stepOptions);
+    if (Array.isArray(definitions)) {
+      return definitions;
+    }
+  }
+  const activeFlowId = String(state?.activeFlowId || '').trim().toLowerCase();
+  if (activeFlowId && activeFlowId !== DEFAULT_ACTIVE_FLOW_ID) {
+    return [];
   }
   if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
@@ -665,12 +710,18 @@ function getStepIdsForState(state = {}) {
 
 function getLastStepIdForState(state = {}) {
   const ids = getStepIdsForState(state);
-  return ids[ids.length - 1] || 10;
+  if (ids.length) {
+    return ids[ids.length - 1];
+  }
+  return String(state?.activeFlowId || '').trim().toLowerCase() === DEFAULT_ACTIVE_FLOW_ID ? 10 : 0;
 }
 
 function getAuthChainStartStepId(state = {}) {
-  if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
-    return FINAL_OAUTH_CHAIN_START_STEP;
+  const authStepId = typeof getStepIdByKeyForState === 'function'
+    ? getStepIdByKeyForState('oauth-login', state)
+    : null;
+  if (Number.isInteger(authStepId) && authStepId > 0) {
+    return authStepId;
   }
   return isPlusModeState(state) ? 10 : FINAL_OAUTH_CHAIN_START_STEP;
 }
@@ -906,8 +957,13 @@ const SETTINGS_EXPORT_FILENAME_PREFIX = 'multipage-settings';
 const STEP6_REGISTRATION_SUCCESS_WAIT_MS = 20000;
 
 const DEFAULT_STATE = {
+  activeFlowId: DEFAULT_ACTIVE_FLOW_ID,
+  activeRunId: '',
+  currentNodeId: '',
+  nodeStatuses: {},
   currentStep: 0, // 当前流程执行到的步骤编号。
-  stepStatuses: Object.fromEntries(STEP_IDS.map((stepId) => [stepId, 'pending'])),
+  stepStatuses: { ...DEFAULT_STEP_STATUSES },
+  runtimeState: runtimeStateHelpers?.buildDefaultRuntimeState?.() || null,
   ...CONTRIBUTION_RUNTIME_DEFAULTS,
   oauthUrl: null, // 运行时抓取到的 OAuth 地址，不要手动预填。
   resolvedSignupMethod: null, // 当前自动轮次冻结后的实际注册方式。
@@ -931,11 +987,13 @@ const DEFAULT_STATE = {
   sub2apiSessionId: null, // SUB2API OpenAI Auth 会话 ID。
   sub2apiOAuthState: null, // SUB2API OpenAI Auth state。
   sub2apiGroupId: null, // SUB2API 目标分组 ID。
+  sub2apiGroupIds: [], // SUB2API 多目标分组 ID。
   sub2apiDraftName: null, // SUB2API 本轮预生成的账号名称。
   sub2apiProxyId: null, // SUB2API 本轮使用的代理 ID。
   codex2apiSessionId: null, // Codex2API OAuth 会话 ID。
   codex2apiOAuthState: null, // Codex2API OAuth state。
   plusCheckoutTabId: null, // Plus checkout / PayPal 标签页 ID。
+  automationWindowId: null, // 当前任务锁定的浏览器窗口 ID，避免新标签页跑到其它窗口。
   plusCheckoutUrl: null, // Plus checkout 运行时短链，不写入持久配置。
   plusCheckoutCountry: 'DE',
   plusCheckoutCurrency: 'EUR',
@@ -1348,7 +1406,81 @@ function normalizeSignupMethod(value = '') {
     : 'email';
 }
 
+function getFlowCapabilityRegistry() {
+  const rootScope = typeof self !== 'undefined' ? self : globalThis;
+  if (typeof flowCapabilityRegistry !== 'undefined' && flowCapabilityRegistry) {
+    return flowCapabilityRegistry;
+  }
+  return rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+    defaultFlowId: typeof DEFAULT_ACTIVE_FLOW_ID === 'string' ? DEFAULT_ACTIVE_FLOW_ID : 'openai',
+  }) || null;
+}
+
+function resolveCurrentFlowCapabilities(state = {}, options = {}) {
+  const registry = getFlowCapabilityRegistry();
+  if (!registry?.resolveSidepanelCapabilities) {
+    return null;
+  }
+  return registry.resolveSidepanelCapabilities({
+    activeFlowId: options?.activeFlowId ?? state?.activeFlowId,
+    panelMode: options?.panelMode ?? state?.panelMode,
+    signupMethod: options?.signupMethod ?? state?.signupMethod,
+    state,
+  });
+}
+
+function validateAutoRunStartState(state = {}, options = {}) {
+  const registry = getFlowCapabilityRegistry();
+  if (!registry?.validateAutoRunStart) {
+    return { ok: true, errors: [] };
+  }
+  return registry.validateAutoRunStart({
+    activeFlowId: options?.activeFlowId ?? state?.activeFlowId,
+    panelMode: options?.panelMode ?? state?.panelMode,
+    signupMethod: options?.signupMethod ?? state?.signupMethod,
+    state,
+  });
+}
+
+function validateModeSwitchState(state = {}, options = {}) {
+  const registry = getFlowCapabilityRegistry();
+  if (!registry?.validateModeSwitch) {
+    return {
+      ok: true,
+      changedKeys: Array.isArray(options?.changedKeys) ? options.changedKeys : [],
+      errors: [],
+      normalizedUpdates: {},
+    };
+  }
+  return registry.validateModeSwitch({
+    activeFlowId: options?.activeFlowId ?? state?.activeFlowId,
+    changedKeys: options?.changedKeys,
+    panelMode: options?.panelMode ?? state?.panelMode,
+    signupMethod: options?.signupMethod ?? state?.signupMethod,
+    state,
+  });
+}
+
 function canUsePhoneSignup(state = {}) {
+  const capabilityState = typeof resolveCurrentFlowCapabilities === 'function'
+    ? resolveCurrentFlowCapabilities(state)
+    : (() => {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      const registry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+        defaultFlowId: typeof DEFAULT_ACTIVE_FLOW_ID === 'string' ? DEFAULT_ACTIVE_FLOW_ID : 'openai',
+      }) || null;
+      return registry?.resolveSidepanelCapabilities
+        ? registry.resolveSidepanelCapabilities({
+          activeFlowId: state?.activeFlowId,
+          panelMode: state?.panelMode,
+          signupMethod: state?.signupMethod,
+          state,
+        })
+        : null;
+    })();
+  if (capabilityState && typeof capabilityState.canUsePhoneSignup === 'boolean') {
+    return capabilityState.canUsePhoneSignup;
+  }
   return Boolean(state?.phoneVerificationEnabled)
     && !Boolean(state?.plusModeEnabled)
     && !Boolean(state?.contributionMode);
@@ -1360,9 +1492,26 @@ function resolveSignupMethod(state = {}) {
     return normalizeSignupMethod(frozenMethod);
   }
   const method = normalizeSignupMethod(state?.signupMethod);
-  return method === SIGNUP_METHOD_PHONE && canUsePhoneSignup(state)
-    ? SIGNUP_METHOD_PHONE
-    : SIGNUP_METHOD_EMAIL;
+  const capabilityState = typeof resolveCurrentFlowCapabilities === 'function'
+    ? resolveCurrentFlowCapabilities(state, { signupMethod: method })
+    : (() => {
+      const rootScope = typeof self !== 'undefined' ? self : globalThis;
+      const registry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+        defaultFlowId: typeof DEFAULT_ACTIVE_FLOW_ID === 'string' ? DEFAULT_ACTIVE_FLOW_ID : 'openai',
+      }) || null;
+      return registry?.resolveSidepanelCapabilities
+        ? registry.resolveSidepanelCapabilities({
+          activeFlowId: state?.activeFlowId,
+          panelMode: state?.panelMode,
+          signupMethod: method,
+          state,
+        })
+        : null;
+    })();
+  if (capabilityState?.effectiveSignupMethod) {
+    return normalizeSignupMethod(capabilityState.effectiveSignupMethod);
+  }
+  return method === SIGNUP_METHOD_PHONE && canUsePhoneSignup(state) ? SIGNUP_METHOD_PHONE : SIGNUP_METHOD_EMAIL;
 }
 
 async function ensureResolvedSignupMethodForRun(options = {}) {
@@ -3242,7 +3391,9 @@ function buildPersistentSettingsPayload(input = {}, options = {}) {
   };
   if (Object.prototype.hasOwnProperty.call(payload, 'phoneVerificationEnabled')
     || Object.prototype.hasOwnProperty.call(payload, 'plusModeEnabled')
-    || Object.prototype.hasOwnProperty.call(payload, 'signupMethod')) {
+    || Object.prototype.hasOwnProperty.call(payload, 'signupMethod')
+    || Object.prototype.hasOwnProperty.call(payload, 'panelMode')
+    || Object.prototype.hasOwnProperty.call(payload, 'activeFlowId')) {
     payload.signupMethod = resolveSignupMethod(nextSignupConstraintState);
   }
   if (payload.ipProxyServiceProfiles) {
@@ -3322,7 +3473,16 @@ async function getState() {
     ? { ...state }
     : {};
   delete sessionState.accountRunHistory;
-  return { ...DEFAULT_STATE, ...persistedSettings, ...persistedAliasState, accountRunHistory, ...sessionState };
+  const stateView = {
+    ...DEFAULT_STATE,
+    ...persistedSettings,
+    ...persistedAliasState,
+    ...sessionState,
+    accountRunHistory,
+  };
+  return typeof buildStateViewWithRuntimeState === 'function'
+    ? buildStateViewWithRuntimeState(stateView)
+    : stateView;
 }
 
 async function initializeSessionStorageAccess() {
@@ -3341,19 +3501,24 @@ async function initializeSessionStorageAccess() {
 async function setState(updates) {
   console.log(LOG_PREFIX, 'storage.set:', JSON.stringify(updates).slice(0, 200));
   if (Object.keys(updates || {}).length > 0) {
-    await chrome.storage.session.set(updates);
+    const currentSessionState = await chrome.storage.session.get(null);
+    const sessionUpdates = buildStatePatchWithRuntimeState({
+      ...DEFAULT_STATE,
+      ...currentSessionState,
+    }, updates);
+    await chrome.storage.session.set(sessionUpdates);
     const persistentAliasUpdates = {};
-    if (Object.prototype.hasOwnProperty.call(updates, 'manualAliasUsage')) {
-      persistentAliasUpdates.manualAliasUsage = normalizeBooleanMap(updates.manualAliasUsage);
+    if (Object.prototype.hasOwnProperty.call(sessionUpdates, 'manualAliasUsage')) {
+      persistentAliasUpdates.manualAliasUsage = normalizeBooleanMap(sessionUpdates.manualAliasUsage);
     }
-    if (Object.prototype.hasOwnProperty.call(updates, 'preservedAliases')) {
-      persistentAliasUpdates.preservedAliases = normalizeBooleanMap(updates.preservedAliases);
+    if (Object.prototype.hasOwnProperty.call(sessionUpdates, 'preservedAliases')) {
+      persistentAliasUpdates.preservedAliases = normalizeBooleanMap(sessionUpdates.preservedAliases);
     }
-    if (Object.prototype.hasOwnProperty.call(updates, 'icloudAliasCache')) {
-      persistentAliasUpdates.icloudAliasCache = normalizeIcloudAliasCacheList(updates.icloudAliasCache);
+    if (Object.prototype.hasOwnProperty.call(sessionUpdates, 'icloudAliasCache')) {
+      persistentAliasUpdates.icloudAliasCache = normalizeIcloudAliasCacheList(sessionUpdates.icloudAliasCache);
     }
-    if (Object.prototype.hasOwnProperty.call(updates, 'icloudAliasCacheAt')) {
-      persistentAliasUpdates.icloudAliasCacheAt = Math.max(0, Number(updates.icloudAliasCacheAt) || 0);
+    if (Object.prototype.hasOwnProperty.call(sessionUpdates, 'icloudAliasCacheAt')) {
+      persistentAliasUpdates.icloudAliasCacheAt = Math.max(0, Number(sessionUpdates.icloudAliasCacheAt) || 0);
     }
     if (Object.keys(persistentAliasUpdates).length > 0) {
       await chrome.storage.local.set(persistentAliasUpdates);
@@ -3410,6 +3575,30 @@ async function importSettingsBundle(configBundle) {
     fillDefaults: true,
     requireKnownKeys: true,
   });
+  const importModeValidation = validateModeSwitchState({
+    ...state,
+    ...importedSettings,
+    resolvedSignupMethod: null,
+  }, {
+    changedKeys: Object.keys(importedSettings),
+  });
+  if (importModeValidation?.normalizedUpdates && Object.keys(importModeValidation.normalizedUpdates).length > 0) {
+    Object.assign(importedSettings, importModeValidation.normalizedUpdates);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(importedSettings, 'phoneVerificationEnabled')
+    || Object.prototype.hasOwnProperty.call(importedSettings, 'plusModeEnabled')
+    || Object.prototype.hasOwnProperty.call(importedSettings, 'signupMethod')
+    || Object.prototype.hasOwnProperty.call(importedSettings, 'panelMode')
+    || Object.prototype.hasOwnProperty.call(importedSettings, 'activeFlowId')
+    || Object.prototype.hasOwnProperty.call(importedSettings, 'contributionMode')
+  ) {
+    importedSettings.signupMethod = resolveSignupMethod({
+      ...state,
+      ...importedSettings,
+      resolvedSignupMethod: null,
+    });
+  }
 
   await setPersistentSettings(importedSettings);
 
@@ -4011,6 +4200,7 @@ async function resetState() {
       'luckmailPreserveTagName',
       'preferredIcloudHost',
       'preferredIcloudAliasSource',
+      'automationWindowId',
       ...CONTRIBUTION_RUNTIME_KEYS,
     ]),
     getPersistedSettings(),
@@ -4055,7 +4245,7 @@ async function resetState() {
     ? prev.freeReusablePhoneActivation
     : null;
   await chrome.storage.session.clear();
-  await chrome.storage.session.set({
+  const resetPayload = buildStatePatchWithRuntimeState({}, {
     ...DEFAULT_STATE,
     ...persistedSettings,
     ...persistedAliasState,
@@ -4083,7 +4273,12 @@ async function resetState() {
     preferredIcloudAliasSource: String(prev.preferredIcloudAliasSource || '').trim().toLowerCase() === 'apple-account'
       ? 'apple-account'
       : '',
+    automationWindowId: Number.isInteger(Number(prev.automationWindowId))
+      && Number(prev.automationWindowId) >= 0
+      ? Number(prev.automationWindowId)
+      : null,
   });
+  await chrome.storage.session.set(resetPayload);
   if (typeof chrome.storage.session.remove === 'function') {
     await chrome.storage.session.remove('accountRunHistory');
   }
@@ -4649,6 +4844,8 @@ async function requestHotmailLocalCode(account, pollPayload = {}) {
         top: 5,
         senderFilters: pollPayload.senderFilters || [],
         subjectFilters: pollPayload.subjectFilters || [],
+        requiredKeywords: pollPayload.requiredKeywords || [],
+        codePatterns: pollPayload.codePatterns || [],
         excludeCodes: pollPayload.excludeCodes || [],
         filterAfterTimestamp: Number(pollPayload.filterAfterTimestamp || 0) || 0,
       }),
@@ -4925,6 +5122,8 @@ async function pollHotmailVerificationCode(step, state, pollPayload = {}) {
         afterTimestamp: pollPayload.filterAfterTimestamp || 0,
         senderFilters: pollPayload.senderFilters || [],
         subjectFilters: pollPayload.subjectFilters || [],
+        requiredKeywords: pollPayload.requiredKeywords || [],
+        codePatterns: pollPayload.codePatterns || [],
         excludeCodes: pollPayload.excludeCodes || [],
       });
       const match = matchResult.match;
@@ -6113,6 +6312,8 @@ async function pollCloudflareTempEmailVerificationCode(step, state, pollPayload 
         afterTimestamp: pollPayload.filterAfterTimestamp || 0,
         senderFilters: pollPayload.senderFilters || [],
         subjectFilters: pollPayload.subjectFilters || [],
+        requiredKeywords: pollPayload.requiredKeywords || [],
+        codePatterns: pollPayload.codePatterns || [],
         excludeCodes: pollPayload.excludeCodes || [],
       });
       const match = matchResult.match;
@@ -6319,7 +6520,7 @@ async function pollIcloudListVerificationCode(step, state, mail, pollPayload = {
 
 async function getOpenIcloudHostPreference() {
   try {
-    const tabs = await chrome.tabs.query({
+    const tabs = await queryTabsInAutomationWindow({
       url: ICLOUD_TAB_URL_PATTERNS,
     });
 
@@ -6572,7 +6773,7 @@ function shouldEmitIcloudTransientLog(key, windowMs = 1500) {
 }
 
 async function openIcloudLoginPage(preferredUrl) {
-  const tabs = await chrome.tabs.query({
+  const tabs = await queryTabsInAutomationWindow({
     url: ICLOUD_TAB_URL_PATTERNS,
   });
   const preferredHost = new URL(preferredUrl).host;
@@ -6596,7 +6797,7 @@ async function openIcloudLoginPage(preferredUrl) {
     return existingAnyIcloudTab.id;
   }
 
-  const created = await chrome.tabs.create({ url: preferredUrl, active: true });
+  const created = await createAutomationTab({ url: preferredUrl, active: true });
   return created.id;
 }
 
@@ -6913,7 +7114,7 @@ async function ensureIcloudMailContextTab(tabs = [], targetHost = '', preferredH
           await chrome.tabs.update(mailTabs[0].id, { url: fallbackMailUrl, active: false });
           await waitForIcloudMailTabReady(mailTabs[0].id, 9000);
           try {
-            return await chrome.tabs.query({
+            return await queryTabsInAutomationWindow({
               url: ICLOUD_TAB_URL_PATTERNS,
             });
           } catch {
@@ -6938,13 +7139,13 @@ async function ensureIcloudMailContextTab(tabs = [], targetHost = '', preferredH
       await chrome.tabs.update(anyIcloudTab.id, { url: fallbackMailUrl, active: false });
       await waitForIcloudMailTabReady(anyIcloudTab.id, 9000);
     } else {
-      const created = await chrome.tabs.create({ url: fallbackMailUrl, active: false });
+      const created = await createAutomationTab({ url: fallbackMailUrl, active: false });
       await waitForIcloudMailTabReady(created?.id, 9000);
     }
   } catch {}
 
   try {
-    return await chrome.tabs.query({
+    return await queryTabsInAutomationWindow({
       url: ICLOUD_TAB_URL_PATTERNS,
     });
   } catch {
@@ -6987,7 +7188,7 @@ async function icloudRequestViaPageContext(method, url, options = {}) {
   const targetHost = configuredHost || normalizeIcloudHost(new URL(url).hostname);
   const preferredHost = configuredHost || normalizeIcloudHost(state?.preferredIcloudHost);
 
-  let tabs = await chrome.tabs.query({
+  let tabs = await queryTabsInAutomationWindow({
     url: ICLOUD_TAB_URL_PATTERNS,
   });
   tabs = await ensureIcloudMailContextTab(tabs, targetHost, preferredHost);
@@ -7698,14 +7899,18 @@ async function resolveIcloudPremiumMailServiceForSetupUrl(setupUrl, state = null
     const pageErrors = [];
     let openTabs = [];
 
-    if (chrome.tabs?.query && chrome.scripting?.executeScript) {
+    if (chrome.scripting?.executeScript) {
       try {
-        openTabs = await chrome.tabs.query({
-          url: [
-            'https://www.icloud.com/*',
-            'https://www.icloud.com.cn/*',
-          ],
-        });
+        openTabs = typeof queryTabsInAutomationWindow === 'function'
+          ? await queryTabsInAutomationWindow({ url: ICLOUD_TAB_URL_PATTERNS })
+          : (chrome.tabs?.query
+              ? await chrome.tabs.query({
+                url: [
+                  'https://www.icloud.com/*',
+                  'https://www.icloud.com.cn/*',
+                ],
+              })
+              : []);
       } catch {}
     }
 
@@ -9095,6 +9300,22 @@ async function getTabId(source) {
   return tabRuntime.getTabId(source);
 }
 
+async function getAutomationWindowId(options = {}) {
+  return tabRuntime.getAutomationWindowId(options);
+}
+
+async function createAutomationTab(createProperties = {}, options = {}) {
+  return tabRuntime.createAutomationTab(createProperties, options);
+}
+
+async function queryTabsInAutomationWindow(queryInfo = {}, options = {}) {
+  return tabRuntime.queryTabsInAutomationWindow(queryInfo, options);
+}
+
+async function isTabInAutomationWindow(tabOrId, options = {}) {
+  return tabRuntime.isTabInAutomationWindow(tabOrId, options);
+}
+
 function parseUrlSafely(rawUrl) {
   if (typeof navigationUtils !== 'undefined' && navigationUtils?.parseUrlSafely) {
     return navigationUtils.parseUrlSafely(rawUrl);
@@ -9174,7 +9395,7 @@ function isSignupEntryHost(hostname = '') {
   if (typeof navigationUtils !== 'undefined' && navigationUtils?.isSignupEntryHost) {
     return navigationUtils.isSignupEntryHost(hostname);
   }
-  return ['chatgpt.com', 'chat.openai.com'].includes(hostname);
+  return ['chatgpt.com', 'www.chatgpt.com', 'chat.openai.com'].includes(hostname);
 }
 
 function isLikelyLoggedInChatgptHomeUrl(rawUrl) {
@@ -9258,6 +9479,7 @@ function matchesSourceUrlFamily(source, candidateUrl, referenceUrl) {
   if (!candidate) return false;
   const reference = parseUrlSafely(referenceUrl);
   switch (source) {
+    case 'openai-auth':
     case 'signup-page':
       return isSignupPageHost(candidate.hostname) || isSignupEntryHost(candidate.hostname);
     case 'duck-mail':
@@ -9268,6 +9490,8 @@ function matchesSourceUrlFamily(source, candidateUrl, referenceUrl) {
       return is163MailHost(candidate.hostname);
     case 'gmail-mail':
       return candidate.hostname === 'mail.google.com';
+    case 'icloud-mail':
+      return candidate.hostname === 'www.icloud.com' || candidate.hostname === 'www.icloud.com.cn';
     case 'inbucket-mail':
       return Boolean(reference) && candidate.origin === reference.origin && candidate.pathname.startsWith('/m/');
     case 'mail-2925':
@@ -9278,9 +9502,22 @@ function matchesSourceUrlFamily(source, candidateUrl, referenceUrl) {
       return Boolean(reference)
         && candidate.origin === reference.origin
         && (candidate.pathname.startsWith('/admin/accounts') || candidate.pathname.startsWith('/login') || candidate.pathname === '/');
+    case 'codex2api-panel':
+      return Boolean(reference)
+        && candidate.origin === reference.origin
+        && (candidate.pathname.startsWith('/admin/accounts') || candidate.pathname === '/admin' || candidate.pathname === '/');
     default:
       return false;
   }
+}
+
+function sourcesMatch(leftSource, rightSource) {
+  if (sourceRegistry?.resolveCanonicalSource) {
+    const left = sourceRegistry.resolveCanonicalSource(leftSource);
+    const right = sourceRegistry.resolveCanonicalSource(rightSource);
+    return Boolean(left && right && left === right);
+  }
+  return String(leftSource || '').trim() === String(rightSource || '').trim();
 }
 
 async function rememberSourceLastUrl(source, url) {
@@ -9363,7 +9600,7 @@ async function ensureContentScriptReadyOnTab(source, tabId, options = {}) {
 
 function isContentScriptReadyPong(source, pong) {
   if (!pong?.ok) return false;
-  if (pong.source && pong.source !== source) return false;
+  if (pong.source && !sourcesMatch(pong.source, source)) return false;
   if (source === 'plus-checkout') {
     return Boolean(pong.plusCheckoutReady);
   }
@@ -9554,11 +9791,13 @@ function getSourceLabel(source) {
     return loggingStatus.getSourceLabel(source);
   }
   const labels = {
+    'openai-auth': '认证页',
     'gmail-mail': 'Gmail 邮箱',
     'sidepanel': '侧边栏',
     'signup-page': '认证页',
     'vps-panel': 'CPA 面板',
     'sub2api-panel': 'SUB2API 后台',
+    'codex2api-panel': 'Codex2API 后台',
     'qq-mail': 'QQ 邮箱',
     'mail-163': '163 邮箱',
     'mail-2925': '2925 邮箱',
@@ -9570,6 +9809,8 @@ function getSourceLabel(source) {
     'cloudmail': 'Cloud Mail',
     'plus-checkout': 'Plus Checkout',
     'paypal-flow': 'PayPal 授权页',
+    'gopay-flow': 'GoPay 授权页',
+    'unknown-source': '未知来源',
   };
   return labels[source] || source || '未知来源';
 }
@@ -9623,10 +9864,16 @@ function getStepFetchNetworkRetryPolicy(step) {
   };
 }
 
+const sourceRegistry = self.MultiPageSourceRegistry?.createSourceRegistry?.() || null;
+const flowCapabilityRegistry = self.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+  defaultFlowId: DEFAULT_ACTIVE_FLOW_ID,
+}) || null;
+
 const navigationUtils = self.MultiPageBackgroundNavigationUtils?.createNavigationUtils({
   DEFAULT_CODEX2API_URL,
   DEFAULT_SUB2API_URL,
   normalizeLocalCpaStep9Mode,
+  sourceRegistry,
 });
 
 const loggingStatus = self.MultiPageBackgroundLoggingStatus?.createLoggingStatus({
@@ -9636,6 +9883,7 @@ const loggingStatus = self.MultiPageBackgroundLoggingStatus?.createLoggingStatus
   isRecoverableStep9AuthFailure,
   LOG_PREFIX,
   setState,
+  sourceRegistry,
   STOP_ERROR_MESSAGE,
 });
 
@@ -9648,6 +9896,7 @@ const tabRuntime = self.MultiPageBackgroundTabRuntime?.createTabRuntime({
   isRetryableContentScriptTransportError,
   LOG_PREFIX,
   matchesSourceUrlFamily,
+  sourceRegistry,
   setState,
   sleepWithStop,
   STOP_ERROR_MESSAGE,
@@ -10022,7 +10271,9 @@ function getDownstreamStateResets(step, state = {}) {
       sub2apiSessionId: null,
       sub2apiOAuthState: null,
       sub2apiGroupId: null,
+      sub2apiGroupIds: [],
       sub2apiDraftName: null,
+      sub2apiProxyId: null,
       codex2apiSessionId: null,
       codex2apiOAuthState: null,
       flowStartTime: null,
@@ -10521,6 +10772,30 @@ async function launchAutoRunTimerPlan(trigger = 'alarm', options = {}) {
       return false;
     }
 
+    if (plan.kind === AUTO_RUN_TIMER_KIND_SCHEDULED_START) {
+      const autoRunStartValidation = typeof validateAutoRunStartState === 'function'
+        ? validateAutoRunStartState(state, { state })
+        : { ok: true, errors: [] };
+      if (autoRunStartValidation?.ok === false) {
+        const validationMessage = autoRunStartValidation.errors?.[0]?.message || '当前设置不支持启动自动流程。';
+        await clearAutoRunTimerAlarm();
+        await broadcastAutoRunStatus('idle', {
+          currentRun: 0,
+          totalRuns: 1,
+          attemptRun: 0,
+        }, {
+          autoRunRoundSummaries: [],
+          autoRunTimerPlan: null,
+          scheduledAutoRunPlan: null,
+        });
+        await addLog(`自动运行计划已取消：${validationMessage}`, 'error');
+        if (trigger === 'manual') {
+          throw new Error(validationMessage);
+        }
+        return false;
+      }
+    }
+
     await clearAutoRunTimerAlarm();
     if (plan.autoRunSessionId && !isCurrentAutoRunSessionId(plan.autoRunSessionId)) {
       return false;
@@ -10899,6 +11174,9 @@ async function handleStepData(step, payload) {
       if (payload.sub2apiSessionId !== undefined) updates.sub2apiSessionId = payload.sub2apiSessionId || null;
       if (payload.sub2apiOAuthState !== undefined) updates.sub2apiOAuthState = payload.sub2apiOAuthState || null;
       if (payload.sub2apiGroupId !== undefined) updates.sub2apiGroupId = payload.sub2apiGroupId || null;
+      if (payload.sub2apiGroupIds !== undefined) updates.sub2apiGroupIds = Array.isArray(payload.sub2apiGroupIds)
+        ? payload.sub2apiGroupIds
+        : [];
       if (payload.sub2apiDraftName !== undefined) updates.sub2apiDraftName = payload.sub2apiDraftName || null;
       if (payload.sub2apiProxyId !== undefined) updates.sub2apiProxyId = payload.sub2apiProxyId || null;
       if (payload.cpaOAuthState !== undefined) updates.cpaOAuthState = payload.cpaOAuthState || null;
@@ -11982,7 +12260,9 @@ const contributionOAuthManager = self.MultiPageBackgroundContributionOAuth?.crea
   broadcastDataUpdate,
   chrome,
   closeLocalhostCallbackTabs,
+  createAutomationTab,
   getState,
+  queryTabsInAutomationWindow,
   setState,
 });
 contributionOAuthManager?.ensureCallbackListeners?.();
@@ -13222,6 +13502,7 @@ const panelBridge = self.MultiPageBackgroundPanelBridge?.createPanelBridge({
   chrome,
   addLog,
   closeConflictingTabsForSource,
+  createAutomationTab,
   ensureContentScriptReadyOnTab,
   getPanelMode,
   normalizeCodex2ApiUrl,
@@ -13270,8 +13551,20 @@ const signupFlowHelpers = self.MultiPageSignupFlowHelpers?.createSignupFlowHelpe
   waitForTabStableComplete,
   waitForTabUrlMatch,
 });
+const openAiMailRules = self.MultiPageOpenAiMailRules?.createOpenAiMailRules({
+  getHotmailVerificationRequestTimestamp,
+  MAIL_2925_VERIFICATION_INTERVAL_MS,
+  MAIL_2925_VERIFICATION_MAX_ATTEMPTS,
+});
+const mailRuleRegistry = self.MultiPageBackgroundMailRuleRegistry?.createMailRuleRegistry({
+  defaultFlowId: DEFAULT_ACTIVE_FLOW_ID,
+  flowBuilders: {
+    openai: openAiMailRules,
+  },
+});
 const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.createVerificationFlowHelpers({
   addLog,
+  buildVerificationPollPayload: mailRuleRegistry?.buildVerificationPollPayload,
   chrome,
   closeConflictingTabsForSource,
   CLOUDFLARE_TEMP_EMAIL_PROVIDER,
@@ -13541,6 +13834,7 @@ const plusCheckoutCreateExecutor = self.MultiPageBackgroundPlusCheckoutCreate?.c
   addLog,
   chrome,
   completeStepFromBackground,
+  createAutomationTab,
   ensureContentScriptReadyOnTabUntilStopped,
   fetch: typeof fetch === 'function' ? fetch.bind(globalThis) : null,
   markCurrentRegistrationAccountUsed,
@@ -13564,6 +13858,7 @@ const plusCheckoutBillingExecutor = self.MultiPageBackgroundPlusCheckoutBilling?
   getTabId,
   isTabAlive,
   markCurrentRegistrationAccountUsed,
+  queryTabsInAutomationWindow,
   sendTabMessageUntilStopped,
   setState,
   sleepWithStop,
@@ -13579,6 +13874,7 @@ const goPayManualConfirmExecutor = self.MultiPageBackgroundGoPayManualConfirm?.c
   getTabId,
   isTabAlive,
   registerTab,
+  createAutomationTab,
   setState,
 });
 const payPalApproveExecutor = self.MultiPageBackgroundPayPalApprove?.createPayPalApproveExecutor({
@@ -13586,6 +13882,7 @@ const payPalApproveExecutor = self.MultiPageBackgroundPayPalApprove?.createPayPa
   chrome,
   completeStepFromBackground,
   ensureContentScriptReadyOnTabUntilStopped,
+  queryTabsInAutomationWindow,
   getTabId,
   isTabAlive,
   sendTabMessageUntilStopped,
@@ -13601,6 +13898,7 @@ const goPayApproveExecutor = self.MultiPageBackgroundGoPayApprove?.createGoPayAp
   ensureContentScriptReadyOnTabUntilStopped,
   getTabId,
   isTabAlive,
+  queryTabsInAutomationWindow,
   registerTab,
   sendTabMessageUntilStopped,
   setState,
@@ -13638,6 +13936,7 @@ const step10Executor = self.MultiPageBackgroundStep10?.createStep10Executor({
   sendToContentScript,
   sendToContentScriptResilient,
   shouldBypassStep9ForLocalCpa,
+  DEFAULT_SUB2API_GROUP_NAME,
   SUB2API_STEP9_RESPONSE_TIMEOUT_MS,
 });
 const stepExecutorsByKey = {
@@ -13721,6 +14020,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   normalizeSignupMethod,
   canUsePhoneSignup,
   resolveSignupMethod,
+  validateAutoRunStart: validateAutoRunStartState,
   getTabId,
   getStopRequested: () => stopRequested,
   handleCloudflareSecurityBlocked,
@@ -13813,6 +14113,10 @@ const plusGpcStepRegistry = buildStepRegistry(PLUS_GPC_STEP_DEFINITIONS);
 const codex2ApiLoginOnlyStepRegistry = buildStepRegistry(CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS);
 
 function getStepRegistryForState(state = {}) {
+  const activeFlowId = String(state?.activeFlowId || DEFAULT_ACTIVE_FLOW_ID).trim().toLowerCase() || DEFAULT_ACTIVE_FLOW_ID;
+  if (activeFlowId !== DEFAULT_ACTIVE_FLOW_ID) {
+    throw new Error(`当前尚未注册 flow=${activeFlowId} 的步骤执行器。`);
+  }
   if (typeof isCodex2ApiLoginOnlyMode === 'function' && isCodex2ApiLoginOnlyMode(state)) {
     return codex2ApiLoginOnlyStepRegistry;
   }

@@ -294,6 +294,58 @@ return {
   assert.equal(api.shouldWarnCpaPhoneSignup('phone', 'cpa'), false);
 });
 
+test('sidepanel phone signup gating can follow the shared flow capability registry', () => {
+  const bundle = [
+    extractFunction('normalizeSignupMethod'),
+    extractFunction('normalizePanelMode'),
+    extractFunction('canSelectPhoneSignupMethod'),
+    extractFunction('shouldWarnCpaPhoneSignup'),
+  ].join('\n');
+
+  const api = new Function(`
+const window = {
+  MultiPageFlowCapabilities: {
+    createFlowCapabilityRegistry() {
+      return {
+        resolveSidepanelCapabilities({ state = {}, panelMode = 'cpa', signupMethod = 'email' } = {}) {
+          const phoneAllowed = String(state?.activeFlowId || '').trim().toLowerCase() === 'openai';
+          return {
+            canSelectPhoneSignup: phoneAllowed,
+            shouldWarnCpaPhoneSignup: phoneAllowed && signupMethod === 'phone' && panelMode === 'cpa',
+          };
+        },
+      };
+    },
+  },
+};
+let latestState = {
+  activeFlowId: 'site-a',
+  contributionMode: false,
+  panelMode: 'cpa',
+};
+const inputPhoneVerificationEnabled = { checked: true };
+const inputPlusModeEnabled = { checked: false };
+function getSelectedPanelMode() { return 'cpa'; }
+function getSelectedSignupMethod() { return 'phone'; }
+function isCpaPhoneSignupPromptDismissed() { return false; }
+${bundle}
+return {
+  canSelectPhoneSignupMethod,
+  shouldWarnCpaPhoneSignup,
+  setFlow(flowId) {
+    latestState.activeFlowId = flowId;
+  },
+};
+`)();
+
+  assert.equal(api.canSelectPhoneSignupMethod(), false);
+  assert.equal(api.shouldWarnCpaPhoneSignup('phone', 'cpa'), false);
+
+  api.setFlow('openai');
+  assert.equal(api.canSelectPhoneSignupMethod(), true);
+  assert.equal(api.shouldWarnCpaPhoneSignup('phone', 'cpa'), true);
+});
+
 test('manual step 3 uses phone identity without requiring registration email', () => {
   const api = new Function(`
 let latestState = { signupMethod: 'phone', phoneVerificationEnabled: true, signupPhoneNumber: '+441111111111', accountIdentifierType: 'phone', accountIdentifier: '+441111111111' };

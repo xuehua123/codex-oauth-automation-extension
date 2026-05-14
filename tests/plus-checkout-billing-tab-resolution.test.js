@@ -82,6 +82,7 @@ function createExecutorHarness({
   fetchImpl = null,
   getAddressSeedForCountry = () => createAddressSeed(),
   getState = null,
+  queryTabsInAutomationWindow = null,
   markCurrentRegistrationAccountUsed = async () => {},
   probeIpProxyExit = null,
   onSetState = null,
@@ -161,6 +162,7 @@ function createExecutorHarness({
     getTabId: async () => null,
     isTabAlive: async () => false,
     markCurrentRegistrationAccountUsed,
+    ...(typeof queryTabsInAutomationWindow === 'function' ? { queryTabsInAutomationWindow } : {}),
     setState: async (updates) => {
       events.states.push(updates);
       if (typeof onSetState === 'function') {
@@ -238,6 +240,38 @@ test('Plus checkout billing uses the current checkout tab when step 6 did not re
   assert.equal(events.completed[0].step, 7);
   assert.equal(events.states.some((updates) => updates.plusCheckoutTabId === checkoutTab.id), true);
   assert.equal(events.logs.some((entry) => /当前已在 Plus Checkout 页面/.test(entry.message)), true);
+});
+
+test('Plus checkout billing searches checkout tabs inside the locked automation window', async () => {
+  const queries = [];
+  const { checkoutTab, executor } = createExecutorHarness({
+    frames: [{ frameId: 0, url: 'https://chatgpt.com/checkout/openai_ie/cs_test' }],
+    queryTabsInAutomationWindow: async (queryInfo) => {
+      queries.push(queryInfo);
+      if (queryInfo?.active) {
+        return [];
+      }
+      if (queryInfo?.url === 'https://chatgpt.com/checkout/*') {
+        return [checkoutTab];
+      }
+      return [];
+    },
+    stateByFrame: {
+      0: {
+        hasPayPal: true,
+        paypalCandidates: [{ tag: 'button', text: 'PayPal' }],
+        billingFieldsVisible: true,
+        hasSubscribeButton: true,
+      },
+    },
+  });
+
+  await executor.executePlusCheckoutBilling({});
+
+  assert.deepEqual(queries, [
+    { active: true, currentWindow: true },
+    { url: 'https://chatgpt.com/checkout/*' },
+  ]);
 });
 
 test('Plus checkout billing sends the billing command to the iframe that contains PayPal', async () => {

@@ -10,6 +10,7 @@
       addLog,
       broadcastDataUpdate,
       chrome,
+      createAutomationTab = null,
       getTabId,
       isTabAlive,
       registerTab,
@@ -48,7 +49,9 @@
         throw new Error('步骤 7：无法自动重新打开 GoPay 订阅页。');
       }
 
-      const tab = await chrome.tabs.create({ url: checkoutUrl, active: true });
+      const tab = typeof createAutomationTab === 'function'
+        ? await createAutomationTab({ url: checkoutUrl, active: true })
+        : await chrome.tabs.create({ url: checkoutUrl, active: true });
       const tabId = Number(tab?.id) || 0;
       if (!tabId) {
         throw new Error('步骤 7：重新打开 GoPay 订阅页失败。');

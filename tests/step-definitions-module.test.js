@@ -17,6 +17,7 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
 
   assert.equal(Array.isArray(steps), true);
   assert.equal(steps.length, 10);
+  assert.equal(steps.every((step) => step.flowId === 'openai'), true);
   assert.deepStrictEqual(
     steps.map((step) => step.order),
     steps.map((step) => step.order).slice().sort((left, right) => left - right)
@@ -69,6 +70,11 @@ test('step definitions module exposes ordered normal and Plus step metadata', ()
   assert.equal(api.getPlusPaymentStepTitle({ plusModeEnabled: true, plusPaymentMethod: 'gopay' }), '');
   assert.deepStrictEqual(api.getStepIds({ plusModeEnabled: true }), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
   assert.equal(api.getLastStepId({ plusModeEnabled: true }), 13);
+  assert.equal(api.hasFlow('openai'), true);
+  assert.equal(api.hasFlow('site-a'), false);
+  assert.deepStrictEqual(api.getRegisteredFlowIds(), ['openai']);
+  assert.deepStrictEqual(api.getSteps({ activeFlowId: 'site-a' }), []);
+  assert.equal(api.getStepById(2, { activeFlowId: 'site-a' }), null);
   assert.equal(plusSteps[5].title, '创建 Plus Checkout');
   assert.equal(plusSteps[7].title, 'PayPal 登录与授权');
 

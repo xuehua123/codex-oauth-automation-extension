@@ -18,6 +18,7 @@ function createExecutor({
   getTabId = async (source) => (source === 'paypal-flow' ? 1 : null),
   isTabAlive = async () => true,
   queryTabs = [],
+  queryTabsInAutomationWindow = null,
 }) {
   const api = loadModule();
   const events = {
@@ -61,6 +62,7 @@ function createExecutor({
     ensureContentScriptReadyOnTabUntilStopped: async () => {},
     getTabId,
     isTabAlive,
+    ...(typeof queryTabsInAutomationWindow === 'function' ? { queryTabsInAutomationWindow } : {}),
     sendTabMessageUntilStopped: async (_tabId, _source, message) => {
       events.messages.push(message.type);
       if (message.type === 'PAYPAL_GET_STATE') {
@@ -404,6 +406,41 @@ test('PayPal approve discovers an already open unregistered PayPal tab', async (
   assert.equal(events.logs.some(({ message }) => /发现 PayPal 页面/.test(message)), true);
   assert.deepEqual(events.completed.map((item) => item.step), [8]);
   assert.equal(events.messages.includes('PAYPAL_CLICK_APPROVE'), true);
+});
+
+test('PayPal approve discovers PayPal tabs through the locked automation window query', async () => {
+  const queries = [];
+  const { executor, events } = createExecutor({
+    pageStates: [
+      { needsLogin: false, approveReady: true },
+    ],
+    submitResults: [],
+    getTabId: async () => null,
+    isTabAlive: async () => false,
+    queryTabsInAutomationWindow: async (queryInfo) => {
+      queries.push(queryInfo);
+      return [
+        {
+          id: 9,
+          active: true,
+          currentWindow: true,
+          url: 'https://www.paypal.com/pay/?token=BA-window',
+        },
+      ];
+    },
+    tabUrls: [
+      'https://www.paypal.com/pay/?token=BA-window',
+    ],
+  });
+
+  await executor.executePayPalApprove({
+    paypalEmail: 'user@example.com',
+    paypalPassword: 'secret',
+  });
+
+  assert.deepEqual(queries, [{}]);
+  assert.deepEqual(events.updatedTabs, [{ tabId: 9, updateInfo: { active: true } }]);
+  assert.deepEqual(events.completed.map((item) => item.step), [8]);
 });
 
 test('PayPal approve auto-detects split email then password pages', async () => {

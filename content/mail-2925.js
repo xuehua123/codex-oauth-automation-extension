@@ -670,7 +670,56 @@ function matchesMailFilters(text, senderFilters, subjectFilters) {
   return senderMatch || subjectMatch;
 }
 
-function extractStrictChatGPTVerificationCode(text) {
+function normalizeRulePatternList(patterns = []) {
+  return Array.isArray(patterns) ? patterns : [];
+}
+
+function extractCodeByRulePatterns(text, patterns = []) {
+  const normalizedText = String(text || '');
+  for (const pattern of normalizeRulePatternList(patterns)) {
+    try {
+      const source = String(pattern?.source || '').trim();
+      if (!source) {
+        continue;
+      }
+      const flags = String(pattern?.flags || '').replace(/[^dgimsuvy]/g, '');
+      const match = normalizedText.match(new RegExp(source, flags));
+      if (!match) {
+        continue;
+      }
+      for (let index = 1; index < match.length; index += 1) {
+        const candidate = String(match[index] || '').trim();
+        if (candidate) {
+          return candidate;
+        }
+      }
+      if (String(match[0] || '').trim()) {
+        return String(match[0] || '').trim();
+      }
+    } catch (_) {
+      // Ignore invalid runtime rule patterns and continue with other candidates.
+    }
+  }
+  return null;
+}
+
+function normalizeTargetEmailHints(hints = [], targetEmail = '') {
+  const normalizedHints = Array.isArray(hints) ? hints : [];
+  const collected = normalizedHints
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedTarget = String(targetEmail || '').trim().toLowerCase();
+  if (normalizedTarget) {
+    collected.push(normalizedTarget);
+    const atIndex = normalizedTarget.indexOf('@');
+    if (atIndex > 0) {
+      collected.push(`${normalizedTarget.slice(0, atIndex)}=${normalizedTarget.slice(atIndex + 1)}`);
+    }
+  }
+  return [...new Set(collected)];
+}
+
+function extractLegacyStrictVerificationCode(text) {
   const normalized = String(text || '');
   const patterns = [
     /your\s+(?:temporary\s+)?chatgpt\s+(?:(?:log-?in|login)\s+)?code\s+is[\s\S]{0,80}?(\d{6})/i,
@@ -742,11 +791,16 @@ function findSafeStandaloneSixDigitCode(text) {
   return null;
 }
 
-function extractVerificationCode(text, strictChatGPTCodeOnly = false) {
-  const strictCode = extractStrictChatGPTVerificationCode(text);
-  if (strictChatGPTCodeOnly) {
-    return strictCode;
+function extractVerificationCode(text, options = {}) {
+  const legacyStrictMode = typeof options === 'boolean' ? options : false;
+  const strictMode = legacyStrictMode || Boolean(options?.strictMode);
+  const codePatterns = legacyStrictMode ? [] : options?.codePatterns;
+  const strictCode = extractLegacyStrictVerificationCode(text);
+  const matchedByRule = extractCodeByRulePatterns(text, codePatterns);
+  if (strictMode) {
+    return matchedByRule || strictCode;
   }
+  if (matchedByRule) return matchedByRule;
   if (strictCode) return strictCode;
 
   const normalized = String(text || '');
@@ -754,11 +808,8 @@ function extractVerificationCode(text, strictChatGPTCodeOnly = false) {
   const matchCn = normalized.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})/);
   if (matchCn) return matchCn[1];
 
-  const matchOpenAiLogin = normalized.match(/(?:chatgpt\s+log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
-  if (matchOpenAiLogin) return matchOpenAiLogin[1];
-
-  const matchChatGPT = normalized.match(/your\s+chatgpt\s+code\s+is\s+(\d{6})/i);
-  if (matchChatGPT) return matchChatGPT[1];
+  const matchLoginCode = normalized.match(/(?:log-?in\s+code|enter\s+this\s+code)[^0-9]{0,24}(\d{6})/i);
+  if (matchLoginCode) return matchLoginCode[1];
 
   const matchEn = normalized.match(/code[:\s]+is[:\s]+(\d{6})|code[:\s]+(\d{6})/i);
   if (matchEn) return matchEn[1] || matchEn[2];
@@ -771,9 +822,9 @@ function extractEmails(text = '') {
   return [...new Set(matches.map((item) => item.toLowerCase()))];
 }
 
-function extractForwardedTargetEmails(text = '') {
+function extractForwardedTargetEmails(text = '', targetEmailHints = []) {
   const normalizedText = String(text || '').toLowerCase();
-  const matches = normalizedText.match(/bounce\+[a-z0-9._%+-]*-([a-z0-9._%+-]+)=([a-z0-9.-]+\.[a-z]{2,})@(?:tm\d*\.openai\.com|em\d+\.tm\.openai\.com)/gi) || [];
+  const matches = normalizedText.match(/bounce\+[a-z0-9._%+-]*-([a-z0-9._%+-]+)=([a-z0-9.-]+\.[a-z]{2,})@[a-z0-9.-]+\.[a-z]{2,}/gi) || [];
   const decoded = matches
     .map((candidate) => {
       const match = String(candidate || '').match(/bounce\+[a-z0-9._%+-]*-([a-z0-9._%+-]+)=([a-z0-9.-]+\.[a-z]{2,})@/i);
@@ -783,7 +834,19 @@ function extractForwardedTargetEmails(text = '') {
       return `${match[1].toLowerCase()}@${match[2].toLowerCase()}`;
     })
     .filter(Boolean);
-  return [...new Set(decoded)];
+  const hinted = normalizeTargetEmailHints(targetEmailHints)
+    .filter((hint) => hint.includes('@') || hint.includes('='))
+    .flatMap((hint) => {
+      if (hint.includes('@')) {
+        return normalizedText.includes(hint) ? [hint] : [];
+      }
+      const match = hint.match(/^([^=]+)=([^=]+)$/);
+      if (!match || !normalizedText.includes(hint)) {
+        return [];
+      }
+      return [`${match[1]}@${match[2]}`];
+    });
+  return [...new Set([...decoded, ...hinted])];
 }
 
 function emailMatchesTarget(candidate, targetEmail) {
@@ -796,19 +859,20 @@ function emailMatchesTarget(candidate, targetEmail) {
   return normalizedCandidate === normalizedTarget;
 }
 
-function getTargetEmailMatchState(text, targetEmail) {
+function getTargetEmailMatchState(text, targetEmail, options = {}) {
   const normalizedTarget = String(targetEmail || '').trim().toLowerCase();
   if (!normalizedTarget) {
     return { matches: true, hasExplicitEmail: false };
   }
 
   const normalizedText = String(text || '').toLowerCase();
-  if (normalizedText.includes(normalizedTarget)) {
+  const targetEmailHints = normalizeTargetEmailHints(options?.targetEmailHints, normalizedTarget);
+  if (targetEmailHints.some((hint) => normalizedText.includes(hint))) {
     return { matches: true, hasExplicitEmail: true };
   }
 
   const extractedEmails = extractEmails(normalizedText);
-  const forwardedTargetEmails = extractForwardedTargetEmails(normalizedText);
+  const forwardedTargetEmails = extractForwardedTargetEmails(normalizedText, targetEmailHints);
   if (!extractedEmails.length) {
     return forwardedTargetEmails.length
       ? {
@@ -1175,14 +1239,15 @@ async function ensureMail2925Session(payload = {}) {
 async function handlePollEmail(step, payload) {
   await ensureSeenCodesSession(step, payload);
   const {
+    codePatterns = [],
     senderFilters,
     subjectFilters,
     maxAttempts,
     intervalMs,
     filterAfterTimestamp = 0,
     excludeCodes = [],
-    strictChatGPTCodeOnly = false,
     targetEmail = '',
+    targetEmailHints = [],
     mail2925MatchTargetEmail = false,
   } = payload || {};
   const excludedCodeSet = new Set(excludeCodes.filter(Boolean));
@@ -1249,21 +1314,25 @@ async function handlePollEmail(step, payload) {
           continue;
         }
         const previewTargetState = mail2925MatchTargetEmail
-          ? getTargetEmailMatchState(previewText, targetEmail)
+          ? getTargetEmailMatchState(previewText, targetEmail, { targetEmailHints })
           : { matches: true, hasExplicitEmail: false };
         if (mail2925MatchTargetEmail && previewTargetState.hasExplicitEmail && !previewTargetState.matches) {
           continue;
         }
 
-        const previewCode = extractVerificationCode(previewText, strictChatGPTCodeOnly);
+        const previewCode = extractVerificationCode(previewText, {
+          codePatterns,
+        });
         const openedText = await openMailAndDeleteAfterRead(item, step);
         const openedTargetState = mail2925MatchTargetEmail
-          ? getTargetEmailMatchState(openedText, targetEmail)
+          ? getTargetEmailMatchState(openedText, targetEmail, { targetEmailHints })
           : { matches: true, hasExplicitEmail: false };
         if (mail2925MatchTargetEmail && openedTargetState.hasExplicitEmail && !openedTargetState.matches) {
           continue;
         }
-        const bodyCode = extractVerificationCode(openedText, strictChatGPTCodeOnly);
+        const bodyCode = extractVerificationCode(openedText, {
+          codePatterns,
+        });
         const candidateCode = bodyCode || previewCode;
 
         if (!candidateCode) {

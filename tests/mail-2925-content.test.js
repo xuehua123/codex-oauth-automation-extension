@@ -319,6 +319,7 @@ return {
 test('handlePollEmail skips explicit mismatched target emails when receive-mode matching is enabled', async () => {
   const bundle = [
     extractFunction('extractEmails'),
+    extractFunction('normalizeTargetEmailHints'),
     extractFunction('extractForwardedTargetEmails'),
     extractFunction('emailMatchesTarget'),
     extractFunction('getTargetEmailMatchState'),
@@ -405,6 +406,34 @@ return {
 
   assert.equal(result.code, '445566');
   assert.deepEqual(api.getReadAndDeleteCalls(), ['mail-2']);
+});
+
+test('getTargetEmailMatchState decodes generic forwarded bounce aliases without OpenAI-specific domains', () => {
+  const bundle = [
+    extractFunction('extractEmails'),
+    extractFunction('normalizeTargetEmailHints'),
+    extractFunction('extractForwardedTargetEmails'),
+    extractFunction('emailMatchesTarget'),
+    extractFunction('getTargetEmailMatchState'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { getTargetEmailMatchState };
+`)();
+
+  const state = api.getTargetEmailMatchState(
+    'Return-Path: <bounce+notice-expected.user=example.com@mailer.forwarder.net>',
+    'expected.user@example.com',
+    {
+      targetEmailHints: ['expected.user@example.com', 'expected.user=example.com'],
+    }
+  );
+
+  assert.deepEqual(state, {
+    matches: true,
+    hasExplicitEmail: true,
+  });
 });
 
 test('handlePollEmail only accepts 2925 mails inside the fixed lookback window', async () => {
@@ -549,7 +578,9 @@ return {
 
 test('extractVerificationCode strict mode matches the new suspicious log-in mail body', () => {
   const bundle = [
-    extractFunction('extractStrictChatGPTVerificationCode'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
+    extractFunction('extractLegacyStrictVerificationCode'),
     extractFunction('isLikelyCompactTimeValue'),
     extractFunction('isLikelyHeaderTimestampCode'),
     extractFunction('findSafeStandaloneSixDigitCode'),
@@ -566,9 +597,36 @@ return { extractVerificationCode };
   assert.equal(api.extractVerificationCode(bodyText, false), '982219');
 });
 
+test('extractVerificationCode supports runtime mail rule patterns', () => {
+  const bundle = [
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
+    extractFunction('extractLegacyStrictVerificationCode'),
+    extractFunction('isLikelyCompactTimeValue'),
+    extractFunction('isLikelyHeaderTimestampCode'),
+    extractFunction('findSafeStandaloneSixDigitCode'),
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = 'System alert\nUse verification pin A-556677 to continue.';
+  assert.equal(
+    api.extractVerificationCode(bodyText, {
+      codePatterns: [{ source: 'pin\\s+A-(\\d{6})', flags: 'i' }],
+    }),
+    '556677'
+  );
+});
+
 test('extractVerificationCode ignores compact header time before fallback code', () => {
   const bundle = [
-    extractFunction('extractStrictChatGPTVerificationCode'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
+    extractFunction('extractLegacyStrictVerificationCode'),
     extractFunction('isLikelyCompactTimeValue'),
     extractFunction('isLikelyHeaderTimestampCode'),
     extractFunction('findSafeStandaloneSixDigitCode'),

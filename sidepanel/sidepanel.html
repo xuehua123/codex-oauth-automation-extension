@@ -118,6 +118,14 @@
   <section id="data-section" data-main-view="run">
     <div id="settings-card" class="data-card">
       <div class="data-row">
+        <span class="data-label">Flow</span>
+        <select id="select-flow" class="data-select" aria-label="Flow 选择">
+          <option value="codex" selected>codex</option>
+          <option value="pending-1" disabled>待添加</option>
+          <option value="pending-2" disabled>待添加</option>
+        </select>
+      </div>
+      <div class="data-row">
         <span class="data-label">来源</span>
         <select id="select-panel-mode" class="data-select">
           <option value="cpa">CPA 面板</option>
@@ -1832,6 +1840,7 @@
   <script src="../icloud-list-utils.js"></script>
   <script src="../hotmail-utils.js"></script>
   <script src="../luckmail-utils.js"></script>
+  <script src="../shared/flow-capabilities.js"></script>
   <script src="../data/step-definitions.js"></script>
   <script src="update-service.js"></script>
   <script src="contribution-content-update-service.js"></script>

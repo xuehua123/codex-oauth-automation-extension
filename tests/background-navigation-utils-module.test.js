@@ -29,6 +29,7 @@ test('navigation utils recognize signup password pages for email and phone signu
   assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/create-account/password'), true);
   assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/log-in/password'), true);
   assert.equal(utils.isSignupPasswordPageUrl('https://auth.openai.com/log-in'), false);
+  assert.equal(utils.isSignupEntryHost('www.chatgpt.com'), true);
 });
 
 test('navigation utils treat 126 mail hosts as part of the shared NetEase mail family', () => {

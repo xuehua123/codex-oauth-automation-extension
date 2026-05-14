@@ -7,6 +7,7 @@
   function createVerificationFlowHelpers(deps = {}) {
     const {
       addLog: rawAddLog = async () => {},
+      buildVerificationPollPayload: externalBuildVerificationPollPayload = null,
       chrome,
       closeConflictingTabsForSource,
       CLOUDFLARE_TEMP_EMAIL_PROVIDER,
@@ -424,27 +425,25 @@
     }
 
     function getVerificationPollPayload(step, state, overrides = {}) {
+      if (typeof externalBuildVerificationPollPayload === 'function') {
+        return externalBuildVerificationPollPayload(step, state, overrides);
+      }
+      const normalizedStep = Number(step) === 4 ? 4 : 8;
       const is2925Provider = state?.mailProvider === '2925';
       const mail2925MatchTargetEmail = is2925Provider
         && String(state?.mail2925Mode || '').trim().toLowerCase() === 'receive';
-      if (step === 4) {
-        return {
-          filterAfterTimestamp: is2925Provider ? 0 : getHotmailVerificationRequestTimestamp(4, state),
-          senderFilters: ['openai', 'noreply', 'verify', 'auth', 'duckduckgo', 'forward'],
-          subjectFilters: ['verify', 'verification', 'code', '验证码', 'confirm'],
-          targetEmail: state.email,
-          mail2925MatchTargetEmail,
-          maxAttempts: is2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5,
-          intervalMs: is2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000,
-          ...overrides,
-        };
-      }
-
       return {
-        filterAfterTimestamp: is2925Provider ? 0 : getHotmailVerificationRequestTimestamp(8, state),
-        senderFilters: ['openai', 'noreply', 'verify', 'auth', 'chatgpt', 'duckduckgo', 'forward'],
-        subjectFilters: ['verify', 'verification', 'code', '验证码', 'confirm', 'login'],
-        targetEmail: String(state?.step8VerificationTargetEmail || '').trim() || state.email,
+        flowId: String(state?.activeFlowId || '').trim(),
+        step: normalizedStep,
+        filterAfterTimestamp: is2925Provider ? 0 : getHotmailVerificationRequestTimestamp(normalizedStep, state),
+        senderFilters: [],
+        subjectFilters: [],
+        requiredKeywords: [],
+        codePatterns: [],
+        targetEmail: normalizedStep === 4
+          ? state.email
+          : (String(state?.step8VerificationTargetEmail || '').trim() || state.email),
+        targetEmailHints: [],
         mail2925MatchTargetEmail,
         maxAttempts: is2925Provider ? MAIL_2925_VERIFICATION_MAX_ATTEMPTS : 5,
         intervalMs: is2925Provider ? MAIL_2925_VERIFICATION_INTERVAL_MS : 3000,

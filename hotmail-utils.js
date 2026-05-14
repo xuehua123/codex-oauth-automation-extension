@@ -32,8 +32,44 @@
       : HOTMAIL_SERVICE_MODE_LOCAL;
   }
 
-  function extractVerificationCode(text) {
+  function normalizeRulePatternList(patterns = []) {
+    return Array.isArray(patterns) ? patterns : [];
+  }
+
+  function extractCodeByRulePatterns(text, patterns = []) {
+    const normalizedText = String(text || '');
+    for (const pattern of normalizeRulePatternList(patterns)) {
+      try {
+        const source = String(pattern?.source || '').trim();
+        if (!source) {
+          continue;
+        }
+        const flags = String(pattern?.flags || '').replace(/[^dgimsuvy]/g, '');
+        const match = normalizedText.match(new RegExp(source, flags));
+        if (!match) {
+          continue;
+        }
+        for (let index = 1; index < match.length; index += 1) {
+          const candidate = String(match[index] || '').trim();
+          if (candidate) {
+            return candidate;
+          }
+        }
+        if (String(match[0] || '').trim()) {
+          return String(match[0] || '').trim();
+        }
+      } catch (_) {
+        // Ignore invalid runtime rule patterns and continue with other candidates.
+      }
+    }
+    return null;
+  }
+
+  function extractVerificationCode(text, options = {}) {
     const source = String(text || '');
+    const matchedByRule = extractCodeByRulePatterns(source, options?.codePatterns);
+    if (matchedByRule) return matchedByRule;
+
     const matchCn = source.match(/(?:代码为|验证码[^0-9]*?)[\s：:]*(\d{6})(?!\d)/i);
     if (matchCn) return matchCn[1];
 
@@ -47,10 +83,17 @@
     return matchStandalone ? matchStandalone[1] : null;
   }
 
-  function extractVerificationCodeFromMessage(message = {}) {
+  function extractVerificationCodeFromMessage(message = {}, options = {}) {
+    const sender = firstNonEmptyString([
+      message?.from?.emailAddress?.address,
+      message?.sender,
+      message?.from,
+    ]);
     const subject = firstNonEmptyString([message?.subject]);
     const preview = firstNonEmptyString([message?.bodyPreview, message?.preview, message?.text]);
-    return extractVerificationCode([subject, preview].filter(Boolean).join(' '));
+    return extractVerificationCode([subject, preview, sender].filter(Boolean).join(' '), {
+      codePatterns: options?.codePatterns,
+    });
   }
 
   function getLatestHotmailMessage(messages) {
@@ -133,6 +176,10 @@
   function messageMatchesFilters(message, filters = {}) {
     const senderFilters = (filters.senderFilters || []).map(normalizeText).filter(Boolean);
     const subjectFilters = (filters.subjectFilters || []).map(normalizeText).filter(Boolean);
+    const requiredKeywords = (filters.requiredKeywords || []).map(normalizeText).filter(Boolean);
+    const hasSenderFilters = senderFilters.length > 0;
+    const hasSubjectFilters = subjectFilters.length > 0;
+    const hasKeywordHints = requiredKeywords.length > 0;
     const afterTimestamp = normalizeTimestamp(filters.afterTimestamp);
     const receivedAt = normalizeTimestamp(message?.receivedDateTime);
     if (afterTimestamp && receivedAt && receivedAt < afterTimestamp) {
@@ -142,21 +189,26 @@
     const sender = normalizeText(message?.from?.emailAddress?.address);
     const subject = normalizeText(message?.subject);
     const preview = String(message?.bodyPreview || '');
-    const combinedText = [subject, preview].filter(Boolean).join(' ');
-    const code = extractVerificationCode(combinedText);
+    const combinedText = [subject, sender, preview].filter(Boolean).join(' ');
+    const code = extractVerificationCode(combinedText, {
+      codePatterns: filters.codePatterns,
+    });
     const excludedCodes = new Set((filters.excludeCodes || []).filter(Boolean));
     if (code && excludedCodes.has(code)) {
       return null;
     }
 
-    const senderMatch = senderFilters.length === 0
-      ? true
-      : senderFilters.some((item) => sender.includes(item) || normalizeText(preview).includes(item));
-    const subjectMatch = subjectFilters.length === 0
-      ? true
-      : subjectFilters.some((item) => subject.includes(item) || normalizeText(preview).includes(item));
+    const senderMatch = hasSenderFilters
+      ? senderFilters.some((item) => sender.includes(item) || normalizeText(preview).includes(item))
+      : false;
+    const subjectMatch = hasSubjectFilters
+      ? subjectFilters.some((item) => subject.includes(item) || normalizeText(preview).includes(item))
+      : false;
+    const keywordMatch = hasKeywordHints
+      ? requiredKeywords.some((item) => normalizeText(combinedText).includes(item))
+      : false;
 
-    if (!senderMatch && !subjectMatch) {
+    if ((hasSenderFilters || hasSubjectFilters || hasKeywordHints) && !senderMatch && !subjectMatch && !keywordMatch) {
       return null;
     }
 

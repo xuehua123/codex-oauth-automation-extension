@@ -21,6 +21,7 @@
       ensureContentScriptReadyOnTabUntilStopped,
       getTabId,
       isTabAlive,
+      queryTabsInAutomationWindow = null,
       registerTab,
       sendTabMessageUntilStopped,
       setState,
@@ -110,7 +111,10 @@
       if (!chrome?.tabs?.query) {
         return 0;
       }
-      const tabs = await chrome.tabs.query({}).catch(() => []);
+      const queryTabs = typeof queryTabsInAutomationWindow === 'function'
+        ? queryTabsInAutomationWindow
+        : (queryInfo) => chrome.tabs.query(queryInfo);
+      const tabs = await queryTabs({}).catch(() => []);
       const candidates = (Array.isArray(tabs) ? tabs : [])
         .filter((tab) => Number.isInteger(tab?.id) && predicate(tab.url || ''));
       if (!candidates.length) {

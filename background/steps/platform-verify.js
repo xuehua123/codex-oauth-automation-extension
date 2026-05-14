@@ -19,8 +19,28 @@
       sendToContentScript,
       sendToContentScriptResilient,
       shouldBypassStep9ForLocalCpa,
+      DEFAULT_SUB2API_GROUP_NAME = 'codex',
       SUB2API_STEP9_RESPONSE_TIMEOUT_MS,
     } = deps;
+
+    let sub2ApiApi = null;
+
+    function getSub2ApiApi() {
+      if (sub2ApiApi) {
+        return sub2ApiApi;
+      }
+      const factory = deps.createSub2ApiApi
+        || self.MultiPageBackgroundSub2ApiApi?.createSub2ApiApi;
+      if (typeof factory !== 'function') {
+        throw new Error('SUB2API 直连接口模块未加载，无法提交回调。');
+      }
+      sub2ApiApi = factory({
+        addLog,
+        normalizeSub2ApiUrl,
+        DEFAULT_SUB2API_GROUP_NAME,
+      });
+      return sub2ApiApi;
+    }
 
     function normalizeString(value = '') {
       return String(value || '').trim();
@@ -346,62 +366,22 @@
       if (!sub2apiUrl) {
         throw new Error('SUB2API URL is not configured. Please fill it in the side panel first.');
       }
-      const injectFiles = ['content/utils.js', 'content/sub2api-panel.js'];
-
-      await addStepLog(visibleStep, '正在打开 SUB2API 后台...');
-
-      let tabId = await getTabId('sub2api-panel');
-      const alive = tabId && await isTabAlive('sub2api-panel');
-
-      if (!alive) {
-        tabId = await reuseOrCreateTab('sub2api-panel', sub2apiUrl, {
-          inject: injectFiles,
-          injectSource: 'sub2api-panel',
-          reloadIfSameUrl: true,
-        });
-      } else {
-        await closeConflictingTabsForSource('sub2api-panel', sub2apiUrl, { excludeTabIds: [tabId] });
-        await chrome.tabs.update(tabId, { active: true });
-        await rememberSourceLastUrl('sub2api-panel', sub2apiUrl);
-      }
-
-      await ensureContentScriptReadyOnTab('sub2api-panel', tabId, {
-        inject: injectFiles,
-        injectSource: 'sub2api-panel',
-      });
-
-      await addStepLog(visibleStep, '正在向 SUB2API 提交回调并创建账号...');
-      const requestMessage = {
-        type: 'EXECUTE_STEP',
-        step: platformVerifyStep,
-        source: 'background',
-        payload: {
-          localhostUrl: state.localhostUrl,
-          visibleStep,
-          sub2apiUrl,
-          sub2apiEmail: state.sub2apiEmail,
-          sub2apiPassword: state.sub2apiPassword,
-          sub2apiGroupName: state.sub2apiGroupName,
-          sub2apiDefaultProxyName: state.sub2apiDefaultProxyName,
-          sub2apiAccountPriority: state.sub2apiAccountPriority,
-          sub2apiProxyId: state.sub2apiProxyId,
-          sub2apiSessionId: state.sub2apiSessionId,
-          sub2apiOAuthState: state.sub2apiOAuthState,
-          sub2apiGroupId: state.sub2apiGroupId,
-          sub2apiGroupIds: state.sub2apiGroupIds,
-          sub2apiDraftName: state.sub2apiDraftName,
-        },
-      };
+      const api = getSub2ApiApi();
       const maxExchangeAttempts = 3;
       let lastError = null;
       for (let attempt = 1; attempt <= maxExchangeAttempts; attempt += 1) {
         try {
-          const result = await sendToContentScript('sub2api-panel', requestMessage, {
-            responseTimeoutMs: SUB2API_STEP9_RESPONSE_TIMEOUT_MS,
+          const result = await api.submitOpenAiCallback({
+            ...state,
+            visibleStep,
+            sub2apiUrl,
+          }, {
+            visibleStep,
+            logLabel: `步骤 ${visibleStep}`,
+            logOptions: { step: visibleStep, stepKey: 'platform-verify' },
+            timeoutMs: SUB2API_STEP9_RESPONSE_TIMEOUT_MS,
           });
-          if (result?.error) {
-            throw new Error(result.error);
-          }
+          await completeStepFromBackground(platformVerifyStep, result);
           return;
         } catch (error) {
           lastError = error;

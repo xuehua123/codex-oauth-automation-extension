@@ -9,6 +9,7 @@ const api = new Function('self', `${source}; return self.MultiPageBackgroundVeri
 function createVerificationFlowTestHelpers(overrides = {}) {
   return api.createVerificationFlowHelpers({
     addLog: async () => {},
+    buildVerificationPollPayload: null,
     chrome: {
       tabs: {
         update: async () => {},
@@ -42,6 +43,42 @@ function createVerificationFlowTestHelpers(overrides = {}) {
     ...overrides,
   });
 }
+
+test('verification flow prefers injected verification poll payload builder when provided', () => {
+  const helpers = createVerificationFlowTestHelpers({
+    buildVerificationPollPayload: (step, state, overrides = {}) => ({
+      flowId: state.activeFlowId || 'openai',
+      ruleId: 'custom-rule',
+      step,
+      senderFilters: ['custom-sender'],
+      subjectFilters: ['custom-subject'],
+      targetEmail: state.email,
+      maxAttempts: 9,
+      intervalMs: 4321,
+      ...overrides,
+    }),
+  });
+
+  assert.deepStrictEqual(
+    helpers.getVerificationPollPayload(4, {
+      activeFlowId: 'openai',
+      email: 'user@example.com',
+    }, {
+      excludeCodes: ['111111'],
+    }),
+    {
+      flowId: 'openai',
+      ruleId: 'custom-rule',
+      step: 4,
+      senderFilters: ['custom-sender'],
+      subjectFilters: ['custom-subject'],
+      targetEmail: 'user@example.com',
+      maxAttempts: 9,
+      intervalMs: 4321,
+      excludeCodes: ['111111'],
+    }
+  );
+});
 
 test('verification flow keeps 2925 polling cadence in the default payload', () => {
   const helpers = api.createVerificationFlowHelpers({

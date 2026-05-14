@@ -205,6 +205,15 @@ test('extractVerificationCode ignores TempMail bounce ids before the actual Open
   );
 });
 
+test('extractVerificationCode supports runtime mail rule patterns', () => {
+  assert.equal(
+    extractVerificationCode('Mailbox notice: use pin A-778899 to continue.', {
+      codePatterns: [{ source: 'pin\\s+A-(\\d{6})', flags: 'i' }],
+    }),
+    '778899'
+  );
+});
+
 test('extractVerificationCodeFromMessage reads code from the latest message subject or preview', () => {
   assert.equal(
     extractVerificationCodeFromMessage({
@@ -241,6 +250,30 @@ test('extractVerificationCodeFromMessage reads code from the latest message subj
     }),
     '472196'
   );
+});
+
+test('pickVerificationMessageWithTimeFallback supports required keyword hints and runtime code patterns', () => {
+  const messages = [
+    {
+      id: 'mail-1',
+      subject: 'Security center',
+      from: { emailAddress: { address: 'alerts@example.com' } },
+      bodyPreview: 'Use pin A-661122 to continue',
+      receivedDateTime: '2026-04-14T10:06:00.000Z',
+    },
+  ];
+
+  const result = pickVerificationMessageWithTimeFallback(messages, {
+    afterTimestamp: 0,
+    senderFilters: [],
+    subjectFilters: [],
+    requiredKeywords: ['security'],
+    codePatterns: [{ source: 'pin\\s+A-(\\d{6})', flags: 'i' }],
+    excludeCodes: [],
+  });
+
+  assert.equal(result.match?.code, '661122');
+  assert.equal(result.usedTimeFallback, false);
 });
 
 test('getHotmailListToggleLabel reflects expanded state and account count', () => {

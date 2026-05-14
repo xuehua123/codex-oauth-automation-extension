@@ -1618,7 +1618,10 @@ async function changeIpProxyExitBySession(options = {}) {
 
 async function probeIpProxyExit(options = {}) {
   const { silent = false } = options;
-  const response = await chrome.runtime.sendMessage({
+  const sendMessage = typeof sendSidepanelMessage === 'function'
+    ? sendSidepanelMessage
+    : (message) => chrome.runtime.sendMessage(message);
+  const response = await sendMessage({
     type: 'PROBE_IP_PROXY_EXIT',
     source: 'sidepanel',
     payload: {},

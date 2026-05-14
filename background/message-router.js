@@ -55,12 +55,66 @@
       getStepIdsForState,
       getLastStepIdForState,
       normalizeSignupMethod = (value = '') => String(value || '').trim().toLowerCase() === 'phone' ? 'phone' : 'email',
-      canUsePhoneSignup = (state = {}) => Boolean(state?.phoneVerificationEnabled)
-        && !Boolean(state?.plusModeEnabled)
-        && !Boolean(state?.contributionMode),
+      canUsePhoneSignup = (state = {}) => {
+        const rootScope = typeof self !== 'undefined' ? self : globalThis;
+        const capabilityRegistry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+          defaultFlowId: 'openai',
+        }) || null;
+        if (capabilityRegistry?.canUsePhoneSignup) {
+          return capabilityRegistry.canUsePhoneSignup(state);
+        }
+        return Boolean(state?.phoneVerificationEnabled)
+          && !Boolean(state?.plusModeEnabled)
+          && !Boolean(state?.contributionMode);
+      },
       resolveSignupMethod = (state = {}) => {
         const method = normalizeSignupMethod(state?.signupMethod);
+        const rootScope = typeof self !== 'undefined' ? self : globalThis;
+        const capabilityRegistry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+          defaultFlowId: 'openai',
+        }) || null;
+        if (capabilityRegistry?.resolveSignupMethod) {
+          return capabilityRegistry.resolveSignupMethod(state, method);
+        }
         return method === 'phone' && canUsePhoneSignup(state) ? 'phone' : 'email';
+      },
+      validateAutoRunStart = (state = {}, options = {}) => {
+        const validationState = options?.state || state;
+        const rootScope = typeof self !== 'undefined' ? self : globalThis;
+        const capabilityRegistry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+          defaultFlowId: 'openai',
+        }) || null;
+        if (!capabilityRegistry?.validateAutoRunStart) {
+          return { ok: true, errors: [] };
+        }
+        return capabilityRegistry.validateAutoRunStart({
+          activeFlowId: options?.activeFlowId ?? validationState?.activeFlowId,
+          panelMode: options?.panelMode ?? validationState?.panelMode,
+          signupMethod: options?.signupMethod ?? validationState?.signupMethod,
+          state: validationState,
+        });
+      },
+      validateModeSwitch = (state = {}, options = {}) => {
+        const validationState = options?.state || state;
+        const rootScope = typeof self !== 'undefined' ? self : globalThis;
+        const capabilityRegistry = rootScope.MultiPageFlowCapabilities?.createFlowCapabilityRegistry?.({
+          defaultFlowId: 'openai',
+        }) || null;
+        if (!capabilityRegistry?.validateModeSwitch) {
+          return {
+            ok: true,
+            changedKeys: Array.isArray(options?.changedKeys) ? options.changedKeys : [],
+            errors: [],
+            normalizedUpdates: {},
+          };
+        }
+        return capabilityRegistry.validateModeSwitch({
+          activeFlowId: options?.activeFlowId ?? validationState?.activeFlowId,
+          changedKeys: options?.changedKeys,
+          panelMode: options?.panelMode ?? validationState?.panelMode,
+          signupMethod: options?.signupMethod ?? validationState?.signupMethod,
+          state: validationState,
+        });
       },
       getTabId,
       getStopRequested,
@@ -218,6 +272,34 @@
         : '';
     }
 
+    function normalizeAutomationWindowId(value) {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const numeric = Number(value);
+      return Number.isInteger(numeric) && numeric >= 0 ? numeric : null;
+    }
+
+    function resolveAutomationWindowIdFromMessage(message = {}, sender = {}) {
+      return normalizeAutomationWindowId(
+        message?.payload?.automationWindowId
+        ?? message?.payload?.windowId
+        ?? message?.automationWindowId
+        ?? message?.windowId
+        ?? sender?.tab?.windowId
+        ?? null
+      );
+    }
+
+    async function lockAutomationWindowFromMessage(message = {}, sender = {}) {
+      const windowId = resolveAutomationWindowIdFromMessage(message, sender);
+      if (windowId === null) {
+        return null;
+      }
+      await setState({ automationWindowId: windowId });
+      return windowId;
+    }
+
     async function syncStepAccountIdentityFromPayload(payload = {}) {
       const identifierType = String(payload?.accountIdentifierType || '').trim().toLowerCase();
       const signupPhoneNumber = resolveSignupPhonePayload(payload);
@@ -361,6 +443,9 @@
         if (payload.sub2apiSessionId !== undefined) updates.sub2apiSessionId = payload.sub2apiSessionId || null;
         if (payload.sub2apiOAuthState !== undefined) updates.sub2apiOAuthState = payload.sub2apiOAuthState || null;
         if (payload.sub2apiGroupId !== undefined) updates.sub2apiGroupId = payload.sub2apiGroupId || null;
+        if (payload.sub2apiGroupIds !== undefined) updates.sub2apiGroupIds = Array.isArray(payload.sub2apiGroupIds)
+          ? payload.sub2apiGroupIds
+          : [];
         if (payload.sub2apiDraftName !== undefined) updates.sub2apiDraftName = payload.sub2apiDraftName || null;
         if (payload.sub2apiProxyId !== undefined) updates.sub2apiProxyId = payload.sub2apiProxyId || null;
         if (payload.cpaOAuthState !== undefined) updates.cpaOAuthState = payload.cpaOAuthState || null;
@@ -868,6 +953,7 @@
         case 'EXECUTE_STEP': {
           clearStopRequest();
           if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
             await ensureManualInteractionAllowed('手动执行步骤');
           }
           const step = message.payload.step;
@@ -895,6 +981,9 @@
 
         case 'AUTO_RUN': {
           clearStopRequest();
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           if (Boolean(message.payload?.contributionMode) && typeof setContributionMode === 'function') {
             await setContributionMode(true);
             if (typeof setState === 'function') {
@@ -907,6 +996,10 @@
             }
           }
           const state = await getState();
+          const autoRunStartValidation = validateAutoRunStart(state, { state });
+          if (autoRunStartValidation?.ok === false) {
+            throw new Error(autoRunStartValidation.errors?.[0]?.message || '当前设置不支持启动自动流程。');
+          }
           if (getPendingAutoRunTimerPlan(state)) {
             throw new Error('已有自动运行倒计时计划，请先取消或立即开始。');
           }
@@ -920,6 +1013,9 @@
 
         case 'SCHEDULE_AUTO_RUN': {
           clearStopRequest();
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           if (Boolean(message.payload?.contributionMode) && typeof setContributionMode === 'function') {
             await setContributionMode(true);
             if (typeof setState === 'function') {
@@ -931,6 +1027,11 @@
               });
             }
           }
+          const state = await getState();
+          const autoRunStartValidation = validateAutoRunStart(state, { state });
+          if (autoRunStartValidation?.ok === false) {
+            throw new Error(autoRunStartValidation.errors?.[0]?.message || '当前设置不支持启动自动流程。');
+          }
           const totalRuns = normalizeRunCount(message.payload?.totalRuns || 1);
           return await scheduleAutoRun(totalRuns, {
             delayMinutes: message.payload?.delayMinutes,
@@ -941,6 +1042,9 @@
 
         case 'START_SCHEDULED_AUTO_RUN_NOW': {
           clearStopRequest();
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           const started = await launchAutoRunTimerPlan('manual', {
             expectedKinds: [AUTO_RUN_TIMER_KIND_SCHEDULED_START],
           });
@@ -960,6 +1064,9 @@
 
         case 'SKIP_AUTO_RUN_COUNTDOWN': {
           clearStopRequest();
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           const skipped = await skipAutoRunCountdown();
           if (!skipped) {
             throw new Error('当前没有可立即开始的倒计时。');
@@ -969,6 +1076,9 @@
 
         case 'RESUME_AUTO_RUN': {
           clearStopRequest();
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           if (message.payload.email) {
             await setEmailState(message.payload.email);
           }
@@ -993,6 +1103,16 @@
           const currentState = await getState();
           const updates = buildPersistentSettingsPayload(message.payload || {});
           const sessionUpdates = buildLuckmailSessionSettingsPayload(message.payload || {});
+          const modeValidation = validateModeSwitch({
+            ...currentState,
+            ...updates,
+            resolvedSignupMethod: null,
+          }, {
+            changedKeys: Object.keys(updates),
+          });
+          if (modeValidation?.normalizedUpdates && Object.keys(modeValidation.normalizedUpdates).length > 0) {
+            Object.assign(updates, modeValidation.normalizedUpdates);
+          }
           const nextSignupState = {
             ...currentState,
             ...updates,
@@ -1002,6 +1122,9 @@
             Object.prototype.hasOwnProperty.call(updates, 'phoneVerificationEnabled')
             || Object.prototype.hasOwnProperty.call(updates, 'plusModeEnabled')
             || Object.prototype.hasOwnProperty.call(updates, 'signupMethod')
+            || Object.prototype.hasOwnProperty.call(updates, 'panelMode')
+            || Object.prototype.hasOwnProperty.call(updates, 'activeFlowId')
+            || Object.prototype.hasOwnProperty.call(updates, 'contributionMode')
           ) {
             updates.signupMethod = resolveSignupMethod(nextSignupState);
           }
@@ -1143,7 +1266,12 @@
               'info'
             );
           }
-          return { ok: true, state: await getState(), proxyRouting };
+          return {
+            ok: true,
+            modeValidation,
+            proxyRouting,
+            state: await getState(),
+          };
         }
 
         case 'REFRESH_GPC_CARD_BALANCE': {
@@ -1205,6 +1333,9 @@
         }
 
         case 'PROBE_IP_PROXY_EXIT': {
+          if (message.source === 'sidepanel') {
+            await lockAutomationWindowFromMessage(message, sender);
+          }
           if (typeof probeIpProxyExit !== 'function') {
             throw new Error('IP 代理出口检测能力尚未接入。');
           }

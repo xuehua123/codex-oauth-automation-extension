@@ -54,6 +54,8 @@ function extractFunction(name) {
 test('readOpenedMailBody falls back to thread detail pane and extracts verification code', () => {
   const bundle = [
     extractFunction('normalizeText'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
     extractFunction('extractVerificationCode'),
     extractFunction('getOpenedMailBodyRoot'),
     extractFunction('readOpenedMailBody'),
@@ -83,6 +85,8 @@ return { readOpenedMailBody, extractVerificationCode };
 
 test('extractVerificationCode matches the new suspicious log-in mail body', () => {
   const bundle = [
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
     extractFunction('extractVerificationCode'),
   ].join('\n');
 
@@ -93,6 +97,27 @@ return { extractVerificationCode };
 
   const bodyText = 'ChatGPT Log-in Code\nWe noticed a suspicious log-in on your account. If that was you, enter this code:\n\n982219';
   assert.equal(api.extractVerificationCode(bodyText), '982219');
+});
+
+test('extractVerificationCode supports runtime mail rule patterns', () => {
+  const bundle = [
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
+    extractFunction('extractVerificationCode'),
+  ].join('\n');
+
+  const api = new Function(`
+${bundle}
+return { extractVerificationCode };
+`)();
+
+  const bodyText = 'Mailbox notice\nUse verification pin A-445566 to continue.';
+  assert.equal(
+    api.extractVerificationCode(bodyText, {
+      codePatterns: [{ source: 'pin\\s+A-(\\d{6})', flags: 'i' }],
+    }),
+    '445566'
+  );
 });
 
 test('readOpenedMailBody ignores conversation list rows when no detail pane is open', () => {
@@ -199,6 +224,8 @@ test('icloud poll session baseline is reused across calls and enables fallback a
     extractFunction('normalizeText'),
     extractFunction('getThreadItemMetadata'),
     extractFunction('buildItemSignature'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
     extractFunction('extractVerificationCode'),
     extractFunction('normalizePollSessionKey'),
     extractFunction('getOrCreatePollSessionBaseline'),
@@ -300,6 +327,8 @@ test('icloud step8 polling finds a visible first-row code immediately', async ()
     extractFunction('normalizeText'),
     extractFunction('getThreadItemMetadata'),
     extractFunction('buildItemSignature'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
     extractFunction('extractVerificationCode'),
     extractFunction('normalizePollSessionKey'),
     extractFunction('getOrCreatePollSessionBaseline'),
@@ -378,6 +407,8 @@ test('icloud step8 visible first-row code still respects excluded codes', async 
     extractFunction('normalizeText'),
     extractFunction('getThreadItemMetadata'),
     extractFunction('buildItemSignature'),
+    extractFunction('normalizeRulePatternList'),
+    extractFunction('extractCodeByRulePatterns'),
     extractFunction('extractVerificationCode'),
     extractFunction('normalizePollSessionKey'),
     extractFunction('getOrCreatePollSessionBaseline'),

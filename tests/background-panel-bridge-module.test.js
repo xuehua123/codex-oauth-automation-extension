@@ -16,10 +16,24 @@ test('panel bridge module exposes a factory', () => {
   assert.equal(typeof api?.createPanelBridge, 'function');
 });
 
-test('panel bridge requests oauth url with step 7 log label payload', () => {
+function loadPanelBridgeWithSub2Api() {
+  const sub2apiSource = fs.readFileSync('background/sub2api-api.js', 'utf8');
   const source = fs.readFileSync('background/panel-bridge.js', 'utf8');
-  assert.match(source, /logStep:\s*7/);
-  assert.doesNotMatch(source, /logStep:\s*6/);
+  return new Function('self', `${sub2apiSource}\n${source}; return self.MultiPageBackgroundPanelBridge;`)({});
+}
+
+function createSub2ApiResponse(payload, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => JSON.stringify(payload),
+  };
+}
+
+test('panel bridge requests SUB2API oauth url via direct API', () => {
+  const source = fs.readFileSync('background/panel-bridge.js', 'utf8');
+  assert.match(source, /generateOpenAiAuthUrl/);
+  assert.doesNotMatch(source, /REQUEST_OAUTH_URL/);
 });
 
 test('panel bridge can request codex2api oauth url via protocol', async () => {
@@ -117,16 +131,63 @@ test('panel bridge can request cpa oauth url via management api', async () => {
   }
 });
 
-test('panel bridge forwards SUB2API account priority when requesting oauth url', async () => {
-  const source = fs.readFileSync('background/panel-bridge.js', 'utf8');
-  const sentMessages = [];
+test('panel bridge can request SUB2API oauth url without opening the admin page', async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchCalls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const parsed = new URL(url);
+    const body = options.body ? JSON.parse(options.body) : null;
+    fetchCalls.push({ path: parsed.pathname, search: parsed.search, method: options.method || 'GET', body });
 
-  const api = new Function('self', `${source}; return self.MultiPageBackgroundPanelBridge;`)({});
+    if (parsed.pathname === '/api/v1/auth/login') {
+      return createSub2ApiResponse({
+        code: 0,
+        data: { access_token: 'admin-token' },
+      });
+    }
+    if (parsed.pathname === '/api/v1/admin/groups/all') {
+      return createSub2ApiResponse({
+        code: 0,
+        data: [{ id: 5, name: 'codex', platform: 'openai' }],
+      });
+    }
+    if (parsed.pathname === '/api/v1/admin/proxies/all') {
+      return createSub2ApiResponse({
+        code: 0,
+        data: [{
+          id: 7,
+          name: 'shadowrocket',
+          protocol: 'socks5',
+          host: '127.0.0.1',
+          port: 1080,
+          status: 'active',
+        }],
+      });
+    }
+    if (parsed.pathname === '/api/v1/admin/openai/generate-auth-url') {
+      return createSub2ApiResponse({
+        code: 0,
+        data: {
+          auth_url: 'https://auth.openai.com/authorize?state=oauth-state',
+          session_id: 'session-123',
+          state: 'oauth-state',
+        },
+      });
+    }
+    return createSub2ApiResponse({ code: 1, message: `unexpected path ${parsed.pathname}` }, 404);
+  };
+
+  const tabCreates = [];
+  const sentMessages = [];
+  const api = loadPanelBridgeWithSub2Api();
   const bridge = api.createPanelBridge({
     addLog: async () => {},
     chrome: {
       tabs: {
-        create: async () => ({ id: 72 }),
+        create: async (payload) => {
+          tabCreates.push(payload);
+          return { id: 72 };
+        },
       },
     },
     closeConflictingTabsForSource: async () => {},
@@ -137,11 +198,7 @@ test('panel bridge forwards SUB2API account priority when requesting oauth url',
     rememberSourceLastUrl: async () => {},
     sendToContentScript: async (sourceName, message, options) => {
       sentMessages.push({ sourceName, message, options });
-      return {
-        oauthUrl: 'https://auth.openai.com/authorize?state=oauth-state',
-        sub2apiSessionId: 'session-123',
-        sub2apiOAuthState: 'oauth-state',
-      };
+      return {};
     },
     sendToContentScriptResilient: async () => ({}),
     waitForTabUrlFamily: async () => ({ id: 72 }),
@@ -149,16 +206,30 @@ test('panel bridge forwards SUB2API account priority when requesting oauth url',
     SUB2API_STEP1_RESPONSE_TIMEOUT_MS: 90000,
   });
 
-  await bridge.requestOAuthUrlFromPanel({
-    panelMode: 'sub2api',
-    sub2apiUrl: 'https://sub.example/admin/accounts',
-    sub2apiEmail: 'admin@example.com',
-    sub2apiPassword: 'secret',
-    sub2apiGroupName: 'codex',
-    sub2apiAccountPriority: 3,
-  }, { logLabel: '步骤 7' });
+  try {
+    const result = await bridge.requestOAuthUrlFromPanel({
+      panelMode: 'sub2api',
+      sub2apiUrl: 'https://sub.example/admin/accounts',
+      sub2apiEmail: 'admin@example.com',
+      sub2apiPassword: 'secret',
+      sub2apiGroupName: 'codex',
+      sub2apiDefaultProxyName: 'shadowrocket',
+    }, { logLabel: '步骤 7' });
 
-  assert.equal(sentMessages.length, 1);
-  assert.equal(sentMessages[0].sourceName, 'sub2api-panel');
-  assert.equal(sentMessages[0].message.payload.sub2apiAccountPriority, 3);
+    const generateCall = fetchCalls.find((call) => call.path === '/api/v1/admin/openai/generate-auth-url');
+    assert.equal(tabCreates.length, 0);
+    assert.equal(sentMessages.length, 0);
+    assert.equal(generateCall.body.proxy_id, 7);
+    assert.deepStrictEqual(result, {
+      oauthUrl: 'https://auth.openai.com/authorize?state=oauth-state',
+      sub2apiSessionId: 'session-123',
+      sub2apiOAuthState: 'oauth-state',
+      sub2apiGroupId: 5,
+      sub2apiGroupIds: [5],
+      sub2apiDraftName: result.sub2apiDraftName,
+      sub2apiProxyId: 7,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

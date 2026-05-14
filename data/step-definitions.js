@@ -1,6 +1,7 @@
 (function attachStepDefinitions(root, factory) {
   root.MultiPageStepDefinitions = factory();
 })(typeof self !== 'undefined' ? self : globalThis, function createStepDefinitionsModule() {
+  const DEFAULT_ACTIVE_FLOW_ID = 'openai';
   const PLUS_PAYMENT_METHOD_PAYPAL = 'paypal';
   const PLUS_PAYMENT_METHOD_GOPAY = 'gopay';
   const PLUS_PAYMENT_METHOD_GPC_HELPER = 'gpc-helper';
@@ -111,11 +112,20 @@
       : SIGNUP_METHOD_EMAIL;
   }
 
+  function normalizeActiveFlowId(value = '', fallback = DEFAULT_ACTIVE_FLOW_ID) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized) {
+      return normalized;
+    }
+    const fallbackValue = String(fallback || '').trim().toLowerCase();
+    return fallbackValue || DEFAULT_ACTIVE_FLOW_ID;
+  }
+
   function getResolvedSignupMethod(options = {}) {
     return normalizeSignupMethod(options?.resolvedSignupMethod || options?.signupMethod);
   }
 
-  function getModeStepDefinitions(options = {}) {
+  function getOpenAiModeStepDefinitions(options = {}) {
     if (isCodex2ApiLoginOnlyModeEnabled(options)) {
       return CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS;
     }
@@ -129,20 +139,20 @@
     return paymentMethod === PLUS_PAYMENT_METHOD_GOPAY ? PLUS_GOPAY_STEP_DEFINITIONS : PLUS_PAYPAL_STEP_DEFINITIONS;
   }
 
-  function getPlusPaymentStepTitle(options = {}) {
+  function getOpenAiPlusPaymentStepTitle(options = {}) {
     if (!isPlusModeEnabled(options)) {
       return '';
     }
-    const paymentStep = getModeStepDefinitions({
+    const paymentStep = getOpenAiModeStepDefinitions({
       ...options,
       plusModeEnabled: true,
     }).find((step) => step.key === PLUS_PAYMENT_STEP_KEY);
     return paymentStep?.title || '';
   }
 
-  function getResolvedStepTitle(step = {}, options = {}) {
+  function getOpenAiResolvedStepTitle(step = {}, options = {}) {
     if (isPlusModeEnabled(options) && step.key === PLUS_PAYMENT_STEP_KEY) {
-      return getPlusPaymentStepTitle(options) || step.title;
+      return getOpenAiPlusPaymentStepTitle(options) || step.title;
     }
     const signupMethod = getResolvedSignupMethod(options);
     if (signupMethod === SIGNUP_METHOD_PHONE && PHONE_SIGNUP_TITLE_OVERRIDES[step.key]) {
@@ -151,38 +161,84 @@
     return step.title;
   }
 
-  function cloneSteps(steps = [], options = {}) {
+  const FLOW_DEFINITION_BUILDERS = Object.freeze({
+    openai: {
+      getAllSteps() {
+        const keyed = new Map();
+        for (const step of [
+          ...NORMAL_STEP_DEFINITIONS,
+          ...PLUS_PAYPAL_STEP_DEFINITIONS,
+          ...PLUS_GOPAY_STEP_DEFINITIONS,
+          ...PLUS_GPC_STEP_DEFINITIONS,
+          ...CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS,
+        ]) {
+          keyed.set(`${step.id}:${step.key}`, step);
+        }
+        return Array.from(keyed.values()).sort((left, right) => {
+          const leftOrder = Number.isFinite(left.order) ? left.order : left.id;
+          const rightOrder = Number.isFinite(right.order) ? right.order : right.id;
+          if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+          return left.id - right.id;
+        });
+      },
+      getModeStepDefinitions: getOpenAiModeStepDefinitions,
+      getPlusPaymentStepTitle: getOpenAiPlusPaymentStepTitle,
+      resolveStepTitle: getOpenAiResolvedStepTitle,
+    },
+  });
+
+  function hasFlow(flowId) {
+    const normalizedFlowId = normalizeActiveFlowId(flowId, '');
+    return Boolean(normalizedFlowId && FLOW_DEFINITION_BUILDERS[normalizedFlowId]);
+  }
+
+  function getRegisteredFlowIds() {
+    return Object.keys(FLOW_DEFINITION_BUILDERS);
+  }
+
+  function getFlowDefinitionBuilder(options = {}) {
+    const flowId = normalizeActiveFlowId(options?.activeFlowId, DEFAULT_ACTIVE_FLOW_ID);
+    return {
+      flowId,
+      builder: FLOW_DEFINITION_BUILDERS[flowId] || null,
+    };
+  }
+
+  function cloneSteps(steps = [], options = {}, flowId = DEFAULT_ACTIVE_FLOW_ID) {
+    const { builder } = getFlowDefinitionBuilder({ activeFlowId: flowId });
     return steps.map((step) => ({
       ...step,
-      title: getResolvedStepTitle(step, options),
+      flowId,
+      title: builder?.resolveStepTitle ? builder.resolveStepTitle(step, options) : step.title,
     }));
   }
 
   function getSteps(options = {}) {
-    return cloneSteps(getModeStepDefinitions(options), options);
+    const { flowId, builder } = getFlowDefinitionBuilder(options);
+    if (!builder?.getModeStepDefinitions) {
+      return [];
+    }
+    return cloneSteps(builder.getModeStepDefinitions(options), options, flowId);
   }
 
-  function getAllSteps() {
-    const keyed = new Map();
-    for (const step of [
-      ...NORMAL_STEP_DEFINITIONS,
-      ...PLUS_PAYPAL_STEP_DEFINITIONS,
-      ...PLUS_GOPAY_STEP_DEFINITIONS,
-      ...PLUS_GPC_STEP_DEFINITIONS,
-      ...CODEX2API_LOGIN_ONLY_STEP_DEFINITIONS,
-    ]) {
-      keyed.set(`${step.id}:${step.key}`, step);
+  function getAllSteps(options = {}) {
+    const { flowId, builder } = getFlowDefinitionBuilder(options);
+    if (!builder?.getAllSteps) {
+      return [];
     }
-    return cloneSteps(Array.from(keyed.values()).sort((left, right) => {
-      const leftOrder = Number.isFinite(left.order) ? left.order : left.id;
-      const rightOrder = Number.isFinite(right.order) ? right.order : right.id;
-      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
-      return left.id - right.id;
-    }));
+    return cloneSteps(builder.getAllSteps(options), options, flowId);
+  }
+
+  function getPlusPaymentStepTitle(options = {}) {
+    const { builder } = getFlowDefinitionBuilder(options);
+    if (!builder?.getPlusPaymentStepTitle) {
+      return '';
+    }
+    return builder.getPlusPaymentStepTitle(options);
   }
 
   function getStepIds(options = {}) {
-    return getModeStepDefinitions(options)
+    return getSteps(options)
       .map((step) => Number(step.id))
       .filter(Number.isFinite)
       .sort((left, right) => left - right);
@@ -195,11 +251,16 @@
 
   function getStepById(id, options = {}) {
     const numericId = Number(id);
-    const match = getModeStepDefinitions(options).find((step) => step.id === numericId);
-    return match ? cloneSteps([match], options)[0] : null;
+    const { flowId, builder } = getFlowDefinitionBuilder(options);
+    if (!builder?.getModeStepDefinitions) {
+      return null;
+    }
+    const match = builder.getModeStepDefinitions(options).find((step) => step.id === numericId);
+    return match ? cloneSteps([match], options, flowId)[0] : null;
   }
 
   return {
+    DEFAULT_ACTIVE_FLOW_ID,
     STEP_DEFINITIONS: NORMAL_STEP_DEFINITIONS,
     NORMAL_STEP_DEFINITIONS,
     PLUS_STEP_DEFINITIONS: PLUS_PAYPAL_STEP_DEFINITIONS,
@@ -212,11 +273,14 @@
     getAllSteps,
     getLastStepId,
     getPlusPaymentStepTitle,
+    getRegisteredFlowIds,
     getStepById,
     getStepIds,
     getSteps,
     isCodex2ApiLoginOnlyModeEnabled,
+    hasFlow,
     isPlusModeEnabled,
+    normalizeActiveFlowId,
     normalizePanelMode,
     normalizePlusPaymentMethod,
     normalizeSignupMethod,

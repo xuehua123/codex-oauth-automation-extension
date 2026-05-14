@@ -16,6 +16,7 @@
       addLog: rawAddLog = async () => {},
       chrome,
       completeStepFromBackground,
+      createAutomationTab = null,
       ensureContentScriptReadyOnTabUntilStopped,
       fetch: fetchImpl = null,
       registerTab,
@@ -63,7 +64,9 @@
     }
 
     async function openFreshChatGptTabForCheckoutCreate() {
-      const tab = await chrome.tabs.create({ url: PLUS_CHECKOUT_ENTRY_URL, active: true });
+      const tab = typeof createAutomationTab === 'function'
+        ? await createAutomationTab({ url: PLUS_CHECKOUT_ENTRY_URL, active: true })
+        : await chrome.tabs.create({ url: PLUS_CHECKOUT_ENTRY_URL, active: true });
       const tabId = Number(tab?.id);
       if (!Number.isInteger(tabId)) {
         throw new Error('步骤 6：打开 ChatGPT 页面失败，无法创建订阅页。');

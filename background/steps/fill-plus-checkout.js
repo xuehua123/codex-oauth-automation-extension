@@ -88,6 +88,7 @@
       getTabId,
       isTabAlive,
       markCurrentRegistrationAccountUsed,
+      queryTabsInAutomationWindow = null,
       setState,
       sleepWithStop,
       waitForTabCompleteUntilStopped,
@@ -1364,13 +1365,16 @@
         return null;
       }
 
-      const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+      const queryTabs = typeof queryTabsInAutomationWindow === 'function'
+        ? queryTabsInAutomationWindow
+        : (queryInfo) => chrome.tabs.query(queryInfo);
+      const activeTabs = await queryTabs({ active: true, currentWindow: true }).catch(() => []);
       const activeCheckoutTab = activeTabs.find((tab) => Number.isInteger(tab?.id) && isPlusCheckoutUrl(tab.url));
       if (activeCheckoutTab) {
         return activeCheckoutTab.id;
       }
 
-      const checkoutTabs = await chrome.tabs.query({ url: 'https://chatgpt.com/checkout/*' }).catch(() => []);
+      const checkoutTabs = await queryTabs({ url: 'https://chatgpt.com/checkout/*' }).catch(() => []);
       const checkoutTab = checkoutTabs.find((tab) => Number.isInteger(tab?.id) && isPlusCheckoutUrl(tab.url));
       return checkoutTab?.id || null;
     }

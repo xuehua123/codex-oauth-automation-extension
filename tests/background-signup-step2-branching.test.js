@@ -442,7 +442,12 @@ test('step 2 waits for the existing signup tab to settle before probing the entr
         update: async () => {
           events.push('tab-update');
         },
-        get: async () => ({ url: 'https://chatgpt.com/' }),
+        get: async () => ({ id: 17, windowId: 91, url: 'https://chatgpt.com/' }),
+      },
+      windows: {
+        update: async () => {
+          throw new Error('step 2 must not focus or raise the automation window');
+        },
       },
     },
     completeStepFromBackground: async (step, payload) => {
@@ -565,6 +570,16 @@ test('signup flow helper waits for the signup entry tab to settle for step 2 bef
       logs.push({ message, level, meta });
     },
     buildGeneratedAliasEmail: () => '',
+    chrome: {
+      tabs: {
+        get: async () => ({ id: 23, windowId: 92, url: 'https://chatgpt.com/' }),
+      },
+      windows: {
+        update: async () => {
+          throw new Error('signup entry helper must not focus or raise the automation window');
+        },
+      },
+    },
     ensureContentScriptReadyOnTab: async () => {
       events.push('content-ready');
     },

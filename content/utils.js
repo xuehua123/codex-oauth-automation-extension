@@ -7,8 +7,16 @@ function detectScriptSource({
   url = '',
   hostname = '',
 } = {}) {
+  const sourceRegistry = globalThis?.MultiPageSourceRegistry?.createSourceRegistry?.();
+  if (sourceRegistry?.detectSourceFromLocation) {
+    return sourceRegistry.detectSourceFromLocation({
+      injectedSource,
+      url,
+      hostname,
+    });
+  }
   if (injectedSource) return injectedSource;
-  if (url.includes('auth0.openai.com') || url.includes('auth.openai.com') || url.includes('accounts.openai.com')) return 'signup-page';
+  if (url.includes('auth0.openai.com') || url.includes('auth.openai.com') || url.includes('accounts.openai.com')) return 'openai-auth';
   if (hostname === 'mail.qq.com' || hostname === 'wx.mail.qq.com') return 'qq-mail';
   if (
     hostname === 'mail.163.com'
@@ -22,8 +30,7 @@ function detectScriptSource({
   if (url.includes('duckduckgo.com/email/settings/autofill')) return 'duck-mail';
   if (url.includes('chatgpt.com')) return 'chatgpt';
   if (url.includes("2925.com")) return "mail-2925";
-  // VPS panel — detected dynamically since URL is configurable
-  return 'vps-panel';
+  return 'unknown-source';
 }
 
 const SCRIPT_SOURCE = (() => {
@@ -294,6 +301,10 @@ function log(message, level = 'info', options = {}) {
  * Report that this content script is loaded and ready.
  */
 function reportReady() {
+  if (getRuntimeScriptSource() === 'unknown-source') {
+    console.warn(LOG_PREFIX, 'skip CONTENT_SCRIPT_READY for unknown source');
+    return;
+  }
   console.log(LOG_PREFIX, '内容脚本已就绪');
   const message = {
     type: 'CONTENT_SCRIPT_READY',
@@ -439,6 +450,10 @@ async function humanPause(min = 250, max = 850) {
 }
 
 function shouldReportReadyForFrame(source, isChildFrame) {
+  const sourceRegistry = globalThis?.MultiPageSourceRegistry?.createSourceRegistry?.();
+  if (sourceRegistry?.shouldReportReadyForFrame) {
+    return sourceRegistry.shouldReportReadyForFrame(source, isChildFrame);
+  }
   if (!isChildFrame) return true;
   return ![
     'qq-mail',
@@ -447,6 +462,7 @@ function shouldReportReadyForFrame(source, isChildFrame) {
     'mail-2925',
     'inbucket-mail',
     'plus-checkout',
+    'unknown-source',
   ].includes(source);
 }
 

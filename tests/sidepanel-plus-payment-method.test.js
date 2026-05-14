@@ -109,11 +109,12 @@ return {
   assert.deepEqual(api.calls[0], {
     type: 'getSteps',
     options: {
+      activeFlowId: 'openai',
+      panelMode: 'cpa',
+      codex2apiLoginOnlyMode: false,
       plusModeEnabled: true,
       plusPaymentMethod: 'gopay',
       signupMethod: 'email',
-      panelMode: 'cpa',
-      codex2apiLoginOnlyMode: false,
     },
   });
   assert.deepEqual(api.calls[1], { type: 'render', stepIds: [7] });
@@ -124,6 +125,15 @@ test('sidepanel normalizeSignupMethod stays independent from signup constants du
   assert.doesNotMatch(source, /SIGNUP_METHOD_(PHONE|EMAIL)/);
 });
 
+test('sidepanel initializes latestState before bootstrapping shared step definitions', () => {
+  const latestStateIndex = sidepanelSource.indexOf('let latestState = null;');
+  const bootstrapIndex = sidepanelSource.indexOf('let stepDefinitions = getStepDefinitionsForMode(');
+
+  assert.notEqual(latestStateIndex, -1);
+  assert.notEqual(bootstrapIndex, -1);
+  assert.ok(latestStateIndex < bootstrapIndex);
+});
+
 test('sidepanel signup method UI syncs shared step definitions with the selected signup method', () => {
   const source = extractFunction('updateSignupMethodUI');
   assert.match(source, /syncStepDefinitionsForMode\(/);
@@ -132,8 +142,9 @@ test('sidepanel signup method UI syncs shared step definitions with the selected
 
 test('sidepanel applies restored signup method when rebuilding shared step definitions on load', () => {
   const source = extractFunction('applySettingsState');
-  assert.match(source, /syncStepDefinitionsForMode\(\s*state\?\.panelMode,\s*Boolean\(state\?\.codex2apiLoginOnlyMode\),\s*Boolean\(state\?\.plusModeEnabled\),\s*state\?\.plusPaymentMethod,/);
-  assert.match(source, /signupMethod:\s*state\?\.signupMethod/);
+  assert.match(source, /resolveStepDefinitionCapabilityState\(state/);
+  assert.match(source, /syncStepDefinitionsForMode\(\s*state\?\.panelMode,\s*Boolean\(state\?\.codex2apiLoginOnlyMode\),\s*stepDefinitionState\.plusModeEnabled,\s*state\?\.plusPaymentMethod,/);
+  assert.match(source, /signupMethod:\s*stepDefinitionState\.signupMethod/);
 });
 
 test('sidepanel Plus UI hides PayPal account selector while GoPay is selected', () => {
@@ -171,6 +182,62 @@ return { updatePlusModeUI, selectPlusPaymentMethod, rowPayPalAccount };
   api.selectPlusPaymentMethod.value = 'paypal';
   api.updatePlusModeUI();
   assert.equal(api.rowPayPalAccount.style.display, '');
+});
+
+test('sidepanel Plus UI can hide Plus controls when the shared flow capability registry disables them', () => {
+  const bundle = [
+    extractFunction('normalizePlusPaymentMethod'),
+    extractFunction('getSelectedPlusPaymentMethod'),
+    extractFunction('normalizeGpcHelperPhoneModeValue'),
+    extractFunction('getGpcHelperAutoModeEnabled'),
+    extractFunction('normalizeGpcAutoModePermissionValue'),
+    extractFunction('getGpcAutoModePermissionFromPayload'),
+    extractFunction('shouldPreserveSelectedGpcAutoMode'),
+    extractFunction('hasGpcAutoModePermissionField'),
+    extractFunction('isGpcAutoModePermissionDenied'),
+    extractFunction('normalizeGpcOtpChannelValue'),
+    extractFunction('updatePlusModeUI'),
+  ].join('\n');
+
+  const api = new Function(`
+const window = {
+  MultiPageFlowCapabilities: {
+    createFlowCapabilityRegistry() {
+      return {
+        resolveSidepanelCapabilities() {
+          return {
+            canShowPlusSettings: false,
+            runtimeLocks: { plusModeEnabled: false },
+          };
+        },
+      };
+    },
+  },
+};
+let latestState = { plusPaymentMethod: 'paypal' };
+const inputPlusModeEnabled = { checked: true };
+const rowPlusMode = { style: { display: '' } };
+const selectPlusPaymentMethod = { value: 'paypal', style: { display: '' } };
+const rowPlusPaymentMethod = { style: { display: '' } };
+const rowPayPalAccount = { style: { display: '' } };
+const GPC_HELPER_PHONE_MODE_AUTO = 'auto';
+const GPC_HELPER_PHONE_MODE_MANUAL = 'manual';
+${bundle}
+return {
+  rowPlusMode,
+  rowPlusPaymentMethod,
+  rowPayPalAccount,
+  selectPlusPaymentMethod,
+  updatePlusModeUI,
+};
+`)();
+
+  api.updatePlusModeUI();
+
+  assert.equal(api.rowPlusMode.style.display, 'none');
+  assert.equal(api.rowPlusPaymentMethod.style.display, 'none');
+  assert.equal(api.rowPayPalAccount.style.display, 'none');
+  assert.equal(api.selectPlusPaymentMethod.style.display, 'none');
 });
 
 test('sidepanel step definitions keep GPC helper mode distinct', () => {
@@ -221,11 +288,12 @@ return {
   assert.deepEqual(api.calls[0], {
     type: 'getSteps',
     options: {
+      activeFlowId: 'openai',
+      panelMode: 'cpa',
+      codex2apiLoginOnlyMode: false,
       plusModeEnabled: true,
       plusPaymentMethod: 'gpc-helper',
       signupMethod: 'email',
-      panelMode: 'cpa',
-      codex2apiLoginOnlyMode: false,
     },
   });
 });

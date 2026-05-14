@@ -80,72 +80,14 @@ test('platform verify module supports codex2api protocol callback exchange', asy
   }
 });
 
-test('platform verify retries transient SUB2API oauth/token exchange errors before failing', async () => {
+test('platform verify retries transient SUB2API oauth/token exchange errors before succeeding', async () => {
   const source = fs.readFileSync('background/steps/platform-verify.js', 'utf8');
   const api = new Function('self', `${source}; return self.MultiPageBackgroundStep10;`)({});
 
   const logs = [];
   const attempts = [];
   let callCount = 0;
-  const executor = api.createStep10Executor({
-    addLog: async (message, level = 'info') => {
-      logs.push({ message, level });
-    },
-    chrome: {
-      tabs: {
-        update: async () => {},
-      },
-    },
-    closeConflictingTabsForSource: async () => {},
-    completeStepFromBackground: async () => {},
-    ensureContentScriptReadyOnTab: async () => {},
-    getPanelMode: () => 'sub2api',
-    getTabId: async () => 12,
-    isLocalhostOAuthCallbackUrl: (value) => String(value || '').includes('/auth/callback?code='),
-    isTabAlive: async () => true,
-    normalizeCodex2ApiUrl: (value) => value,
-    normalizeSub2ApiUrl: () => 'https://sub2api.example.com/admin/accounts',
-    rememberSourceLastUrl: async () => {},
-    reuseOrCreateTab: async () => 12,
-    sendToContentScript: async (_source, message) => {
-      attempts.push(message.type);
-      callCount += 1;
-      if (callCount === 1) {
-        return {
-          error: 'request failed: Post "https://auth.openai.com/oauth/token": unexpected EOF',
-        };
-      }
-      return { ok: true };
-    },
-    sendToContentScriptResilient: async () => ({}),
-    shouldBypassStep9ForLocalCpa: () => false,
-    SUB2API_STEP9_RESPONSE_TIMEOUT_MS: 120000,
-  });
-
-  await executor.executeStep10({
-    panelMode: 'sub2api',
-    localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
-    sub2apiUrl: 'https://sub2api.example.com/admin/accounts',
-    sub2apiEmail: 'flow@example.com',
-    sub2apiPassword: 'secret',
-    sub2apiSessionId: 'session-123',
-    sub2apiOAuthState: 'oauth-state',
-  });
-
-  assert.equal(callCount, 2);
-  assert.deepStrictEqual(attempts, ['EXECUTE_STEP', 'EXECUTE_STEP']);
-  assert.equal(
-    logs.some((entry) => /临时网络波动/.test(entry.message) && entry.level === 'warn'),
-    true
-  );
-});
-
-test('platform verify retries transient SUB2API token_exchange_user_error before succeeding', async () => {
-  const source = fs.readFileSync('background/steps/platform-verify.js', 'utf8');
-  const api = new Function('self', `${source}; return self.MultiPageBackgroundStep10;`)({});
-
-  const logs = [];
-  let callCount = 0;
+  let contentScriptCalled = false;
   const executor = api.createStep10Executor({
     addLog: async (message, level = 'info') => {
       logs.push({ message, level });
@@ -167,14 +109,22 @@ test('platform verify retries transient SUB2API token_exchange_user_error before
     rememberSourceLastUrl: async () => {},
     reuseOrCreateTab: async () => 12,
     sendToContentScript: async () => {
-      callCount += 1;
-      if (callCount === 1) {
-        return {
-          error: 'token exchange failed: status 400, body: { "error": { "message": "Invalid request. Please try again later.", "type": "invalid_request_error", "param": null, "code": "token_exchange_user_error" } }',
-        };
-      }
-      return { ok: true };
+      contentScriptCalled = true;
+      return {};
     },
+    createSub2ApiApi: () => ({
+      submitOpenAiCallback: async () => {
+        attempts.push('direct-api');
+        callCount += 1;
+        if (callCount === 1) {
+          throw new Error('request failed: Post "https://auth.openai.com/oauth/token": unexpected EOF');
+        }
+        return {
+          localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+          verifiedStatus: 'SUB2API 已创建账号 #11',
+        };
+      },
+    }),
     sendToContentScriptResilient: async () => ({}),
     shouldBypassStep9ForLocalCpa: () => false,
     SUB2API_STEP9_RESPONSE_TIMEOUT_MS: 120000,
@@ -191,6 +141,74 @@ test('platform verify retries transient SUB2API token_exchange_user_error before
   });
 
   assert.equal(callCount, 2);
+  assert.equal(contentScriptCalled, false);
+  assert.deepStrictEqual(attempts, ['direct-api', 'direct-api']);
+  assert.equal(
+    logs.some((entry) => /临时网络波动/.test(entry.message) && entry.level === 'warn'),
+    true
+  );
+});
+
+test('platform verify retries transient SUB2API token_exchange_user_error before succeeding', async () => {
+  const source = fs.readFileSync('background/steps/platform-verify.js', 'utf8');
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundStep10;`)({});
+
+  const logs = [];
+  let callCount = 0;
+  let contentScriptCalled = false;
+  const executor = api.createStep10Executor({
+    addLog: async (message, level = 'info') => {
+      logs.push({ message, level });
+    },
+    chrome: {
+      tabs: {
+        update: async () => {},
+      },
+    },
+    closeConflictingTabsForSource: async () => {},
+    completeStepFromBackground: async () => {},
+    ensureContentScriptReadyOnTab: async () => {},
+    getPanelMode: () => 'sub2api',
+    getTabId: async () => 12,
+    isLocalhostOAuthCallbackUrl: (value) => String(value || '').includes('/auth/callback?code='),
+    isTabAlive: async () => true,
+    normalizeCodex2ApiUrl: (value) => value,
+    normalizeSub2ApiUrl: () => 'https://sub2api.example.com/admin/accounts',
+    rememberSourceLastUrl: async () => {},
+    reuseOrCreateTab: async () => 12,
+    sendToContentScript: async () => {
+      contentScriptCalled = true;
+      return { ok: true };
+    },
+    createSub2ApiApi: () => ({
+      submitOpenAiCallback: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          throw new Error('token exchange failed: status 400, body: { "error": { "message": "Invalid request. Please try again later.", "type": "invalid_request_error", "param": null, "code": "token_exchange_user_error" } }');
+        }
+        return {
+          localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+          verifiedStatus: 'SUB2API 已创建账号 #11',
+        };
+      },
+    }),
+    sendToContentScriptResilient: async () => ({}),
+    shouldBypassStep9ForLocalCpa: () => false,
+    SUB2API_STEP9_RESPONSE_TIMEOUT_MS: 120000,
+  });
+
+  await executor.executeStep10({
+    panelMode: 'sub2api',
+    localhostUrl: 'http://localhost:1455/auth/callback?code=callback-code&state=oauth-state',
+    sub2apiUrl: 'https://sub2api.example.com/admin/accounts',
+    sub2apiEmail: 'flow@example.com',
+    sub2apiPassword: 'secret',
+    sub2apiSessionId: 'session-123',
+    sub2apiOAuthState: 'oauth-state',
+  });
+
+  assert.equal(callCount, 2);
+  assert.equal(contentScriptCalled, false);
   assert.equal(
     logs.some((entry) => /临时网络波动/.test(entry.message) && entry.level === 'warn'),
     true

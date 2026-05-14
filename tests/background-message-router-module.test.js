@@ -176,3 +176,103 @@ test('SAVE_SETTING broadcasts operation delay setting without background success
   assert.deepStrictEqual(broadcasts.at(-1), { operationDelayEnabled: false });
   assert.equal(logs.length, 0);
 });
+
+test('SAVE_SETTING re-resolves signup method when panel mode changes', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  let state = {
+    signupMethod: 'phone',
+    phoneVerificationEnabled: true,
+    plusModeEnabled: false,
+    panelMode: 'sub2api',
+  };
+
+  const router = api.createMessageRouter({
+    addLog: async () => {},
+    buildLuckmailSessionSettingsPayload: () => ({}),
+    buildPersistentSettingsPayload: (input = {}) => Object.prototype.hasOwnProperty.call(input, 'panelMode')
+      ? { panelMode: input.panelMode }
+      : {},
+    broadcastDataUpdate: () => {},
+    getState: async () => ({ ...state }),
+    resolveSignupMethod: (nextState = {}) => nextState.panelMode === 'cpa' ? 'email' : 'phone',
+    setPersistentSettings: async () => {},
+    setState: async (updates) => {
+      state = { ...state, ...updates };
+    },
+  });
+
+  const response = await router.handleMessage({
+    type: 'SAVE_SETTING',
+    payload: { panelMode: 'cpa' },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(state.panelMode, 'cpa');
+  assert.equal(state.signupMethod, 'email');
+});
+
+test('SAVE_SETTING applies shared mode-switch normalization before persisting incompatible capability flags', async () => {
+  const source = fs.readFileSync('background/message-router.js', 'utf8');
+  const globalScope = { console };
+  const api = new Function('self', `${source}; return self.MultiPageBackgroundMessageRouter;`)(globalScope);
+  const persistedPayloads = [];
+  let state = {
+    activeFlowId: 'site-a',
+    signupMethod: 'email',
+    phoneVerificationEnabled: false,
+    plusModeEnabled: false,
+    panelMode: 'cpa',
+  };
+
+  const router = api.createMessageRouter({
+    addLog: async () => {},
+    buildLuckmailSessionSettingsPayload: () => ({}),
+    buildPersistentSettingsPayload: (input = {}) => ({
+      plusModeEnabled: Boolean(input.plusModeEnabled),
+      phoneVerificationEnabled: Boolean(input.phoneVerificationEnabled),
+      signupMethod: String(input.signupMethod || 'email'),
+    }),
+    broadcastDataUpdate: () => {},
+    getState: async () => ({ ...state }),
+    resolveSignupMethod: (nextState = {}) => (
+      Boolean(nextState.phoneVerificationEnabled) && Boolean(nextState.plusModeEnabled) ? 'phone' : 'email'
+    ),
+    setPersistentSettings: async (updates) => {
+      persistedPayloads.push({ ...updates });
+    },
+    setState: async (updates) => {
+      state = { ...state, ...updates };
+    },
+    validateModeSwitch: () => ({
+      ok: false,
+      errors: [{ code: 'plus_mode_unsupported', message: '当前 flow 不支持 Plus 模式。' }],
+      normalizedUpdates: {
+        plusModeEnabled: false,
+        phoneVerificationEnabled: false,
+        signupMethod: 'email',
+      },
+    }),
+  });
+
+  const response = await router.handleMessage({
+    type: 'SAVE_SETTING',
+    payload: {
+      plusModeEnabled: true,
+      phoneVerificationEnabled: true,
+      signupMethod: 'phone',
+    },
+  });
+
+  assert.equal(response.ok, true);
+  assert.equal(state.plusModeEnabled, false);
+  assert.equal(state.phoneVerificationEnabled, false);
+  assert.equal(state.signupMethod, 'email');
+  assert.deepEqual(persistedPayloads[0], {
+    plusModeEnabled: false,
+    phoneVerificationEnabled: false,
+    signupMethod: 'email',
+  });
+  assert.equal(response.modeValidation?.errors?.[0]?.code, 'plus_mode_unsupported');
+});
