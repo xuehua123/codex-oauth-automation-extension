@@ -290,12 +290,17 @@
         return;
       }
 
-      const text = await file.text();
-      if (dom.inputIcloudList) {
-        dom.inputIcloudList.value = text;
+      try {
+        const text = await file.text();
+        if (dom.inputIcloudList) {
+          dom.inputIcloudList.value = text;
+        }
+        await applyCurrentText();
+      } finally {
+        if (dom.inputIcloudListFile) {
+          dom.inputIcloudListFile.value = '';
+        }
       }
-      helpers?.showToast?.(`已载入 ${file.name}`, 'success', 1800);
-      dom.inputIcloudListFile.value = '';
     }
 
     function reset() {
@@ -309,7 +314,7 @@
       });
       dom.inputIcloudListFile?.addEventListener('change', () => {
         importSelectedFile().catch((err) => {
-          helpers?.showToast?.(`读取 TXT 失败：${err.message}`, 'error');
+          helpers?.showToast?.(`导入 TXT 失败：${err.message}`, 'error');
         });
       });
       dom.btnIcloudListApply?.addEventListener('click', () => {

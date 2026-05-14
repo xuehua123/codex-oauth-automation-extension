@@ -156,6 +156,108 @@ test('icloud-list manager clears the import textarea after a successful apply', 
   }
 });
 
+test('icloud-list manager applies selected TXT files immediately', async () => {
+  const source = fs.readFileSync('sidepanel/icloud-list-manager.js', 'utf8');
+  const windowObject = {};
+  const api = new Function('window', `${source}; return window.SidepanelIcloudListManager;`)(windowObject);
+  const originalDocument = global.document;
+  global.document = {
+    createElement() {
+      return {
+        className: '',
+        innerHTML: '',
+        querySelector() {
+          return {
+            addEventListener() {},
+          };
+        },
+      };
+    },
+  };
+
+  const fileText = 'fresh@icloud.com\thttp://api798.com/latest?email=fresh%40icloud.com&auth_code=SSS888';
+  const listeners = new Map();
+  const sentMessages = [];
+  const dom = {
+    btnIcloudListApply: { disabled: false, addEventListener() {} },
+    btnIcloudListClear: { disabled: false, addEventListener() {} },
+    btnIcloudListImportFile: {
+      disabled: false,
+      addEventListener(event, handler) {
+        listeners.set(`import:${event}`, handler);
+      },
+    },
+    btnIcloudListResetUnused: { disabled: false, addEventListener() {} },
+    icloudListErrors: { style: { display: 'none' }, innerHTML: '' },
+    icloudListRecords: { innerHTML: '', appendChild() {} },
+    icloudListSummary: { textContent: '' },
+    inputIcloudList: { value: '', disabled: false, addEventListener() {} },
+    inputIcloudListFile: {
+      disabled: false,
+      files: [
+        {
+          name: '750.txt',
+          text: async () => fileText,
+        },
+      ],
+      value: 'C:\\fakepath\\750.txt',
+      addEventListener(event, handler) {
+        listeners.set(`file:${event}`, handler);
+      },
+      click() {},
+    },
+  };
+
+  const manager = api.createIcloudListManager({
+    state: {
+      getLatestState: () => ({ icloudListEntries: [] }),
+      syncLatestState() {},
+    },
+    dom,
+    helpers: {
+      escapeHtml: (value) => String(value || ''),
+      openConfirmModal: async () => true,
+      showToast() {},
+    },
+    runtime: {
+      sendMessage: async (message) => {
+        sentMessages.push(message);
+        return {
+          entries: [
+            {
+              id: 'icloud-list-1',
+              email: 'fresh@icloud.com',
+              codeUrl: 'http://api798.com/latest?email=fresh%40icloud.com&auth_code=SSS888',
+              note: '',
+              used: false,
+              lastUsedAt: 0,
+            },
+          ],
+          errors: [],
+        };
+      },
+    },
+    constants: {
+      displayTimeZone: 'Asia/Shanghai',
+    },
+    icloudListUtils: {},
+  });
+
+  try {
+    manager.bindIcloudListEvents();
+    listeners.get('file:change')();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(sentMessages.length, 1);
+    assert.equal(sentMessages[0].type, 'APPLY_ICLOUD_LIST');
+    assert.equal(sentMessages[0].payload.text, fileText);
+    assert.equal(dom.inputIcloudList.value, '');
+    assert.equal(dom.inputIcloudListFile.value, '');
+  } finally {
+    global.document = originalDocument;
+  }
+});
+
 test('sidepanel keeps icloud and icloud-list visibility logic isolated', () => {
   const source = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
 

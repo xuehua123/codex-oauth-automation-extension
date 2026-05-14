@@ -239,3 +239,21 @@ lan@icloud.com\thttps://192.168.1.20/code/3
   assert.match(result.errors[0].reason, /验证码链接/);
   assert.match(result.errors[1].reason, /验证码链接/);
 });
+
+test('parseIcloudListText accepts api798 auth_code links from TXT exports', () => {
+  const result = parseIcloudListText(
+    'colas-drachma-6t@icloud.com\thttp://api798.com/latest?email=colas-drachma-6t%40icloud.com&auth_code=SSS888'
+  );
+
+  assert.deepEqual(result.entries, [
+    {
+      id: 'icloud-list-1',
+      email: 'colas-drachma-6t@icloud.com',
+      codeUrl: 'http://api798.com/latest?email=colas-drachma-6t%40icloud.com&auth_code=SSS888',
+      note: '',
+      used: false,
+      lastUsedAt: 0,
+    },
+  ]);
+  assert.equal(result.errors.length, 0);
+});
