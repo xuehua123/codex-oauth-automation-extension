@@ -38,3 +38,12 @@ test('sidepanel defines every DEFAULT_* constant it references', () => {
   assert.match(source, /const DEFAULT_FIVE_SIM_COUNTRY_ID = 'vietnam';/);
   assert.match(source, /const DEFAULT_FIVE_SIM_COUNTRY_LABEL = '越南 \(Vietnam\)';/);
 });
+
+test('sidepanel guards the removed account history text toggle before using it', () => {
+  const source = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
+
+  assert.match(
+    source,
+    /message\.payload\.accountRunHistoryTextEnabled !== undefined[\s\S]{0,240}typeof inputAccountRunHistoryTextEnabled !== 'undefined'[\s\S]{0,160}inputAccountRunHistoryTextEnabled\.checked/
+  );
+});

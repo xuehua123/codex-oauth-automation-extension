@@ -14855,7 +14855,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.payload.icloudListEntries !== undefined || message.payload.currentIcloudListEmail !== undefined) {
         renderIcloudListEntries();
       }
-      if (message.payload.accountRunHistoryTextEnabled !== undefined && inputAccountRunHistoryTextEnabled) {
+      if (
+        message.payload.accountRunHistoryTextEnabled !== undefined
+        && typeof inputAccountRunHistoryTextEnabled !== 'undefined'
+        && inputAccountRunHistoryTextEnabled
+      ) {
         inputAccountRunHistoryTextEnabled.checked = Boolean(message.payload.accountRunHistoryTextEnabled);
         updateAccountRunHistorySettingsUI();
       }
